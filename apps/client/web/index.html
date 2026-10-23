@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f8f9f7">
+  <meta name="description" content="상황을 선택하고 마이크 입력 변화를 확인하는 VoiceMate 시제품이다.">
+  <title>VoiceMate · 마이크 입력 확인</title>
+  <style>body{margin:0;background:#f8f9f7;color:#172b4d;font-family:system-ui,sans-serif}#loading{padding:48px;text-align:center;font-size:16px}</style>
+</head>
+<body>
+  <p id="loading" role="status">VoiceMate를 준비하고 있다.</p>
+  <script type="module">
+    try {
+      await import('./audio/capture-bridge.mjs');
+      const bootstrap=document.createElement('script');
+      bootstrap.src='flutter_bootstrap.js';
+      document.body.append(bootstrap);
+    } catch {
+      document.getElementById('loading').textContent='화면을 불러오지 못했다. 새로고침한다.';
+    }
+  </script>
+</body>
+</html>
