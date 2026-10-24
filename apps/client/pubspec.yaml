@@ -1,0 +1,15 @@
+name: voicemate
+description: 마이크 입력 변화를 확인하는 VoiceMate 웹 시제품이다.
+publish_to: none
+version: 0.1.0+1
+environment:
+  sdk: '>=3.10.0 <4.0.0'
+dependencies:
+  cupertino_icons: ^2.0.0
+  flutter:
+    sdk: flutter
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+flutter:
+  uses-material-design: true

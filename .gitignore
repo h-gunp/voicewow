@@ -1,0 +1,13 @@
+.reference/
+.superpowers/
+.tools/
+.local/
+.worktrees/
+**/.dart_tool/
+**/build/
+**/.flutter-plugins-dependencies
+**/.idea/
+**/*.iml
+node_modules/
+__pycache__/
+*.log
