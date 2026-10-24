@@ -1,0 +1,44 @@
+enum CaptureState { idle, requesting, running, error }
+
+class AudioEvent {
+  final String type;
+  final CaptureState? state;
+  final String? reason;
+  final double? rms, peak, dbfs, normalized;
+  final int? sampleCount;
+  final Map<String, Object?>? settings;
+  const AudioEvent.state(this.state, {this.reason})
+    : type = 'state',
+      rms = null,
+      peak = null,
+      dbfs = null,
+      normalized = null,
+      sampleCount = null,
+      settings = null;
+  const AudioEvent.level({
+    required this.rms,
+    this.peak,
+    required this.dbfs,
+    required this.normalized,
+    required this.sampleCount,
+  }) : type = 'level',
+       state = null,
+       reason = null,
+       settings = null;
+  const AudioEvent.settings(this.settings)
+    : type = 'settings',
+      state = null,
+      reason = null,
+      rms = null,
+      peak = null,
+      dbfs = null,
+      normalized = null,
+      sampleCount = null;
+}
+
+abstract interface class AudioPort {
+  Stream<AudioEvent> get events;
+  Future<void> start();
+  Future<void> stop();
+  Future<void> dispose();
+}
