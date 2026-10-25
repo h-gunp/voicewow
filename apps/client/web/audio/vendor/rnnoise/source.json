@@ -1,0 +1,70 @@
+{
+  "package": "@jitsi/rnnoise-wasm",
+  "version": "0.2.1",
+  "package_git_commit": "cb529a59a8478fe604e57986fc96afdaecfa6fb7",
+  "tarball": "https://registry.npmjs.org/@jitsi/rnnoise-wasm/-/rnnoise-wasm-0.2.1.tgz",
+  "tarball_integrity": "sha512-iEj77www43pS2Yq+cfLZb+hFuI7L5ccisBzzPMcOjjLsG4/LAlkD1CY58/8gc84nHdLBGmD/OPIWGnvYnXvB0A==",
+  "tarball_sha256": "c80b015b69701699868086a30015e5e680bee41a68df4c8ad2daed8b1bbc1173",
+  "variant": "async legacy 0.1",
+  "files": {
+    "rnnoise.mjs": {
+      "upstream_path": "dist/rnnoise.js",
+      "bytes": 12265,
+      "sha256": "83a86f528a0f4d5c61a84be40dac9f15e5d114f24971bd5953f7f21879bc9bdf",
+      "modified": false
+    },
+    "rnnoise.wasm": {
+      "upstream_path": "dist/rnnoise.wasm",
+      "bytes": 112141,
+      "sha256": "677147b9248aedc0a00de79dc090d1ecead37c08c8bb773a790da16109d2c487",
+      "modified": false
+    },
+    "LICENSE-APACHE": {
+      "upstream_path": "LICENSE",
+      "bytes": 12588,
+      "sha256": "4646d0ab74a05730f8b3b12b6376ddccb7f0905ee5b69265b3d873b97ace3e94",
+      "modified": false
+    },
+    "LICENSE-RNNOISE": {
+      "upstream_path": "COPYING",
+      "bytes": 1581,
+      "sha256": "e2f59ff41d9d03adc3dcf3deff170f8c8cf4a6eb4a9b174762a7656d23200ffa",
+      "modified": false
+    },
+    "NOTICE-RNNOISE": {
+      "bytes": 14262,
+      "sha256": "1ad7c4d13b32dffeeca1345377532da666456b945b9bdd9d92d4ce3102528ed9"
+    }
+  },
+  "engine": {
+    "repository": "https://github.com/xiph/rnnoise",
+    "commit": "1cbdbcf1283499bbb2230a6b0f126eb9b236defd",
+    "license": "BSD-3-Clause",
+    "license_url": "https://raw.githubusercontent.com/xiph/rnnoise/1cbdbcf1283499bbb2230a6b0f126eb9b236defd/COPYING",
+    "model_source": "src/rnn_data.c",
+    "model_source_sha256": "7b90ed18f065a34597d80b4c00e140a7c5eb6380ef8c9c6bf265384c944ae708",
+    "model_location": "same licensed source tree; no separate model archive"
+  },
+  "provenance": {
+    "matching_previous_package": "@jitsi/rnnoise-wasm@0.1.0",
+    "previous_package_git_commit": "cf998963932adc1dc9d060d42aaa1efe622d1318",
+    "matching_files": [
+      "dist/rnnoise.js",
+      "dist/rnnoise.wasm"
+    ],
+    "byte_identity_verified": true,
+    "source_rebuild_performed": false,
+    "previous_submodule_url": "https://api.github.com/repos/jitsi/rnnoise-wasm/git/trees/cf998963932adc1dc9d060d42aaa1efe622d1318",
+    "publisher_readme": "https://github.com/jitsi/rnnoise-wasm/blob/cb529a59a8478fe604e57986fc96afdaecfa6fb7/README.md",
+    "previous_tarball": "https://registry.npmjs.org/@jitsi/rnnoise-wasm/-/rnnoise-wasm-0.1.0.tgz",
+    "previous_tarball_integrity": "sha512-JujivPbOUvdRYa2xqByHYKfKGNGa7ZPyNLaNuh8hEp9XsiNfjaJAHdboq6M1VY9TP+765nyxC0LjpAw1VkikOQ==",
+    "previous_tarball_sha256": "e9572fc48b8f9da5c2d88f4b950a74552f58871ac05ee21df3e40959765182dd"
+  },
+  "local_changes": [
+    "dist/rnnoise.js renamed to rnnoise.mjs without content changes"
+  ],
+  "excluded": [
+    "dist/rnnoise-sync.js",
+    "RNNoise 0.2 external model archives"
+  ]
+}

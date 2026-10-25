@@ -27,3 +27,11 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## RNNoise 소음 억제 자산
+
+`apps/client/web/audio/vendor/rnnoise/`에는 [Jitsi의 `@jitsi/rnnoise-wasm@0.2.1`](https://github.com/jitsi/rnnoise-wasm/tree/cb529a59a8478fe604e57986fc96afdaecfa6fb7)의 비동기 로더와 WASM을 포함한다. 패키지의 `dist/rnnoise.js`는 내용 변경 없이 `rnnoise.mjs`로 이름만 바꿨다. Jitsi 패키지 라이선스와 기존 MIT 기여 고지 원문은 [LICENSE-APACHE](apps/client/web/audio/vendor/rnnoise/LICENSE-APACHE)에 보존한다.
+
+사용한 비동기 WASM은 RNNoise 0.1 기본 모델이다. Jitsi 0.1.0과 0.2.1 패키지의 비동기 JavaScript·WASM이 바이트 단위로 같음을 확인했고, Jitsi 0.1.0의 RNNoise 서브모듈은 커밋 `1cbdbcf1283499bbb2230a6b0f126eb9b236defd`로 고정되어 있다. 해당 소스 트리는 기본 모델 `src/rnn_data.c`를 직접 포함한다. RNNoise의 BSD 3-Clause 원문은 [LICENSE-RNNOISE](apps/client/web/audio/vendor/rnnoise/LICENSE-RNNOISE)에, 개별 소스의 저작권 고지는 [NOTICE-RNNOISE](apps/client/web/audio/vendor/rnnoise/NOTICE-RNNOISE)에 보존한다.
+
+별도로 다운로드하는 RNNoise 0.2 모델과 Jitsi의 동기 로더는 포함하지 않는다. 정확한 패키지 출처·무결성 값·파일 해시는 [source.json](apps/client/web/audio/vendor/rnnoise/source.json)에, 모델 추적 근거와 검증 범위는 [vendor README](apps/client/web/audio/vendor/rnnoise/README.md)에 기록한다.

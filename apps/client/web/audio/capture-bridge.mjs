@@ -2,8 +2,15 @@ function browserPlatform() {
   const devices = globalThis.navigator?.mediaDevices;
   return {
     getUserMedia: typeof devices?.getUserMedia === 'function' ? constraints => devices.getUserMedia(constraints) : undefined,
-    createContext: typeof globalThis.AudioContext === 'function' ? () => new AudioContext() : undefined,
+    createContext: typeof globalThis.AudioContext === 'function' ? () => {
+      try { return new AudioContext({sampleRate:48000}); }
+      catch { return new AudioContext(); }
+    } : undefined,
     createWorkletNode: typeof globalThis.AudioWorkletNode === 'function' ? context => new AudioWorkletNode(context, 'voicemate-meter') : undefined,
+    createNoiseReductionNode: async (context, signal) => {
+      const {createNoiseReductionNode} = await import('./noise-reduction.mjs');
+      return createNoiseReductionNode(context, signal);
+    },
     isSecureContext: () => globalThis.isSecureContext !== false,
     now: () => performance.now(),
     setInterval: (fn, ms) => globalThis.setInterval(fn, ms),
@@ -20,19 +27,50 @@ function errorReason(error) {
   return ({NotAllowedError:'permission_denied',SecurityError:'permission_denied',NotFoundError:'device_missing',NotReadableError:'device_busy',OverconstrainedError:'constraints_unavailable'})[error?.name] || error?.captureReason || 'processing_error';
 }
 function failure(reason) { return Object.assign(new Error(reason), {captureReason:reason}); }
+function disposeNode(node) {
+  if (!node) return;
+  node.port.onmessage = null; node.onprocessorerror = null;
+  try { node.port.postMessage?.({type:'dispose'}); } catch { /* A failed processor may already have closed its port. */ }
+  node.port.close();
+  try { node.disconnect(); } catch { /* Already disconnected. */ }
+}
 
 /** Each start owns its resources. Cancelled permission/module promises cannot revive it. */
 export function createCapture({onEvent, platform = browserPlatform()}) {
   let active = null;
   const current = session => active === session && !session.cancelled;
+  async function prepareNoiseNode(s) {
+    const loading = new AbortController();
+    const cancel = () => loading.abort();
+    listen(s, s.abort.signal, 'abort', cancel);
+    // Include the lazy JS import in the deadline, before the WASM loader exists.
+    const timer = setTimeout(() => loading.abort(failure('load_timeout')), 10000);
+    let rejectCancelled;
+    const cancelled = new Promise((_, reject) => {
+      rejectCancelled = () => reject(loading.signal.reason);
+      loading.signal.addEventListener('abort', rejectCancelled, {once:true});
+    });
+    try {
+      if (s.abort.signal.aborted) cancel();
+      const prepared = platform.createNoiseReductionNode(s.context, loading.signal).then(node => {
+        if (loading.signal.aborted) { disposeNode(node); throw loading.signal.reason; }
+        return node;
+      });
+      return await Promise.race([prepared, cancelled]);
+    } finally {
+      clearTimeout(timer);
+      loading.signal.removeEventListener('abort', rejectCancelled);
+    }
+  }
   async function release(s) {
+    s.abort.abort();
     if (s.timer !== undefined) { platform.clearInterval(s.timer); s.timer = undefined; }
     s.unsubscribe?.(); s.unsubscribe = null;
     s.unsubscribeDevice?.(); s.unsubscribeDevice = null;
     for (const [target, type, fn] of s.listeners) target.removeEventListener(type, fn);
     s.listeners = [];
-    if (s.node) { s.node.port.onmessage = null; s.node.onprocessorerror = null; s.node.port.close(); }
-    for (const n of [s.source, s.node, s.gain]) { try { n?.disconnect(); } catch { /* Already disconnected. */ } }
+    disposeNode(s.node);
+    for (const n of [s.source, s.gain]) { try { n?.disconnect(); } catch { /* Already disconnected. */ } }
     s.source = s.node = s.gain = null;
     for (const track of s.stream?.getTracks() || []) track.stop();
     s.stream = null;
@@ -49,7 +87,7 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
   function listen(s, target, type, fn) { target.addEventListener(type, fn); s.listeners.push([target,type,fn]); }
   function start() {
     if (active) return active.promise;
-    const s = {cancelled:false,listeners:[]}; active = s;
+    const s = {cancelled:false,listeners:[],abort:new AbortController()}; active = s;
     onEvent({type:'state',state:'requesting'});
     s.promise = (async () => {
       try {
@@ -72,26 +110,45 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
         if (!current(s)) { await release(s); return; }
         if (resumeError) throw resumeError;
         if (!s.context.audioWorklet) throw failure('unsupported');
-        await s.context.audioWorklet.addModule(new URL('./capture-worklet.js', import.meta.url).href);
-        if (!current(s)) { await release(s); return; }
-        s.source = s.context.createMediaStreamSource(s.stream);
-        s.node = platform.createWorkletNode(s.context);
-        s.gain = s.context.createGain(); s.gain.gain.value = 0;
-        s.lastFrame = platform.now();
         let lastSettingsKey;
         function publishSettings() {
           // Only non-identifying processing settings leave the audio bridge.
           const raw = track.getSettings(), settings = {contextSampleRate:s.context.sampleRate};
           for (const key of ['sampleRate','channelCount','autoGainControl','noiseSuppression','echoCancellation']) if (raw[key] !== undefined) settings[key] = raw[key];
+          settings.noiseReductionState = s.noiseReductionState;
+          if (s.noiseReductionReason) settings.noiseReductionReason = s.noiseReductionReason;
           const settingsKey = JSON.stringify(settings);
           if (settingsKey !== lastSettingsKey) {
             lastSettingsKey = settingsKey;
             onEvent({type:'settings',settings});
           }
         }
+        if (typeof platform.createNoiseReductionNode === 'function') {
+          s.noiseReductionState = 'loading';
+          publishSettings();
+          try {
+            s.node = await prepareNoiseNode(s);
+          } catch (error) {
+            if (!current(s)) { await release(s); return; }
+            s.noiseReductionReason = ['unsupported','unsupported_sample_rate','load_failed','load_timeout'].includes(error?.captureReason) ? error.captureReason : 'load_failed';
+          }
+          if (!current(s)) { await release(s); return; }
+          s.noiseReductionState = s.node ? 'active' : 'unavailable';
+        } else {
+          s.noiseReductionState = 'unavailable';
+          s.noiseReductionReason = 'unsupported';
+        }
+        if (!s.node) {
+          await s.context.audioWorklet.addModule(new URL('./capture-worklet.js', import.meta.url).href);
+          if (!current(s)) { await release(s); return; }
+          s.node = platform.createWorkletNode(s.context);
+        }
+        s.source = s.context.createMediaStreamSource(s.stream);
+        s.gain = s.context.createGain(); s.gain.gain.value = 0;
+        s.lastFrame = platform.now();
         s.node.port.onmessage = ({data}) => {
           if (!current(s)) return;
-          if (data?.type === 'error') { void end(s,'error','invalid_samples'); return; }
+          if (data?.type === 'error') { void end(s,'error',s.noiseReductionState === 'active' ? 'noise_reduction_failed' : 'invalid_samples'); return; }
           if (data?.type !== 'level') return;
           if (!Number.isFinite(data.rms) || data.rms < 0 || !Number.isFinite(data.peak) || data.peak < 0 || !(data.dbfs === null || Number.isFinite(data.dbfs)) || !Number.isFinite(data.normalized) || data.normalized < 0 || data.normalized > 1 || !Number.isInteger(data.sampleCount) || data.sampleCount < 1) { void end(s,'error','invalid_samples'); return; }
           try { publishSettings(); } catch { void end(s,'error','processing_error'); return; }
@@ -99,7 +156,7 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
           s.lastFrame = platform.now();
           onEvent({type:'level',rms:data.rms,peak:data.peak,dbfs:data.dbfs,normalized:data.normalized,sampleCount:data.sampleCount});
         };
-        s.node.onprocessorerror = () => void end(s,'error','processing_error');
+        s.node.onprocessorerror = () => void end(s,'error',s.noiseReductionState === 'active' ? 'noise_reduction_failed' : 'processing_error');
         s.source.connect(s.node); s.node.connect(s.gain); s.gain.connect(s.context.destination);
         s.timer = platform.setInterval(() => { if (platform.now() - s.lastFrame >= 1500) void end(s,'error','frame_timeout'); }, 250);
         publishSettings();

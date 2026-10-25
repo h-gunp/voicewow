@@ -10,7 +10,10 @@ class MeterScreen extends StatelessWidget {
   const MeterScreen({super.key, required this.session, required this.onBack});
   String get title {
     return switch (session.state) {
-      CaptureState.requesting => '마이크 권한을 확인한다.',
+      CaptureState.requesting =>
+        session.settings['noiseReductionState'] == 'loading'
+            ? '소음 억제를 준비하고 있다.'
+            : '마이크 권한을 확인한다.',
       CaptureState.running => '입력을 확인하고 있다.',
       CaptureState.error => switch (session.reason) {
         'permission_denied' => '마이크 권한이 필요하다.',
@@ -26,12 +29,20 @@ class MeterScreen extends StatelessWidget {
     if (session.reason == 'tab_hidden') return '탭을 벗어나 입력을 중지했다. 다시 시작한다.';
     if (session.reason == 'device_changed') return '입력 장치 구성이 바뀌었다. 다시 시작한다.';
     return switch (session.state) {
-      CaptureState.requesting => '브라우저의 권한 요청에서 마이크를 허용한다.',
-      CaptureState.running => '주변 소리도 함께 반영된다.',
+      CaptureState.requesting =>
+        session.settings['noiseReductionState'] == 'loading'
+            ? '입력 준비가 끝나면 측정을 시작한다.'
+            : '브라우저의 권한 요청에서 마이크를 허용한다.',
+      CaptureState.running => switch (session.settings['noiseReductionState']) {
+        'active' => '주변 소음을 줄인 입력이다. 다른 사람의 목소리가 남을 수 있다.',
+        'unavailable' => '소음 억제를 사용할 수 없어 원본 입력을 표시한다.',
+        _ => '주변 소리도 함께 반영된다.',
+      },
       CaptureState.error => switch (session.reason) {
         'permission_denied' => '주소창의 사이트 권한에서 마이크를 허용한 뒤 다시 시작한다.',
         'device_missing' => '마이크 연결을 확인한 뒤 다시 시작한다.',
         'device_busy' => '다른 앱의 마이크 사용을 확인한다.',
+        'noise_reduction_failed' => '소음 억제 중 문제가 발생했다. 다시 시작한다.',
         'insecure_context' => '마이크를 사용하려면 이 페이지를 HTTPS 주소로 연다.',
         'unsupported' =>
           '이 브라우저에서는 필요한 입력 기능을 지원하지 않는다. HTTPS 페이지를 최신 Safari 또는 Chrome에서 연다.',
@@ -44,6 +55,11 @@ class MeterScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = session.scenario!;
+    final inputLabel =
+        session.state == CaptureState.running &&
+            session.settings['noiseReductionState'] == 'active'
+        ? '소음 억제 후 입력'
+        : '원본 입력';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -128,7 +144,7 @@ class MeterScreen extends StatelessWidget {
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                '원본 입력 ${session.level?.dbfs?.toStringAsFixed(1) ?? '—'} dBFS\n수신 프레임 ${session.frameCount}\n입력 상태 ${session.state.name}\n${_settingsText()}',
+                '$inputLabel ${session.level?.dbfs?.toStringAsFixed(1) ?? '—'} dBFS\n수신 프레임 ${session.frameCount}\n입력 상태 ${session.state.name}\n${_settingsText()}',
                 style: const TextStyle(fontSize: 12, color: muted, height: 1.8),
               ),
             ),
@@ -140,11 +156,21 @@ class MeterScreen extends StatelessWidget {
 
   String _settingsText() {
     final settings = session.settings;
+    final noiseReduction = switch ((
+      session.state,
+      settings['noiseReductionState'],
+    )) {
+      (CaptureState.requesting, 'loading') => '준비 중',
+      (CaptureState.running, 'active') => '적용 중',
+      (CaptureState.running, 'unavailable') => '사용 불가',
+      (CaptureState.idle || CaptureState.error, _) => '미사용',
+      _ => '확인 불가',
+    };
     String flag(String key) => settings[key] == true
         ? '켜짐'
         : settings[key] == false
         ? '꺼짐'
         : '확인 불가';
-    return '오디오 처리 ${settings['contextSampleRate'] ?? '—'} Hz\n자동 이득 ${flag('autoGainControl')} · 잡음 억제 ${flag('noiseSuppression')}\n반향 제거 ${flag('echoCancellation')}';
+    return '앱 소음 억제 $noiseReduction\n오디오 처리 ${settings['contextSampleRate'] ?? '—'} Hz\n자동 이득 ${flag('autoGainControl')} · 브라우저 잡음 억제 ${flag('noiseSuppression')}\n반향 제거 ${flag('echoCancellation')}';
   }
 }

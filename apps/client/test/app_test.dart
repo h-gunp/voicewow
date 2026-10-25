@@ -358,4 +358,136 @@ void main() {
       expect(find.text('상한 75'), findsOneWidget);
     });
   }
+
+  for (final scale in [1.0, 2.0]) {
+    for (final fixture in [
+      (
+        CaptureState.requesting,
+        'loading',
+        '소음 억제를 준비하고 있다.',
+        '입력 준비가 끝나면 측정을 시작한다.',
+        '준비 중',
+        '원본 입력 — dBFS',
+      ),
+      (
+        CaptureState.running,
+        'active',
+        '입력을 확인하고 있다.',
+        '주변 소음을 줄인 입력이다. 다른 사람의 목소리가 남을 수 있다.',
+        '적용 중',
+        '소음 억제 후 입력 -31.0 dBFS',
+      ),
+      (
+        CaptureState.running,
+        'unavailable',
+        '입력을 확인하고 있다.',
+        '소음 억제를 사용할 수 없어 원본 입력을 표시한다.',
+        '사용 불가',
+        '원본 입력 -31.0 dBFS',
+      ),
+    ]) {
+      testWidgets(
+        'noise reduction ${fixture.$2} explains its input at text scale $scale',
+        (tester) async {
+          tester.view.physicalSize = const Size(320, 568);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final port = FakeAudioPort();
+          await tester.pumpWidget(
+            VoiceMateApp(audioPort: port, textScaler: TextScaler.linear(scale)),
+          );
+          await tester.ensureVisible(find.byKey(const Key('scenario-quiet')));
+          await tester.tap(find.byKey(const Key('scenario-quiet')));
+          await tester.pump();
+          await tester.ensureVisible(find.byKey(const Key('start')));
+          await tester.tap(find.byKey(const Key('start')));
+          await tester.pumpAndSettle();
+          port.send(
+            AudioEvent.settings({
+              'noiseReductionState': fixture.$2,
+              'noiseSuppression': false,
+            }),
+          );
+          port.send(AudioEvent.state(fixture.$1));
+          if (fixture.$1 == CaptureState.running) {
+            port.send(
+              const AudioEvent.level(
+                rms: .03,
+                dbfs: -31,
+                normalized: .5,
+                sampleCount: 4800,
+              ),
+            );
+          }
+          await tester.pumpAndSettle();
+          expect(find.text(fixture.$3), findsOneWidget);
+          expect(find.text(fixture.$4), findsOneWidget);
+          expect(tester.takeException(), isNull);
+          await tester.ensureVisible(find.text('입력 정보'));
+          await tester.tap(find.text('입력 정보'));
+          await tester.pumpAndSettle();
+          expect(find.textContaining('앱 소음 억제 ${fixture.$5}'), findsOneWidget);
+          expect(find.textContaining('브라우저 잡음 억제 꺼짐'), findsOneWidget);
+          expect(find.textContaining(fixture.$6), findsOneWidget);
+          expect(tester.takeException(), isNull);
+          await tester.ensureVisible(find.byKey(const Key('toggle-capture')));
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const Key('toggle-capture')).hitTestable(),
+            findsOneWidget,
+          );
+        },
+      );
+    }
+  }
+
+  for (final terminalState in [CaptureState.idle, CaptureState.error]) {
+    testWidgets('noise reduction active details clear after $terminalState', (
+      tester,
+    ) async {
+      final port = FakeAudioPort();
+      await tester.pumpWidget(VoiceMateApp(audioPort: port));
+      await tester.tap(find.byKey(const Key('scenario-quiet')));
+      await tester.pump();
+      await tester.ensureVisible(find.byKey(const Key('start')));
+      await tester.tap(find.byKey(const Key('start')));
+      await tester.pumpAndSettle();
+      port.send(const AudioEvent.settings({'noiseReductionState': 'active'}));
+      port.send(const AudioEvent.state(CaptureState.running));
+      port.send(
+        const AudioEvent.level(
+          rms: .03,
+          dbfs: -31,
+          normalized: .5,
+          sampleCount: 4800,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('입력 정보'));
+      await tester.tap(find.text('입력 정보'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('앱 소음 억제 적용 중'), findsOneWidget);
+      if (terminalState == CaptureState.idle) {
+        await tester.ensureVisible(find.byKey(const Key('toggle-capture')));
+        await tester.tap(find.byKey(const Key('toggle-capture')));
+      } else {
+        port.send(
+          const AudioEvent.state(
+            CaptureState.error,
+            reason: 'noise_reduction_failed',
+          ),
+        );
+      }
+      await tester.pumpAndSettle();
+      expect(find.textContaining('앱 소음 억제 미사용'), findsOneWidget);
+      expect(find.textContaining('소음 억제 후 입력'), findsNothing);
+      expect(find.textContaining('주변 소음을 줄인 입력'), findsNothing);
+      expect(find.text('입력 수준 —'), findsOneWidget);
+      expect(find.byKey(const Key('input-fill')), findsNothing);
+      if (terminalState == CaptureState.error) {
+        expect(find.text('소음 억제 중 문제가 발생했다. 다시 시작한다.'), findsOneWidget);
+      }
+    });
+  }
 }
