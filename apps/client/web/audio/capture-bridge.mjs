@@ -1,3 +1,5 @@
+import { EnvironmentEstimator } from './environment-estimator.mjs';
+
 function browserPlatform() {
   const devices = globalThis.navigator?.mediaDevices;
   return {
@@ -37,7 +39,7 @@ function disposeNode(node) {
 
 /** Each start owns its resources. Cancelled permission/module promises cannot revive it. */
 export function createCapture({onEvent, platform = browserPlatform()}) {
-  let active = null;
+  let active = null, nextSession = 0;
   const current = session => active === session && !session.cancelled;
   async function prepareNoiseNode(s) {
     const loading = new AbortController();
@@ -87,7 +89,7 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
   function listen(s, target, type, fn) { target.addEventListener(type, fn); s.listeners.push([target,type,fn]); }
   function start(noiseReductionEnabled = true) {
     if (active) return active.promise;
-    const s = {cancelled:false,listeners:[],hasFrame:false,abort:new AbortController()}; active = s;
+    const s = {cancelled:false,listeners:[],hasFrame:false,abort:new AbortController(),sessionId:++nextSession, settingsRevision:0, estimator:new EnvironmentEstimator()}; active = s;
     onEvent({type:'state',state:'requesting'});
     s.promise = (async () => {
       try {
@@ -135,6 +137,10 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
           if (s.noiseReductionReason) settings.noiseReductionReason = s.noiseReductionReason;
           const settingsKey = JSON.stringify(settings);
           if (settingsKey !== lastSettingsKey) {
+            if (lastSettingsKey !== undefined) {
+              s.estimator = new EnvironmentEstimator(); s.analysisOrigin = null;
+              s.settingsRevision++;
+            }
             lastSettingsKey = settingsKey;
             onEvent({type:'settings',settings});
           }
@@ -167,6 +173,30 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
         s.node.port.onmessage = ({data}) => {
           if (!current(s)) return;
           if (data?.type === 'error') { void end(s,'error',s.noiseReductionState === 'active' ? 'noise_reduction_failed' : 'invalid_samples'); return; }
+          if (data?.type === 'analysis_unavailable') {
+            s.estimator = new EnvironmentEstimator();
+            onEvent({type:'analysis',analysis:{state:'unavailable'}}); return;
+          }
+          if (data?.type === 'analysis') {
+            try {
+              publishSettings();
+              const settings = track.getSettings();
+              if (s.noiseReductionState !== 'active' || ['autoGainControl','noiseSuppression','echoCancellation'].some(key=>settings[key] !== false)) {
+                s.estimator = new EnvironmentEstimator(); s.analysisOrigin = null;
+                onEvent({type:'analysis',analysis:{state:'unavailable'}}); return;
+              }
+              const now = platform.now();
+              if (!Number.isSafeInteger(data.seq) || data.seq < 0 || data.sampleStart !== data.seq*480 || data.sampleEnd !== (data.seq+1)*480 || typeof data.clipped !== 'boolean' || !Number.isFinite(data.sampleTime) || !Number.isFinite(s.context.currentTime)) throw new Error('invalid analysis');
+              const origin = data.sampleTime - data.sampleEnd/48000;
+              if (s.analysisOrigin == null) s.analysisOrigin = origin;
+              if (Math.abs(s.analysisOrigin-origin) > .001) throw new Error('analysis clock changed');
+              const age = (s.context.currentTime-data.sampleTime)*1000;
+              if (age > 1000 || age < -250) { s.estimator.hold(); onEvent({type:'analysis',analysis:{state:'held'}}); return; }
+              s.estimator.add(data);
+              if (data.seq%10===0) onEvent({type:'analysis',analysis:{...s.estimator.snapshot(),sessionId:s.sessionId,deviceEpoch:s.sessionId,settingsRevision:s.settingsRevision,seq:data.seq,sampleStart:data.sampleStart,sampleEnd:data.sampleEnd,sampleTime:data.sampleTime,receivedAt:now}});
+            } catch { s.estimator.hold(); onEvent({type:'analysis',analysis:{state:'unavailable'}}); }
+            return;
+          }
           if (data?.type !== 'level') return;
           if (!Number.isFinite(data.rms) || data.rms < 0 || !Number.isFinite(data.peak) || data.peak < 0 || !(data.dbfs === null || Number.isFinite(data.dbfs)) || !Number.isFinite(data.normalized) || data.normalized < 0 || data.normalized > 1 || !Number.isInteger(data.sampleCount) || data.sampleCount < 1) { void end(s,'error','invalid_samples'); return; }
           try { publishSettings(); } catch { void end(s,'error','processing_error'); return; }

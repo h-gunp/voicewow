@@ -56,6 +56,17 @@ class MeterScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = session.scenario!;
+    final a = session.analysis;
+    final offset = a['offset'] as num?;
+    final voice = a['voiceDbfs'] as num?;
+    final noise = a['noiseDbfs'] as num?;
+    final analysisStatus = switch (a['state']) {
+      'ready' => '환경 분석 중',
+      'collecting' => '비발화 증거를 수집하고 있다.',
+      'held' => '잡음 정보가 오래됐거나 불확실해 보류했다.',
+      'unsupported' => '자동 조절 지원 범위를 초과했다.',
+      _ => '환경 분석을 사용할 수 없다.',
+    };
     final inputLabel =
         session.state == CaptureState.running &&
             session.settings['noiseReductionState'] == 'active'
@@ -132,6 +143,29 @@ class MeterScreen extends StatelessWidget {
           '빨간 선은 선택한 상황의 하한·상한이다.\n참고 척도 · 실제 데시벨은 아니다.',
           textAlign: TextAlign.center,
           style: TextStyle(color: muted, fontSize: 12, height: 1.7),
+        ),
+        const SizedBox(height: 12),
+        Semantics(
+          liveRegion: true,
+          child: Text(
+            [
+              analysisStatus,
+              if (a['state'] == 'ready') ...[
+                '발화 판정 ${a['speech'] == 'speech'
+                    ? '발화 감지'
+                    : a['speech'] == 'nonSpeech'
+                    ? '비발화'
+                    : '불확실'}',
+                '주변 잡음 추정 ${noise?.toStringAsFixed(1) ?? '—'} dBFS',
+                '발화 수준 추정 ${voice == null ? '—' : (voice + SessionController.inputLevelOffset).clamp(0, 120).toStringAsFixed(1)}',
+                if (offset != null)
+                  '환경 적응 참고범위 ${(s.referenceLower + offset).clamp(0, 120).toStringAsFixed(1)}–${(s.referenceUpper + offset).clamp(0, 120).toStringAsFixed(1)}',
+              ],
+              '실험적 추정 · 본인 화자 구분 및 실제 음압 아님',
+            ].join('\n'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: muted, fontSize: 12, height: 1.7),
+          ),
         ),
         const SizedBox(height: 28),
         OutlinedButton(

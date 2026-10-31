@@ -53,11 +53,29 @@ export async function createNoiseReductionNode(context, signal) {
         if (!response.ok) throw failure('load_failed');
         const wasmBinary = new Uint8Array(await response.arrayBuffer());
         if (finished) return;
+        let vadBinary = null;
+        const vadRequest = new AbortController();
+        let cancelVad;
+        const cancelled = new Promise(resolve => { cancelVad = () => { vadRequest.abort(); resolve(null); }; });
+        request.signal.addEventListener('abort', cancelVad, {once:true});
+        let vadTimer;
+        try {
+          const timeout = new Promise(resolve => { vadTimer = setTimeout(() => { vadRequest.abort(); resolve(null); }, 1500); });
+          const download = (async () => {
+            const vadResponse = await fetch(new URL('./vendor/libfvad/libfvad.wasm', import.meta.url), {
+              signal: vadRequest.signal, mode: 'same-origin', credentials: 'same-origin',
+            });
+            return vadResponse.ok ? new Uint8Array(await vadResponse.arrayBuffer()) : null;
+          })();
+          vadBinary = await Promise.race([download, timeout, cancelled]);
+        } catch { /* The existing level meter remains available without VAD. */ }
+        finally { clearTimeout(vadTimer); request.signal.removeEventListener('abort', cancelVad); }
+        if (finished) return;
         await context.audioWorklet.addModule(new URL('./noise-reduction-worklet.mjs', import.meta.url).href);
         if (finished) return;
         node = new AudioWorkletNode(context, 'voicemate-noise-meter', {
           numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1],
-          processorOptions: {wasmBinary},
+          processorOptions: {wasmBinary, vadBinary},
         });
         if (finished) { dispose(node); return; }
         node.port.onmessage = ({data}) => {

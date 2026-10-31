@@ -10,7 +10,7 @@ function harness({permission, moduleGate}={}) {
   track.getSettings=()=>({sampleRate:48000,echoCancellation:false});
   const stream={getTracks:()=>[track],getAudioTracks:()=>[track]};
   const makeNode=()=>{const n={connections:[],disconnected:false,connect(x){this.connections.push(x);return x;},disconnect(){this.disconnected=true;}};nodes.push(n);return n;};
-  const ctx={state:'running',sampleRate:48000,destination:{},closed:0,resume:async()=>{},close:async()=>{ctx.closed++;ctx.state='closed';},audioWorklet:{addModule:async()=>{if(moduleGate)await moduleGate.promise;}},createMediaStreamSource:()=>makeNode(),createGain:()=>Object.assign(makeNode(),{gain:{value:1}})};
+  const ctx={state:'running',sampleRate:48000,get currentTime(){return time/1000;},destination:{},closed:0,resume:async()=>{},close:async()=>{ctx.closed++;ctx.state='closed';},audioWorklet:{addModule:async()=>{if(moduleGate)await moduleGate.promise;}},createMediaStreamSource:()=>makeNode(),createGain:()=>Object.assign(makeNode(),{gain:{value:1}})};
   const makeWorkletNode=()=>Object.assign(makeNode(),{port:{onmessage:null,closed:false,messages:[],postMessage(message){this.messages.push(message);},close(){this.closed=true;}},onprocessorerror:null});
   const node=makeWorkletNode(), port=node.port;
   const platform={calls:0,getUserMedia:async()=>{platform.calls++;return permission?permission.promise:stream;},createContext:()=>ctx,createWorkletNode:()=>node,now:()=>time,setInterval:fn=>{timers.set(1,fn);return 1;},clearInterval:id=>timers.delete(id),isHidden:()=>hidden,subscribeVisibility:fn=>{visibility=fn;return()=>{visibility=null;};},subscribeDeviceChange:fn=>{deviceListeners.add(fn);return()=>deviceListeners.delete(fn);}};
@@ -18,6 +18,37 @@ function harness({permission, moduleGate}={}) {
   return {capture,platform,ctx,track,stream,node,port,nodes,timers,events,deviceListeners,makeWorkletNode,frame(overrides={},target=node){target.port.onmessage?.({data:{type:'level',rms:.5,peak:.5,dbfs:-6.0206,normalized:.925,sampleCount:4800,...overrides}});},async changeDevice(){for(const fn of [...deviceListeners])fn();await settle();},async hide(){hidden=true;visibility?.();await settle();},async tick(ms){time+=ms;for(const fn of timers.values())fn();await settle();}};
 }
 async function settle(){for(let i=0;i<8;i++)await Promise.resolve();}
+
+test('analysis only accepts fresh frames when processing settings are known disabled', async () => {
+  const h=harness(), noise=addNoiseReduction(h);
+  h.track.getSettings=()=>({sampleRate:48000,autoGainControl:false,noiseSuppression:false,echoCancellation:false});
+  await h.capture.start();
+  const node=noise.node;
+  for(let seq=0;seq<410;seq++) {
+    node.port.onmessage({data:{type:'analysis',seq,sampleStart:seq*480,sampleEnd:(seq+1)*480,sampleTime:(seq+1)/100,power:.01,clipped:false,speech:'nonSpeech'}});
+    if (seq%10===0) h.frame({},node);
+    await h.tick(10);
+  }
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.state,'ready');
+  h.track.getSettings=()=>({sampleRate:48000,autoGainControl:true,noiseSuppression:false,echoCancellation:false});
+  node.port.onmessage({data:{type:'analysis',seq:410,sampleStart:196800,sampleEnd:197280,sampleTime:4.11,power:.01,clipped:false,speech:'nonSpeech'}});
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.state,'unavailable');
+  await h.capture.stop();
+});
+
+test('backlog stays held until audio clock catches up and preserves initial baseline', async () => {
+  const h=harness(), {node}=addNoiseReduction(h);
+  h.track.getSettings=()=>({autoGainControl:false,noiseSuppression:false,echoCancellation:false});
+  await h.capture.start();
+  const send=(seq,power)=>node.port.onmessage({data:{type:'analysis',seq,sampleStart:seq*480,sampleEnd:(seq+1)*480,sampleTime:(seq+1)/100,power,clipped:false,speech:'nonSpeech'}});
+  for(let seq=0;seq<400;seq++){send(seq,.01);if(seq%10===0)h.frame({},node);await h.tick(10);}
+  for(let i=0;i<20;i++){h.frame({},node);await h.tick(100);}
+  for(let seq=400;seq<900;seq++){send(seq,.03);if(seq%10===0)h.frame({},node);await h.tick(10);}
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.state,'held');
+  for(let seq=1100;seq<4500;seq++){send(seq,.03);if(seq%10===0)h.frame({},node);await h.tick(10);}
+  assert.ok(h.events.findLast(e=>e.type==='analysis').analysis.offset > 0);
+  await h.capture.stop();
+});
 function assertReleased(h){assert.ok(h.track.stops>=1);assert.equal(h.ctx.state,'closed');assert.equal(h.port.onmessage,null);assert.equal(h.timers.size,0);}
 
 test('disabled_noise_reduction_skips_loader_and_measures_raw_input', async () => {
