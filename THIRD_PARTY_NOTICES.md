@@ -1,5 +1,7 @@
 # 제3자 참고 및 라이선스
 
+실험적 VAD에는 `@ozymandiasthegreat/vad@2.0.7`의 `libfvad.wasm`을 사용한다. WebRTC/libfvad 엔진의 BSD-3-Clause LICENSE, PATENTS, AUTHORS는 별도 보존하며 버전·해시는 [자산 기록](apps/client/web/audio/vendor/libfvad/README.md)에 있다. npm 패키지 메타데이터는 MIT를 명시한다. 앱은 upstream JavaScript wrapper나 base64 decoder를 포함하지 않고 자체 wrapper로 WASM API를 직접 호출한다.
+
 상황 선택 흐름과 하한·상한 설정은 [AppleDeveloperAcademy-MC3/Alright](https://github.com/AppleDeveloperAcademy-MC3/Alright)의 커밋 `fb3b8fc15207ab1d4f266278111065e7e2c94c5d`를 참고했다. Swift 소스와 기존 그림·폰트·로고·Lottie 자산을 제품에 복사하지 않았다. 브라우저 입력 처리와 Flutter 화면은 이 프로젝트에서 작성했다. `.reference/`는 검토용이며 앱 배포에 포함하지 않는다.
 
 원본의 표시값은 검증된 SPL·dBA 기준이 아니다. 실제 dBFS 입력과 직접 비교하지 않는다.

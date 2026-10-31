@@ -54,6 +54,14 @@ class WebAudioPort implements AudioPort {
                   Map<String, Object?>.from(decoded['settings'] as Map),
                 ),
               );
+            case 'analysis':
+              if (decoded['analysis'] is Map) {
+                _events.add(
+                  AudioEvent.analysis(
+                    Map<String, Object?>.from(decoded['analysis'] as Map),
+                  ),
+                );
+              }
           }
         }).toJS,
       ),

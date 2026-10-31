@@ -2,8 +2,41 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createNoiseMeter } from '../../apps/client/web/audio/noise-reducer.mjs';
+import createRNNWasmModule from '../../apps/client/web/audio/vendor/rnnoise/rnnoise.mjs';
 
 const wasmBinary = await readFile(new URL('../../apps/client/web/audio/vendor/rnnoise/rnnoise.wasm', import.meta.url));
+
+test('bundled RNNoise output places the test signal predominantly in the next frame', async () => {
+  const engine = await createRNNWasmModule({wasmBinary});
+  const state = engine._rnnoise_create(0), ptr = engine._malloc(3840), offset = ptr/4;
+  const energies = [];
+  try {
+    for (let frame=0;frame<3;frame++) {
+      for (let i=0;i<480;i++) engine.HEAPF32[offset+i] = frame === 0 ? Math.sin(i*.2)*15000 : 0;
+      engine._rnnoise_process_frame(state,ptr+1920,ptr);
+      let energy=0;
+      for (let i=0;i<480;i++) energy += engine.HEAPF32[offset+480+i] ** 2;
+      energies.push(energy);
+    }
+    assert.ok(energies[1] > energies[0] * 100);
+    assert.ok(energies[1] > energies[2] * 10);
+  } finally { engine._rnnoise_destroy(state); engine._free(ptr); }
+});
+
+test('analysis aligns previous raw frame with delayed RNNoise output', async () => {
+  const frames = [];
+  const vad = {process: () => false};
+  const meter = await createNoiseMeter(wasmBinary, 48000, {vad, onAnalysis: f => frames.push(f)});
+  try {
+    meter.push(new Float32Array(480).fill(.25));
+    assert.equal(frames.length, 0);
+    meter.push(new Float32Array(480).fill(.5));
+    assert.equal(frames.length, 1);
+    assert.equal(frames[0].seq, 0);
+    assert.equal(frames[0].power, .0625);
+    assert.equal(frames[0].sampleStart, 0);
+  } finally { meter.dispose(); }
+});
 
 test('real_rnnoise_keeps_silence_at_zero_and_emits_complete_100ms_windows', async () => {
   const meter = await createNoiseMeter(wasmBinary, 48000);

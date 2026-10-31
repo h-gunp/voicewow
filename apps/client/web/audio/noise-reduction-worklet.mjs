@@ -1,4 +1,5 @@
 import { createNoiseMeter } from './noise-reducer.mjs';
+import { createVoiceActivity } from './voice-activity.mjs';
 
 class NoiseMeterProcessor extends AudioWorkletProcessor {
   constructor(options) {
@@ -6,7 +7,17 @@ class NoiseMeterProcessor extends AudioWorkletProcessor {
     this.finished = false;
     this.meter = null;
     this.port.onmessage = ({data}) => { if (data?.type === 'dispose') this.dispose(); };
-    createNoiseMeter(options.processorOptions.wasmBinary, sampleRate).then(meter => {
+    const {wasmBinary, vadBinary} = options.processorOptions;
+    const prepareVad = vadBinary ? createVoiceActivity(vadBinary).catch(() => null) : Promise.resolve(null);
+    prepareVad.then(async vad => {
+      try {
+        return await createNoiseMeter(wasmBinary, sampleRate, vad ? {
+          vad,
+          onAnalysis: frame => this.port.postMessage({type:'analysis', ...frame, sampleTime:this.origin + frame.sampleEnd/sampleRate}),
+          onFailure: () => this.port.postMessage({type:'analysis_unavailable'}),
+        } : null);
+      } catch (error) { vad?.dispose(); throw error; }
+    }).then(meter => {
       if (this.finished) { meter.dispose(); return; }
       this.meter = meter;
       this.port.postMessage({type:'ready'});
@@ -25,6 +36,7 @@ class NoiseMeterProcessor extends AudioWorkletProcessor {
     if (this.finished) return false;
     const input = inputs[0]?.[0];
     if (!this.meter || !input) return true;
+    if (this.origin === undefined) this.origin = (globalThis.currentFrame ?? 0) / sampleRate;
     try {
       for (const frame of this.meter.push(input)) this.port.postMessage({type:'level', ...frame});
     } catch {

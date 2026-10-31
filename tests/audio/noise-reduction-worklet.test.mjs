@@ -23,7 +23,33 @@ globalThis.registerProcessor = (name, constructor) => {
 };
 await import('../../apps/client/web/audio/noise-reduction-worklet.mjs');
 const wasmBinary = await readFile(new URL('../../apps/client/web/audio/vendor/rnnoise/rnnoise.wasm', import.meta.url));
+const vadBinary = await readFile(new URL('../../apps/client/web/audio/vendor/libfvad/libfvad.wasm', import.meta.url));
 const create = () => new Processor({processorOptions:{wasmBinary}});
+
+test('real RNNoise and VAD worklet emits aligned raw analysis without samples', {timeout:2000}, async () => {
+  const processor = new Processor({processorOptions:{wasmBinary,vadBinary}});
+  await processor.port.next('ready');
+  globalThis.currentFrame = 96000;
+  processor.process([[new Float32Array(480).fill(.25)]]);
+  processor.process([[new Float32Array(480).fill(.5)]]);
+  const frame = processor.port.messages.find(m=>m.type === 'analysis');
+  assert.equal(frame.seq, 0);
+  assert.equal(frame.sampleStart, 0);
+  assert.equal(frame.sampleTime, 2.01);
+  assert.equal(frame.power, .0625);
+  assert.ok(['speech','nonSpeech','uncertain'].includes(frame.speech));
+  processor.port.onmessage({data:{type:'dispose'}});
+  delete globalThis.currentFrame;
+});
+
+test('invalid VAD binary keeps RNNoise level meter running', {timeout:2000}, async () => {
+  const processor = new Processor({processorOptions:{wasmBinary,vadBinary:new Uint8Array([0])}});
+  await processor.port.next('ready');
+  processor.process([[new Float32Array(4800)]]);
+  assert.equal(processor.port.messages.filter(m=>m.type === 'level').length, 1);
+  assert.equal(processor.port.messages.some(m=>m.type === 'analysis'), false);
+  processor.port.onmessage({data:{type:'dispose'}});
+});
 
 test('real_engine_worklet_waits_for_ready_then_reports_100ms_without_sending_samples', {timeout:2000}, async () => {
   const processor = create();

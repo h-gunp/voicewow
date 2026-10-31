@@ -7,6 +7,7 @@ class AudioEvent {
   final double? rms, peak, dbfs, normalized;
   final int? sampleCount;
   final Map<String, Object?>? settings;
+  final Map<String, Object?>? analysis;
   const AudioEvent.state(this.state, {this.reason})
     : type = 'state',
       rms = null,
@@ -14,7 +15,8 @@ class AudioEvent {
       dbfs = null,
       normalized = null,
       sampleCount = null,
-      settings = null;
+      settings = null,
+      analysis = null;
   const AudioEvent.level({
     required this.rms,
     this.peak,
@@ -24,7 +26,8 @@ class AudioEvent {
   }) : type = 'level',
        state = null,
        reason = null,
-       settings = null;
+       settings = null,
+       analysis = null;
   const AudioEvent.settings(this.settings)
     : type = 'settings',
       state = null,
@@ -33,7 +36,18 @@ class AudioEvent {
       peak = null,
       dbfs = null,
       normalized = null,
-      sampleCount = null;
+      sampleCount = null,
+      analysis = null;
+  const AudioEvent.analysis(this.analysis)
+    : type = 'analysis',
+      state = null,
+      reason = null,
+      rms = null,
+      peak = null,
+      dbfs = null,
+      normalized = null,
+      sampleCount = null,
+      settings = null;
 }
 
 abstract interface class AudioPort {

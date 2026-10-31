@@ -13,6 +13,7 @@ class SessionController extends ChangeNotifier {
   AudioEvent? level;
   String? reason;
   Map<String, Object?> settings = {};
+  Map<String, Object?> analysis = {};
   bool noiseReductionEnabled = true;
   int frameCount = 0, _epoch = 0;
   bool _acceptEvents = false, _disposed = false;
@@ -25,7 +26,7 @@ class SessionController extends ChangeNotifier {
   double? get displayLevel {
     if (level == null) return null;
     if (level!.dbfs == null) return 0;
-    // 표시 척도를 이동하는 고정값이며 실제 음압 보정값은 아니다.
+    // 웹사이트 측정값과 보정 전 값의 차이를 사용자가 실험으로 관측한 보정값이다.
     return (level!.dbfs! + inputLevelOffset).clamp(0.0, 120.0).toDouble();
   }
 
@@ -60,6 +61,7 @@ class SessionController extends ChangeNotifier {
     level = null;
     reason = null;
     settings = {};
+    analysis = {};
     frameCount = 0;
     notifyListeners();
     try {
@@ -82,6 +84,7 @@ class SessionController extends ChangeNotifier {
     state = CaptureState.idle;
     level = null;
     reason = null;
+    analysis = {};
     notifyListeners();
     await _audio.stop();
   }
@@ -92,7 +95,10 @@ class SessionController extends ChangeNotifier {
       case 'state':
         state = event.state!;
         reason = event.reason;
-        if (state != CaptureState.running) level = null;
+        if (state != CaptureState.running) {
+          level = null;
+          analysis = {};
+        }
         if (state == CaptureState.idle || state == CaptureState.error)
           _acceptEvents = false;
       case 'level':
@@ -101,6 +107,10 @@ class SessionController extends ChangeNotifier {
         frameCount++;
       case 'settings':
         settings = event.settings!;
+        analysis = {};
+      case 'analysis':
+        if (state != CaptureState.running) return;
+        analysis = event.analysis!;
     }
     notifyListeners();
   }

@@ -5,7 +5,7 @@ const frameSize = 480;
 const pcmScale = 32768;
 
 /** RNNoise accepts 10 ms of 48 kHz PCM16-scaled floats, not Web Audio floats. */
-export async function createNoiseMeter(wasmBinary, sampleRate = 48000) {
+export async function createNoiseMeter(wasmBinary, sampleRate = 48000, analysis = null) {
   if (sampleRate !== 48000) throw new RangeError('RNNoise requires 48000 Hz');
   const engine = await createRNNWasmModule({wasmBinary});
   let state = 0, buffer = 0;
@@ -22,18 +22,30 @@ export async function createNoiseMeter(wasmBinary, sampleRate = 48000) {
   const outputOffset = inputOffset + frameSize;
   const output = new Float32Array(frameSize);
   const meter = new LevelMeter(sampleRate);
-  let count = 0, disposed = false;
+  let count = 0, disposed = false, energy = 0, peak = 0, sequence = 0, previous = null;
   return {
     push(samples) {
       if (disposed) throw new Error('Noise meter is disposed');
       const levels = [];
       for (const sample of samples) {
         if (!Number.isFinite(sample)) throw new RangeError('Samples must be finite');
+        energy += sample * sample;
+        peak = Math.max(peak, Math.abs(sample));
         engine.HEAPF32[inputOffset + count++] = sample * pcmScale;
         if (count !== frameSize) continue;
-        engine._rnnoise_process_frame(state, buffer + frameSize * 4, buffer);
+        const score = engine._rnnoise_process_frame(state, buffer + frameSize * 4, buffer);
         // Read the current heap: a WASM memory growth can replace HEAPF32.
         for (let i=0; i<frameSize; i++) output[i] = engine.HEAPF32[outputOffset+i] / pcmScale;
+        if (analysis?.vad) {
+          try {
+            const speech = analysis.vad.process(output);
+            if (previous) analysis.onAnalysis({...previous, speech: speech ? 'speech' : (score < .2 && previous.score < .2 ? 'nonSpeech' : 'uncertain')});
+          } catch {
+            analysis.vad.dispose?.(); analysis.vad = null; analysis.onFailure?.();
+          }
+        }
+        previous = {seq:sequence, sampleStart:sequence*frameSize, sampleEnd:(sequence+1)*frameSize, power:energy/frameSize, clipped:peak >= .999, score};
+        sequence++; energy = peak = 0;
         levels.push(...meter.push(output));
         count = 0;
       }
@@ -42,6 +54,7 @@ export async function createNoiseMeter(wasmBinary, sampleRate = 48000) {
     dispose() {
       if (disposed) return;
       disposed = true;
+      analysis?.vad?.dispose?.();
       output.fill(0);
       engine.HEAPF32.fill(0, inputOffset, outputOffset + frameSize);
       engine._rnnoise_destroy(state);

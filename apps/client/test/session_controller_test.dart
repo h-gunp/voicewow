@@ -19,6 +19,16 @@ void main() {
     await session.start();
     expect(port.starts, 0);
   });
+  test('analysis is cleared on stop and late analysis is ignored', () async {
+    session.selectScenario(Scenario.values.first);
+    await session.start();
+    port.send(const AudioEvent.state(CaptureState.running));
+    port.send(const AudioEvent.analysis({'state': 'ready', 'offset': 1.0}));
+    expect(session.analysis['state'], 'ready');
+    await session.stop();
+    port.send(const AudioEvent.analysis({'state': 'ready', 'offset': 2.0}));
+    expect(session.analysis, isEmpty);
+  });
   test(
     'duplicate start is ignored and late events after stop are discarded',
     () async {

@@ -62,6 +62,42 @@ function assertDisposed(node) {
   assert.equal(node.onprocessorerror, null);
 }
 
+for (const stage of ['response','body']) test(`stalled VAD ${stage} times out without disabling RNNoise`, async t => {
+  const h=harness(t), gate=deferred(); let calls=0, vadSignal;
+  h.replace('fetch', async (_url, options) => {
+    if (++calls === 1) return {ok:true,arrayBuffer:async()=>new Uint8Array([0,97,115,109]).buffer};
+    vadSignal=options.signal;
+    return stage === 'response' ? gate.promise : {ok:true,arrayBuffer:()=>gate.promise};
+  });
+  const pending=createNoiseReductionNode(h.context, new AbortController().signal);
+  await settle();
+  const vadTimer=[...h.timers.values()].find(timer=>timer.ms === 1500);
+  assert.ok(vadTimer);
+  vadTimer.fn();
+  await settle();
+  assert.equal(vadSignal.aborted,true);
+  assert.equal(h.nodes.length,1);
+  assert.equal(h.nodes[0].options.processorOptions.vadBinary,null);
+  h.ready();
+  assert.equal(await pending,h.nodes[0]);
+  gate.resolve(stage === 'response' ? {ok:true,arrayBuffer:async()=>new ArrayBuffer(4)} : new ArrayBuffer(4));
+});
+
+test('cancelling a stalled VAD request cleans its timer and does not create a node', async t => {
+  const h=harness(t), gate=deferred(), abort=new AbortController(); let calls=0, vadSignal;
+  h.replace('fetch', async (_url, options) => {
+    if (++calls === 1) return {ok:true,arrayBuffer:async()=>new ArrayBuffer(4)};
+    vadSignal=options.signal; return gate.promise;
+  });
+  const pending=createNoiseReductionNode(h.context,abort.signal);
+  const rejected=assert.rejects(pending,{name:'AbortError'});
+  await settle(); abort.abort(); await rejected; await settle();
+  assert.equal(vadSignal.aborted,true);
+  assert.equal(h.timers.size,0);
+  gate.resolve({ok:true,arrayBuffer:async()=>new ArrayBuffer(4)});
+  await settle(); assert.equal(h.nodes.length,0);
+});
+
 test('loader_returns_only_a_ready_mono_node_and_hands_runtime_handlers_to_capture', async t => {
   const h = harness(t), abort = new AbortController();
   let resolved = false;
@@ -78,7 +114,7 @@ test('loader_returns_only_a_ready_mono_node_and_hands_runtime_handlers_to_captur
   assert.equal(node.name, 'voicemate-noise-meter');
   assert.deepEqual(node.options, {
     numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1],
-    processorOptions: {wasmBinary: new Uint8Array([0, 97, 115, 109])},
+    processorOptions: {wasmBinary: new Uint8Array([0, 97, 115, 109]), vadBinary: new Uint8Array([0, 97, 115, 109])},
   });
   h.ready();
   assert.equal(await pending, node);
