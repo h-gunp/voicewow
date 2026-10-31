@@ -379,6 +379,14 @@ void main() {
       ),
       (
         CaptureState.running,
+        'disabled',
+        '입력을 확인하고 있다.',
+        '소음 억제를 끄고 원본 입력을 표시한다.',
+        '꺼짐',
+        '원본 입력 -31.0 dBFS',
+      ),
+      (
+        CaptureState.running,
         'unavailable',
         '입력을 확인하고 있다.',
         '소음 억제를 사용할 수 없어 원본 입력을 표시한다.',

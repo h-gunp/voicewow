@@ -85,9 +85,9 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
     await release(s);
   }
   function listen(s, target, type, fn) { target.addEventListener(type, fn); s.listeners.push([target,type,fn]); }
-  function start() {
+  function start(noiseReductionEnabled = true) {
     if (active) return active.promise;
-    const s = {cancelled:false,listeners:[],abort:new AbortController()}; active = s;
+    const s = {cancelled:false,listeners:[],hasFrame:false,abort:new AbortController()}; active = s;
     onEvent({type:'state',state:'requesting'});
     s.promise = (async () => {
       try {
@@ -95,7 +95,21 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
         if (typeof platform.getUserMedia !== 'function' || typeof platform.createContext !== 'function' || typeof platform.createWorkletNode !== 'function') throw failure('unsupported');
         if (platform.isHidden()) throw failure('tab_hidden');
         s.unsubscribe = platform.subscribeVisibility(() => { if(platform.isHidden()) void end(s,'idle','tab_hidden'); });
-        s.unsubscribeDevice = platform.subscribeDeviceChange?.(() => void end(s,'idle','device_changed'));
+        s.unsubscribeDevice = platform.subscribeDeviceChange?.(() => {
+          // Permission can expose a new device list without changing the captured microphone.
+          if (!current(s) || !s.track) return;
+          try {
+            const track = s.stream.getAudioTracks()[0];
+            if (track !== s.track || track.readyState !== 'live' || track.muted) {
+              void end(s,'idle','device_changed'); return;
+            }
+            const deviceId = track.getSettings().deviceId || null;
+            if (s.deviceId && deviceId === s.deviceId) return;
+            if (!s.hasFrame && !s.deviceId) { s.deviceId = deviceId; return; }
+            // Without a stable identity after audio starts, do not mix uncertain inputs.
+            void end(s,'idle','device_changed');
+          } catch { void end(s,'error','processing_error'); }
+        });
         // Create/resume within the start click's activation. Await after permission.
         s.context = platform.createContext();
         const resumed = s.context.resume().then(() => null, error => error);
@@ -104,6 +118,8 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
         const track = s.stream.getAudioTracks()[0];
         if (!track || track.readyState === 'ended') throw failure('input_ended');
         if (track.muted) throw failure('input_muted');
+        s.track = track;
+        s.deviceId = track.getSettings().deviceId || null;
         listen(s,track,'mute',()=>void end(s,'error','input_muted'));
         listen(s,track,'ended',()=>void end(s,'error','input_ended'));
         const resumeError = await resumed;
@@ -123,7 +139,9 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
             onEvent({type:'settings',settings});
           }
         }
-        if (typeof platform.createNoiseReductionNode === 'function') {
+        if (!noiseReductionEnabled) {
+          s.noiseReductionState = 'disabled';
+        } else if (typeof platform.createNoiseReductionNode === 'function') {
           s.noiseReductionState = 'loading';
           publishSettings();
           try {
@@ -154,6 +172,7 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
           try { publishSettings(); } catch { void end(s,'error','processing_error'); return; }
           if (!current(s)) return;
           s.lastFrame = platform.now();
+          s.hasFrame = true;
           onEvent({type:'level',rms:data.rms,peak:data.peak,dbfs:data.dbfs,normalized:data.normalized,sampleCount:data.sampleCount});
         };
         s.node.onprocessorerror = () => void end(s,'error',s.noiseReductionState === 'active' ? 'noise_reduction_failed' : 'processing_error');

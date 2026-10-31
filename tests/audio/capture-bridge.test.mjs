@@ -20,6 +20,50 @@ function harness({permission, moduleGate}={}) {
 async function settle(){for(let i=0;i<8;i++)await Promise.resolve();}
 function assertReleased(h){assert.ok(h.track.stops>=1);assert.equal(h.ctx.state,'closed');assert.equal(h.port.onmessage,null);assert.equal(h.timers.size,0);}
 
+test('disabled_noise_reduction_skips_loader_and_measures_raw_input', async () => {
+  const h=harness(); let loadCount=0;
+  h.platform.createNoiseReductionNode=async()=>{loadCount++;return h.makeWorkletNode();};
+  await h.capture.start(false);
+  assert.equal(loadCount,0);
+  assert.equal(h.events.findLast(e=>e.type==='settings').settings.noiseReductionState,'disabled');
+  assert.equal(h.events.some(e=>e.settings?.noiseReductionState==='loading'),false);
+  assert.equal(h.events.at(-1).state,'running');
+  h.frame({dbfs:-35});
+  assert.equal(h.events.at(-1).dbfs,-35);
+  await h.capture.stop(); assertReleased(h);
+});
+
+test('disabled_noise_reduction_does_not_report_unavailable_without_a_loader', async () => {
+  const h=harness(); await h.capture.start(false);
+  const settings=h.events.findLast(e=>e.type==='settings').settings;
+  assert.equal(settings.noiseReductionState,'disabled');
+  assert.equal(settings.noiseReductionReason,undefined);
+  await h.capture.stop(); assertReleased(h);
+});
+
+test('switch_to_raw_input_survives_previous_context_closing_late', async () => {
+  const h=harness(), noise=addNoiseReduction(h), next=harness(), closing=deferred();
+  h.ctx.close=async()=>{await closing.promise;h.ctx.state='closed';};
+  await h.capture.start();
+  const stale=noise.node.port.onmessage;
+  const stopped=h.capture.stop();
+  assert.equal(h.track.readyState,'ended');
+  for (const key of ['createContext','getUserMedia','createWorkletNode']) h.platform[key]=next.platform[key];
+  await h.capture.start(false);
+  assert.equal(h.events.findLast(e=>e.type==='settings').settings.noiseReductionState,'disabled');
+  next.frame({dbfs:-30});
+  assert.equal(h.events.at(-1).dbfs,-30);
+  const count=h.events.length;
+  stale({data:{type:'level',rms:.5,peak:.5,dbfs:-6,normalized:.9,sampleCount:4800}});
+  assert.equal(h.events.length,count);
+  closing.resolve(); await stopped;
+  assert.equal(next.ctx.state,'running');
+  assert.equal(next.track.readyState,'live');
+  next.frame({dbfs:-25});
+  assert.equal(h.events.at(-1).dbfs,-25);
+  await h.capture.stop(); assertReleased(next);
+});
+
 test('noise_factory_deadline_includes_module_loading_and_disposes_late_node', async t => {
   t.mock.timers.enable({apis:['setTimeout']});
   const h=harness(), gate=deferred(), late=h.makeWorkletNode(); let signal;
@@ -98,14 +142,61 @@ test('device_change_stops_capture_and_releases_its_subscription', async () => {
   assert.equal(h.events.length, eventCount);
 });
 
-test('device_change_during_permission_wait_cannot_revive_late_stream', async () => {
+test('device_list_exposure_during_permission_does_not_cancel_the_selected_stream', async () => {
   const permission=deferred(), h=harness({permission});
   const pending=h.capture.start(); await h.changeDevice();
-  assert.deepEqual(h.events.at(-1), {type:'state',state:'idle',reason:'device_changed'});
+  assert.deepEqual(h.events.at(-1), {type:'state',state:'requesting'});
   permission.resolve(h.stream); await pending;
-  assertReleased(h);
-  assert.equal(h.events.some(event=>event.state==='running'), false);
-  assert.equal(h.deviceListeners.size, 0);
+  h.frame(); assert.equal(h.events.at(-1).type,'level');
+  await h.capture.stop(); assertReleased(h);
+});
+
+test('startup_device_notification_without_identity_does_not_cancel_before_audio', async () => {
+  const h=harness(); await h.capture.start(false); await h.changeDevice();
+  assert.equal(h.track.stops,0); h.frame();
+  assert.equal(h.events.at(-1).type,'level');
+  await h.capture.stop(); assertReleased(h);
+});
+
+test('unchanged_active_microphone_survives_device_list_notifications_without_exposing_id', async () => {
+  const h=harness(); h.track.getSettings=()=>({sampleRate:48000,deviceId:'private-built-in'});
+  await h.capture.start(false); h.frame(); await h.changeDevice(); h.frame();
+  assert.equal(h.track.stops,0); assert.equal(h.events.at(-1).type,'level');
+  assert.equal(JSON.stringify(h.events).includes('private-built-in'),false);
+  await h.capture.stop(); assertReleased(h);
+});
+
+test('changed_active_microphone_still_stops_before_or_after_first_audio', async () => {
+  for(const hasFrame of [false,true]) {
+    const h=harness(); let deviceId='built-in';
+    h.track.getSettings=()=>({sampleRate:48000,deviceId});
+    await h.capture.start(false); if(hasFrame) h.frame();
+    deviceId='headset'; await h.changeDevice();
+    assert.equal(h.events.at(-1).reason,'device_changed'); assertReleased(h);
+  }
+});
+
+test('newly_exposed_identity_is_baselined_only_before_audio', async () => {
+  for(const hasFrame of [false,true]) {
+    const h=harness(); let deviceId;
+    h.track.getSettings=()=>({sampleRate:48000,deviceId});
+    await h.capture.start(false); if(hasFrame) h.frame();
+    deviceId='built-in'; await h.changeDevice();
+    if(hasFrame) { assert.equal(h.events.at(-1).reason,'device_changed'); assertReleased(h); }
+    else { h.frame(); await h.changeDevice(); assert.equal(h.track.stops,0); await h.capture.stop(); }
+  }
+});
+
+test('unreadable_or_inactive_track_is_not_ignored_on_device_notification', async () => {
+  for(const state of ['ended','muted','settings_error']) {
+    const h=harness(); h.track.getSettings=()=>({sampleRate:48000,deviceId:'built-in'});
+    await h.capture.start(false);
+    if(state==='ended') h.track.readyState='ended';
+    else if(state==='muted') h.track.muted=true;
+    else h.track.getSettings=()=>{throw new Error('read failed');};
+    await h.changeDevice(); assertReleased(h);
+    assert.equal(h.events.at(-1).reason,state==='settings_error'?'processing_error':'device_changed');
+  }
 });
 
 test('explicit_stop_removes_device_listener_and_suppresses_late_callback', async () => {
@@ -238,8 +329,10 @@ test('noise_reduction_loading_waits_without_a_frame_timeout_then_measures_filter
 
 for(const action of ['stop','hide','changeDevice']) test(`noise_reduction_${action}_while_loading_releases_a_late_node`, async () => {
   const h=harness(), gate=deferred(), noise=addNoiseReduction(h,{gate});
+  let deviceId='built-in'; h.track.getSettings=()=>({sampleRate:48000,deviceId});
   const pending=h.capture.start(); await settle();
   assert.ok(noise.signal instanceof AbortSignal);
+  if(action==='changeDevice') deviceId='headset';
   if(action==='stop') await h.capture.stop(); else await h[action]();
   assert.equal(noise.signal.aborted,true);
   const eventCount=h.events.length;

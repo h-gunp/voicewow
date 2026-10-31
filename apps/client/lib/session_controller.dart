@@ -13,6 +13,7 @@ class SessionController extends ChangeNotifier {
   AudioEvent? level;
   String? reason;
   Map<String, Object?> settings = {};
+  bool noiseReductionEnabled = true;
   int frameCount = 0, _epoch = 0;
   bool _acceptEvents = false, _disposed = false;
   SessionController(this._audio) {
@@ -35,6 +36,22 @@ class SessionController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setNoiseReductionEnabled(bool value) async {
+    if (_disposed ||
+        state == CaptureState.requesting ||
+        noiseReductionEnabled == value)
+      return;
+    noiseReductionEnabled = value;
+    if (state == CaptureState.running) {
+      final stopping = stop();
+      // Start before awaiting close to retain Safari's click activation.
+      final starting = start();
+      await Future.wait([stopping, starting]);
+    } else {
+      notifyListeners();
+    }
+  }
+
   Future<void> start() async {
     if (scenario == null || active || _disposed) return;
     final epoch = ++_epoch;
@@ -46,7 +63,7 @@ class SessionController extends ChangeNotifier {
     frameCount = 0;
     notifyListeners();
     try {
-      await _audio.start();
+      await _audio.start(noiseReductionEnabled: noiseReductionEnabled);
     } catch (_) {
       if (!_disposed && epoch == _epoch) {
         state = CaptureState.error;

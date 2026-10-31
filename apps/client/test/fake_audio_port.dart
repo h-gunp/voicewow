@@ -4,14 +4,16 @@ import 'package:voicemate/audio/audio_port.dart';
 class FakeAudioPort implements AudioPort {
   final controller = StreamController<AudioEvent>.broadcast(sync: true);
   int starts = 0, stops = 0;
+  final noiseReductionSelections = <bool>[];
   Completer<void>? gate;
   Completer<void>? stopGate;
   @override
   Stream<AudioEvent> get events => controller.stream;
   void send(AudioEvent event) => controller.add(event);
   @override
-  Future<void> start() async {
+  Future<void> start({bool noiseReductionEnabled = true}) async {
     starts++;
+    noiseReductionSelections.add(noiseReductionEnabled);
     if (gate != null) await gate!.future;
   }
 

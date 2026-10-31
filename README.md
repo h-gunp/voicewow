@@ -28,6 +28,8 @@ lib/screens와 lib/widgets는 화면, lib/session_controller.dart는 상태와 �
 
 ## 소음 억제
 
+기본값은 켜짐이다. 화면의 주변 소음 억제 스위치를 끄면 RNNoise 로딩 없이 원본 입력을 측정한다. 실행 중 전환하면 입력을 재시작하며 이전 입력값을 지운다. 선택은 중지·재시작·상황 변경 동안 유지된다.
+
 입력은 마이크 → `noise-reduction-worklet.mjs`의 RNNoise·LevelMeter → `capture-bridge.mjs` → WebAudioPort → SessionController → 화면 순서로 전달된다.
 앱에 포함한 `@jitsi/rnnoise-wasm@0.2.1`의 비동기 로더와 RNNoise 0.1 기본 모델을 같은 사이트에서 불러온다. API 키나 별도 서버가 필요하지 않으며 원본 음성을 저장·업로드하지 않는다. 파일 출처·해시·라이선스는 [RNNoise 자산 기록](apps/client/web/audio/vendor/rnnoise/README.md)에 있다.
 
@@ -40,8 +42,8 @@ lib/screens와 lib/widgets는 화면, lib/session_controller.dart는 상태와 �
 
 ## 검증과 배포
 
-RNNoise 상태 안내·초기화·취소·시간 초과·원본 복귀 검사를 포함한 테스트의 예상 수는 Flutter 32개와 Node 86개다. Node 테스트 일부는 포함된 실제 WASM의 무음·잡음·프레임 경계를 검사하며 실제 사용자 발화 검증을 대체하지 않는다. 실제 통과 여부는 실행 결과로 확인한다.
+RNNoise 상태 안내·초기화·취소·시간 초과·원본 복귀 검사를 포함한 테스트의 예상 수는 Flutter 39개와 Node 94개다. Node 테스트 일부는 포함된 실제 WASM의 무음·잡음·프레임 경계를 검사하며 실제 사용자 발화 검증을 대체하지 않는다. 실제 통과 여부는 실행 결과로 확인한다.
 배포 대상은 apps/client/build/web 전체이며 HTTPS와 JavaScript 모듈 MIME이 필요하다. RNNoise의 모듈·WASM·라이선스 파일도 함께 배포한다.
 하위 경로에 배포하면 해당 경로로 --base-href를 설정해 다시 빌드한다. 아이폰 Safari의 실제 마이크 검증은 자동 테스트와 별도로 수행한다.
-이 저장소에는 기존 프로젝트의 배포 계정·사이트 ID·검증 영수증을 복사하지 않는다.
+개발 원본은 이 GitHub 저장소다. 기존 Sites 주소를 유지하고, 이 저장소의 검증된 커밋으로 만든 웹 산출물만 배포한다. [배포 절차](docs/deployment.md)를 따른다. 계정·자격증명·개인 실험 자료·빌드 산출물은 이 저장소에 커밋하지 않는다.
 제3자 고지는 THIRD_PARTY_NOTICES.md에 있다.
