@@ -35,6 +35,7 @@ class MeterScreen extends StatelessWidget {
             : '브라우저의 권한 요청에서 마이크를 허용한다.',
       CaptureState.running => switch (session.settings['noiseReductionState']) {
         'active' => '주변 소음을 줄인 입력이다. 다른 사람의 목소리가 남을 수 있다.',
+        'disabled' => '소음 억제를 끄고 원본 입력을 표시한다.',
         'unavailable' => '소음 억제를 사용할 수 없어 원본 입력을 표시한다.',
         _ => '주변 소리도 함께 반영된다.',
       },
@@ -104,6 +105,22 @@ class MeterScreen extends StatelessWidget {
           style: const TextStyle(color: muted, fontSize: 13, height: 1.7),
         ),
         const SizedBox(height: 8),
+        SwitchListTile(
+          key: const Key('toggle-noise-reduction'),
+          contentPadding: EdgeInsets.zero,
+          title: const Text(
+            '주변 소음 억제',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+          ),
+          subtitle: Text(
+            session.noiseReductionEnabled ? '켜짐' : '꺼짐',
+            style: const TextStyle(color: muted, fontSize: 12),
+          ),
+          value: session.noiseReductionEnabled,
+          onChanged: session.state == CaptureState.requesting
+              ? null
+              : session.setNoiseReductionEnabled,
+        ),
         VolumeGauge(scenario: s, displayLevel: session.displayLevel),
         Text(
           '입력 수준 ${session.displayLevel?.toStringAsFixed(1) ?? '—'}',
@@ -162,6 +179,7 @@ class MeterScreen extends StatelessWidget {
     )) {
       (CaptureState.requesting, 'loading') => '준비 중',
       (CaptureState.running, 'active') => '적용 중',
+      (CaptureState.running, 'disabled') => '꺼짐',
       (CaptureState.running, 'unavailable') => '사용 불가',
       (CaptureState.idle || CaptureState.error, _) => '미사용',
       _ => '확인 불가',

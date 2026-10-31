@@ -11,7 +11,7 @@ extension type _Options._(JSObject _) implements JSObject {
   external factory _Options({JSFunction onEvent});
 }
 extension type _Capture(JSObject _) implements JSObject {
-  external JSPromise<JSAny?> start();
+  external JSPromise<JSAny?> start(JSBoolean noiseReductionEnabled);
   external JSPromise<JSAny?> stop();
 }
 
@@ -62,14 +62,14 @@ class WebAudioPort implements AudioPort {
   @override
   Stream<AudioEvent> get events => _events.stream;
   @override
-  Future<void> start() async {
+  Future<void> start({bool noiseReductionEnabled = true}) async {
     if (_capture == null) {
       _events.add(
         const AudioEvent.state(CaptureState.error, reason: 'unsupported'),
       );
       return;
     }
-    await _capture!.start().toDart;
+    await _capture!.start(noiseReductionEnabled.toJS).toDart;
   }
 
   @override

@@ -8,7 +8,7 @@ class UnsupportedAudioPort implements AudioPort {
   @override
   Stream<AudioEvent> get events => _events.stream;
   @override
-  Future<void> start() async => _events.add(
+  Future<void> start({bool noiseReductionEnabled = true}) async => _events.add(
     const AudioEvent.state(CaptureState.error, reason: 'unsupported'),
   );
   @override

@@ -38,7 +38,7 @@ class AudioEvent {
 
 abstract interface class AudioPort {
   Stream<AudioEvent> get events;
-  Future<void> start();
+  Future<void> start({bool noiseReductionEnabled = true});
   Future<void> stop();
   Future<void> dispose();
 }
