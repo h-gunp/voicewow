@@ -19,6 +19,83 @@ void main() {
     await session.start();
     expect(port.starts, 0);
   });
+  test(
+    'fresh speech remains visible while noise is collecting or held',
+    () async {
+      session.selectScenario(Scenario.values.first);
+      await session.start();
+      port.send(const AudioEvent.state(CaptureState.running));
+      for (final noiseState in ['collecting', 'held', 'unsupported']) {
+        port.send(
+          AudioEvent.analysis({
+            'state': noiseState,
+            'speech': 'speech',
+            'meterState': 'speech',
+            'meterDbfs': -40.0,
+          }),
+        );
+        expect(session.displayLevel, 74.0);
+      }
+      port.send(
+        const AudioEvent.analysis({
+          'state': 'held',
+          'reason': 'analysis_stale',
+          'meterState': 'unavailable',
+        }),
+      );
+      expect(session.displayLevel, isNull);
+    },
+  );
+  test(
+    'meter uses only a ready speech frame and clears on every unsafe state',
+    () async {
+      session.selectScenario(Scenario.values.first);
+      await session.start();
+      port.send(const AudioEvent.state(CaptureState.running));
+      port.send(
+        const AudioEvent.level(
+          rms: .9,
+          dbfs: -1,
+          normalized: .9,
+          sampleCount: 4800,
+        ),
+      );
+      expect(session.displayLevel, isNull);
+      port.send(
+        const AudioEvent.analysis({
+          'state': 'ready',
+          'speech': 'speech',
+          'meterState': 'speech',
+          'meterDbfs': -40.0,
+        }),
+      );
+      expect(session.displayLevel, 74.0);
+      for (final event in [
+        {'state': 'ready', 'speech': 'nonSpeech', 'meterDbfs': -20.0},
+        {'state': 'ready', 'speech': 'uncertain', 'meterDbfs': -20.0},
+        {'state': 'held', 'speech': 'speech', 'meterDbfs': -20.0},
+        {'state': 'collecting', 'speech': 'speech', 'meterDbfs': -20.0},
+        {'state': 'unavailable'},
+      ]) {
+        port.send(AudioEvent.analysis(event));
+        expect(session.displayLevel, isNull);
+      }
+      await session.stop();
+      expect(session.displayLevel, isNull);
+      session.selectScenario(Scenario.values[1]);
+      await session.start();
+      port.send(const AudioEvent.state(CaptureState.running));
+      port.send(
+        const AudioEvent.level(
+          rms: .9,
+          dbfs: -1,
+          normalized: .9,
+          sampleCount: 4800,
+        ),
+      );
+      expect(session.displayLevel, isNull);
+    },
+  );
   test('analysis is cleared on stop and late analysis is ignored', () async {
     session.selectScenario(Scenario.values.first);
     await session.start();

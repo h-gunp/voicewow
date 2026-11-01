@@ -24,10 +24,14 @@ class SessionController extends ChangeNotifier {
       state == CaptureState.requesting || state == CaptureState.running;
 
   double? get displayLevel {
-    if (level == null) return null;
-    if (level!.dbfs == null) return 0;
+    if (state != CaptureState.running ||
+        analysis['meterState'] != 'speech' ||
+        analysis['speech'] != 'speech')
+      return null;
+    final dbfs = analysis['meterDbfs'];
+    if (dbfs is! num || !dbfs.isFinite) return null;
     // 웹사이트 측정값과 보정 전 값의 차이를 사용자가 실험으로 관측한 보정값이다.
-    return (level!.dbfs! + inputLevelOffset).clamp(0.0, 120.0).toDouble();
+    return (dbfs + inputLevelOffset).clamp(0.0, 120.0).toDouble();
   }
 
   void selectScenario(Scenario value) {

@@ -38,6 +38,18 @@ test('analysis aligns previous raw frame with delayed RNNoise output', async () 
   } finally { meter.dispose(); }
 });
 
+test('speech analysis carries RMS of the exact processed frame passed to VAD', async () => {
+  const frames=[]; let expected;
+  const vad={process: samples=>{expected=Math.sqrt(samples.reduce((n,x)=>n+x*x,0)/samples.length);return true;}};
+  const meter=await createNoiseMeter(wasmBinary,48000,{vad,onAnalysis:f=>frames.push(f)});
+  try {
+    meter.push(Float32Array.from({length:960},(_,i)=>.3*Math.sin(i*.2)));
+    assert.equal(frames.length,1);
+    assert.equal(frames[0].speech,'speech');
+    assert.ok(Math.abs(frames[0].meterRms-expected)<1e-9);
+  } finally { meter.dispose(); }
+});
+
 test('real_rnnoise_keeps_silence_at_zero_and_emits_complete_100ms_windows', async () => {
   const meter = await createNoiseMeter(wasmBinary, 48000);
   try {

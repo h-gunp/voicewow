@@ -53,7 +53,7 @@ class VolumeGauge extends StatelessWidget {
 
           return Semantics(
             label:
-                '마이크 입력 수준과 상황별 참고 범위, 하한 ${scenario.referenceLower}, 상한 ${scenario.referenceUpper}',
+                '발화로 판정된 입력 수준과 상황별 참고 범위, 하한 ${scenario.referenceLower}, 상한 ${scenario.referenceUpper}',
             child: Stack(
               clipBehavior: Clip.none,
               children: [

@@ -35,8 +35,8 @@ class MeterScreen extends StatelessWidget {
             : '브라우저의 권한 요청에서 마이크를 허용한다.',
       CaptureState.running => switch (session.settings['noiseReductionState']) {
         'active' => '주변 소음을 줄인 입력이다. 다른 사람의 목소리가 남을 수 있다.',
-        'disabled' => '소음 억제를 끄고 원본 입력을 표시한다.',
-        'unavailable' => '소음 억제를 사용할 수 없어 원본 입력을 표시한다.',
+        'disabled' => '소음 억제가 꺼져 발화 막대를 표시하지 않는다.',
+        'unavailable' => '소음 억제를 사용할 수 없어 발화 막대를 표시하지 않는다.',
         _ => '주변 소리도 함께 반영된다.',
       },
       CaptureState.error => switch (session.reason) {
@@ -194,6 +194,15 @@ class MeterScreen extends StatelessWidget {
           '입력 수준 ${session.displayLevel?.toStringAsFixed(1) ?? '—'}',
           textAlign: TextAlign.center,
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+        ),
+        Text(
+          session.displayLevel != null
+              ? '발화로 판정된 입력이다. 다른 사람의 소리도 포함될 수 있다.'
+              : a['meterState'] == 'nonSpeech'
+              ? '발화가 감지되지 않아 막대를 비웠다.'
+              : '발화 판정이 없거나 확인할 수 없어 막대를 비웠다.',
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: muted, fontSize: 12, height: 1.7),
         ),
         const SizedBox(height: 5),
         const Text(

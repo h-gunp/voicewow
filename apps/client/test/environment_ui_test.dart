@@ -8,6 +8,59 @@ import 'fake_audio_port.dart';
 
 void main() {
   testWidgets(
+    'speech bar clears immediately for non-speech, uncertainty and held',
+    (tester) async {
+      final port = FakeAudioPort();
+      final session = SessionController(port)
+        ..selectScenario(Scenario.values.first);
+      await session.start();
+      port.send(const AudioEvent.state(CaptureState.running));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: AnimatedBuilder(
+                animation: session,
+                builder: (_, _) => MeterScreen(session: session, onBack: () {}),
+              ),
+            ),
+          ),
+        ),
+      );
+      for (final state in ['nonSpeech', 'uncertain', 'held']) {
+        port.send(
+          const AudioEvent.analysis({
+            'state': 'ready',
+            'speech': 'speech',
+            'meterState': 'speech',
+            'meterDbfs': -40.0,
+          }),
+        );
+        await tester.pump();
+        expect(find.byKey(const Key('input-fill')), findsOneWidget);
+        port.send(
+          AudioEvent.analysis({
+            'state': state == 'held' ? 'held' : 'ready',
+            'speech': state,
+            'meterDbfs': -10.0,
+          }),
+        );
+        await tester.pump();
+        expect(find.byKey(const Key('input-fill')), findsNothing);
+      }
+      port.send(const AudioEvent.analysis({
+        'state': 'held',
+        'speech': 'speech',
+        'meterState': 'speech',
+        'meterDbfs': -40.0,
+      }));
+      await tester.pump();
+      expect(find.byKey(const Key('input-fill')), findsOneWidget);
+      expect(find.textContaining('잡음 정보가 오래됐거나 불확실해 보류했다.'), findsOneWidget);
+      session.dispose();
+    },
+  );
+  testWidgets(
     'VAD failure and RNNoise unsupported sample rate are distinguishable',
     (tester) async {
       final port = FakeAudioPort();
@@ -150,6 +203,7 @@ void main() {
         'noiseDbfs': -60.0,
         'offset': 1.0,
         'speech': 'speech',
+        'meterState': 'speech',
       }),
     );
     await tester.pump();
