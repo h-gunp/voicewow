@@ -19,6 +19,58 @@ function harness({permission, moduleGate}={}) {
 }
 async function settle(){for(let i=0;i<8;i++)await Promise.resolve();}
 
+for (const trackSettings of [
+  {echoCancellation:false},
+  {autoGainControl:true,noiseSuppression:false,echoCancellation:false},
+  {autoGainControl:false,noiseSuppression:true,echoCancellation:false},
+  {autoGainControl:false,noiseSuppression:false,echoCancellation:true},
+]) test(`relative speech meter works while environment is held for ${JSON.stringify(trackSettings)}`, async () => {
+  const h=harness(), {node}=addNoiseReduction(h);
+  h.track.getSettings=()=>trackSettings;
+  await h.capture.start();
+  const published=h.events.findLast(e=>e.type==='settings').settings;
+  if (!('autoGainControl' in trackSettings)) assert.equal('autoGainControl' in published,false);
+  if (!('noiseSuppression' in trackSettings)) assert.equal('noiseSuppression' in published,false);
+  const send=async(seq,speech,rms=.5)=>{node.port.onmessage({data:{type:'analysis',seq,sampleStart:seq*480,sampleEnd:(seq+1)*480,sampleTime:(seq+1)/100,power:.01,clipped:false,speech,meterRms:rms}});if(seq%10===0)h.frame({},node);await h.tick(10);return h.events.findLast(e=>e.type==='analysis').analysis;};
+  assert.equal((await send(0,'speech')).meterState,'confirming');
+  assert.equal((await send(1,'speech')).meterState,'confirming');
+  let a=await send(2,'speech');
+  assert.equal(a.meterState,'speech'); assert.equal(a.state,'unavailable');
+  assert.equal(a.reason,'processing_settings'); assert.equal(a.noiseDbfs,null); assert.equal(a.offset,null);
+  assert.equal((await send(3,'nonSpeech')).meterState,'nonSpeech');
+  assert.equal((await send(4,'uncertain')).meterState,'uncertain');
+  for(let seq=5;seq<3005;seq++) a=await send(seq,'speech');
+  assert.equal(a.meterState,'speech'); assert.equal(a.state,'unavailable');
+  h.frame({},node); await h.tick(250);
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.meterState,'unavailable');
+  await h.capture.stop();
+});
+
+test('processing setting changes reset relative speech onset evidence', async () => {
+  const h=harness(), {node}=addNoiseReduction(h); let settings={echoCancellation:false};
+  h.track.getSettings=()=>settings;
+  await h.capture.start();
+  const send=async(seq)=>{node.port.onmessage({data:{type:'analysis',seq,sampleStart:seq*480,sampleEnd:(seq+1)*480,sampleTime:(seq+1)/100,power:.01,clipped:false,speech:'speech',meterRms:.2}});await h.tick(10);return h.events.findLast(e=>e.type==='analysis').analysis;};
+  await send(0); await send(1); assert.equal((await send(2)).meterState,'speech');
+  settings={autoGainControl:true,noiseSuppression:false,echoCancellation:false};
+  assert.equal((await send(3)).meterState,'confirming');
+  await send(4); assert.equal((await send(5)).meterState,'speech');
+  settings={autoGainControl:false,noiseSuppression:false,echoCancellation:false};
+  const supported=await send(6);
+  assert.equal(supported.state,'collecting'); assert.equal(supported.meterState,'confirming');
+  node.port.onmessage({data:{type:'analysis_unavailable'}});
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.meterState,'unavailable');
+  await send(7); await send(8);
+  assert.equal((await send(9)).meterState,'unavailable');
+  await h.capture.stop();
+  h.track.readyState='live'; h.ctx.state='running'; settings={echoCancellation:false};
+  const next=addNoiseReduction(h); await h.capture.start();
+  next.node.port.onmessage({data:{type:'analysis',seq:0,sampleStart:0,sampleEnd:480,sampleTime:h.ctx.currentTime+.01,power:.01,clipped:false,speech:'speech',meterRms:.2}});
+  const restarted=h.events.findLast(e=>e.type==='analysis').analysis;
+  assert.equal(restarted.meterState,'confirming'); assert.equal(restarted.state,'unavailable');
+  await h.capture.stop();
+});
+
 test('stalled context resume after permission reports a recoverable error and releases track', async () => {
   const h=harness(), gate=deferred();
   h.ctx.state='suspended'; h.ctx.resume=()=>gate.promise;
@@ -151,7 +203,7 @@ test('speech confirmation resets on frame gap, settings change and stale input',
   await send(0); await send(1); assert.equal((await send(2)).meterState,'speech');
   await h.tick(10); assert.equal((await send(4)).meterState,'confirming');
   await send(5); assert.equal((await send(6)).meterState,'speech');
-  agc=true; assert.equal((await send(7)).meterState,'unavailable');
+  agc=true; assert.equal((await send(7)).meterState,'confirming');
   agc=false; assert.equal((await send(8)).meterState,'confirming');
   await send(9); assert.equal((await send(10)).meterState,'speech');
   h.frame({},node); await h.tick(250);

@@ -8,6 +8,45 @@ import 'fake_audio_port.dart';
 
 void main() {
   testWidgets(
+    'relative speech remains visible when environment processing is unknown',
+    (tester) async {
+      final port = FakeAudioPort();
+      final session = SessionController(port)
+        ..selectScenario(Scenario.values.first);
+      await session.start();
+      port.send(
+        const AudioEvent.settings({
+          'noiseReductionState': 'active',
+          'vadStatus': 'ready',
+          'echoCancellation': false,
+        }),
+      );
+      port.send(const AudioEvent.state(CaptureState.running));
+      port.send(
+        const AudioEvent.analysis({
+          'state': 'unavailable',
+          'reason': 'processing_settings',
+          'speech': 'speech',
+          'meterState': 'speech',
+          'meterDbfs': -40.0,
+        }),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: MeterScreen(session: session, onBack: () {}),
+            ),
+          ),
+        ),
+      );
+      expect(find.byKey(const Key('input-fill')), findsOneWidget);
+      expect(find.textContaining('환경 잡음 추정과 자동 범위를 보류했다.'), findsOneWidget);
+      expect(find.textContaining('전처리 미확인 · 막대는 상대 참고값이다.'), findsOneWidget);
+      session.dispose();
+    },
+  );
+  testWidgets(
     'input diagnostics distinguish received frames from analysis availability',
     (tester) async {
       final port = FakeAudioPort();
@@ -241,7 +280,7 @@ void main() {
       ),
     );
     expect(
-      find.textContaining('브라우저 처리 설정을 확인할 수 없어 분석을 보류했다.'),
+      find.textContaining('브라우저 처리 설정을 확인할 수 없어 환경 잡음 추정과 자동 범위를 보류했다.'),
       findsOneWidget,
     );
     expect(find.textContaining('자동 이득 확인 불가'), findsOneWidget);
