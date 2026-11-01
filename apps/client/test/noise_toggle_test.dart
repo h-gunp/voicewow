@@ -11,6 +11,9 @@ void main() {
 
   Future<void> startMeter(WidgetTester tester, FakeAudioPort port) async {
     await tester.pumpWidget(VoiceMateApp(audioPort: port));
+    await tester.ensureVisible(find.byKey(const Key('enrollment-skip')));
+    await tester.tap(find.byKey(const Key('enrollment-skip')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('scenario-quiet')));
     await tester.pump();
     await tester.ensureVisible(find.byKey(const Key('start')));
@@ -50,8 +53,8 @@ void main() {
     expect(tester.widget<SwitchListTile>(toggle).onChanged, isNull);
     expect(find.text('입력 수준 —'), findsOneWidget);
     expect(find.byKey(const Key('input-fill')), findsNothing);
-    await tester.ensureVisible(find.text('입력 정보'));
-    await tester.tap(find.text('입력 정보'));
+    await tester.ensureVisible(find.text('앱 정보 · 진단'));
+    await tester.tap(find.text('앱 정보 · 진단'));
     await tester.pumpAndSettle();
     expect(find.textContaining('앱 소음 억제 적용 중'), findsNothing);
     expect(find.textContaining('수신 프레임 0'), findsOneWidget);
@@ -60,8 +63,10 @@ void main() {
     port.gate!.complete();
     port.stopGate!.complete();
     await tester.pumpAndSettle();
-    expect(find.text('소음 억제가 꺼져 발화 막대를 표시하지 않는다.'), findsOneWidget);
     expect(find.textContaining('앱 소음 억제 꺼짐'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.text('소음 억제가 꺼져 발화 막대를 표시하지 않는다.'), findsOneWidget);
     await tester.ensureVisible(toggle);
     await tester.tap(toggle);
     await tester.pump();
