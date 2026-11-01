@@ -48,11 +48,23 @@ class AudioEvent {
       normalized = null,
       sampleCount = null,
       settings = null;
+  const AudioEvent.speaker(this.analysis)
+    : type = 'speaker',
+      state = null,
+      reason = null,
+      rms = null,
+      peak = null,
+      dbfs = null,
+      normalized = null,
+      sampleCount = null,
+      settings = null;
 }
 
 abstract interface class AudioPort {
   Stream<AudioEvent> get events;
   Future<void> start({bool noiseReductionEnabled = true});
   Future<void> stop();
+  Future<void> beginSpeakerEnrollment();
+  Future<void> deleteSpeaker();
   Future<void> dispose();
 }

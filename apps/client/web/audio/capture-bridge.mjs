@@ -1,8 +1,13 @@
 import { EnvironmentEstimator } from './environment-estimator.mjs';
+import { createSpeakerFlow } from './speaker-flow.mjs';
+import { createSpeakerResampler } from './speaker-resample.mjs';
+import { createSpeakerWorker } from './speaker-worker.mjs';
 
 function browserPlatform() {
   const devices = globalThis.navigator?.mediaDevices;
+  const speakerAvailable = () => typeof globalThis.Worker === 'function' && typeof globalThis.fetch === 'function' && !!globalThis.crypto?.subtle;
   return {
+    speakerAvailable,
     getUserMedia: typeof devices?.getUserMedia === 'function' ? constraints => devices.getUserMedia(constraints) : undefined,
     createContext: typeof globalThis.AudioContext === 'function' ? () => {
       try { return new AudioContext({sampleRate:48000}); }
@@ -12,6 +17,11 @@ function browserPlatform() {
     createNoiseReductionNode: async (context, signal) => {
       const {createNoiseReductionNode} = await import('./noise-reduction.mjs');
       return createNoiseReductionNode(context, signal);
+    },
+    createSpeakerEmbedding: () => {
+      if (!speakerAvailable()) throw failure('speaker_unavailable');
+      const adapter=createSpeakerWorker(()=>new Worker(new URL('./speaker-inference-worker.mjs',import.meta.url),{type:'module'}));
+      return {embed:pcm=>adapter.run(pcm),cancel:()=>adapter.cancel()};
     },
     isSecureContext: () => globalThis.isSecureContext !== false,
     now: () => performance.now(),
@@ -42,8 +52,16 @@ function disposeNode(node) {
 
 /** Each start owns its resources. Cancelled permission/module promises cannot revive it. */
 export function createCapture({onEvent, platform = browserPlatform()}) {
-  let active = null, nextSession = 0;
+  let active = null, nextSession = 0, speaker = null;
   const current = session => active === session && !session.cancelled;
+  function resetSpeaker(s){
+    s.speakerExpiresAt=undefined;s.speakerWindowNotBefore=s.context.currentTime;
+    s.speakerGeneration=(s.speakerGeneration||0)+1;
+    if(s.speakerEnabled)s.node?.port.postMessage({type:'speaker_capture',enabled:false,generation:s.speakerGeneration});
+    speaker?.resetEpoch();
+    if(s.speakerEnabled&&speaker?.registered)s.node?.port.postMessage({type:'speaker_capture',enabled:true,generation:s.speakerGeneration});
+    else s.speakerEnabled=false;
+  }
   async function prepareNoiseNode(s) {
     const loading = new AbortController();
     const cancel = () => loading.abort();
@@ -69,6 +87,7 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
   }
   async function release(s) {
     s.abort.abort();
+    s.speakerEnabled=false;
     if (s.timer !== undefined) { platform.clearInterval(s.timer); s.timer = undefined; }
     s.unsubscribe?.(); s.unsubscribe = null;
     s.unsubscribeDevice?.(); s.unsubscribeDevice = null;
@@ -84,7 +103,9 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
   }
   async function end(s, state, reason) {
     if (!current(s)) return;
+    if(reason==='device_changed'){s.speakerEnabled=false;speaker?.remove();}
     active = null; s.cancelled = true;
+    speaker?.resetEpoch();
     // Emit before asynchronous cleanup so an older session cannot overwrite a new one.
     onEvent({type:'state',state,...(reason ? {reason} : {})});
     await release(s);
@@ -149,11 +170,13 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
           const raw = readTrackSettings(track), settings = {contextSampleRate:s.context.sampleRate, contextState:s.context.state};
           for (const key of ['sampleRate','channelCount','autoGainControl','noiseSuppression','echoCancellation']) if (raw[key] !== undefined) settings[key] = raw[key];
           settings.noiseReductionState = s.noiseReductionState;
+          settings.speakerAvailable = platform.speakerAvailable?.() ?? typeof platform.createSpeakerEmbedding === 'function';
           if (s.node?.vadStatus) settings.vadStatus = s.node.vadStatus;
           if (s.noiseReductionReason) settings.noiseReductionReason = s.noiseReductionReason;
           const settingsKey = JSON.stringify(settings);
           if (settingsKey !== lastSettingsKey) {
             if (lastSettingsKey !== undefined) {
+              if(s.speakerEnabled)resetSpeaker(s);
               s.estimator = new EnvironmentEstimator(); s.analysisOrigin = null;
               s.speechFrames = 0;
               s.settingsRevision++;
@@ -191,16 +214,30 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
           if (!current(s)) return;
           if (data?.type === 'error') { void end(s,'error',s.noiseReductionState === 'active' ? 'noise_reduction_failed' : 'invalid_samples'); return; }
           if (data?.type === 'analysis_reset') {
+            if(s.speakerEnabled)resetSpeaker(s);
             s.lastAnalysisAt = undefined; s.lastAnalysisSignature = null; s.lastAnalysisSeq = undefined;
             s.analysisOrigin = null; s.speechFrames = 0; s.estimator.resetEpoch();
             onEvent({type:'analysis',analysis:{state:'held',meterState:'unavailable',reason:'input_gap'}}); return;
           }
           if (data?.type === 'analysis_unavailable') {
+            if(s.speakerEnabled){s.speakerEnabled=false;s.speakerGeneration=(s.speakerGeneration||0)+1;s.node.port.postMessage({type:'speaker_capture',enabled:false,generation:s.speakerGeneration});speaker?.resetEpoch();}
             s.estimator = new EnvironmentEstimator();
             s.lastAnalysisAt = undefined; s.lastAnalysisSignature = null; s.speechFrames = 0;
             s.node.vadStatus = 'runtime_failed';
             try { publishSettings(); } catch(error) { void end(s,'error',errorReason(error)); return; }
             onEvent({type:'analysis',analysis:{state:'unavailable',meterState:'unavailable',reason:'vad_runtime_failed'}}); return;
+          }
+          if(data?.type === 'speaker_window') {
+            const pcm=data.pcm;
+            if(!s.speakerEnabled||!speaker||data.generation!==s.speakerGeneration){if(pcm instanceof Float32Array)pcm.fill(0);return;}
+            try {
+              if(Number.isFinite(data.startTime)&&data.startTime<(s.speakerWindowNotBefore??0))return;
+              if(!(pcm instanceof Float32Array)||pcm.length!==48000||!Number.isSafeInteger(data.sampleStart)||data.sampleStart<0||data.sampleEnd!==data.sampleStart+48000||!Number.isFinite(data.startTime)||!Number.isFinite(data.endTime)||!Number.isFinite(s.context.currentTime)||data.startTime<(s.speakerWindowNotBefore??0)||s.analysisOrigin==null||Math.abs(data.startTime-(s.analysisOrigin+data.sampleStart/48000))>.001||Math.abs(data.endTime-data.startTime-1)>.001||s.context.currentTime-data.endTime>1||s.context.currentTime<data.endTime-.25)throw Error('Invalid speaker window');
+              const converter=createSpeakerResampler(),head=converter.push(pcm),tail=converter.finish(),samples=Float32Array.from([...head,...tail]);head.fill(0);tail.fill(0);
+              void speaker.feed(samples,{startTime:data.startTime,endTime:data.endTime,speechFrames:data.speechFrames,clipped:data.clipped}).finally(()=>samples.fill(0));
+            } catch { if(s.speakerEnabled)onEvent({type:'speaker',speaker:{state:'unavailable'}}); }
+            finally { if(pcm instanceof Float32Array)pcm.fill(0); }
+            return;
           }
           if (data?.type === 'analysis') {
             try {
@@ -253,9 +290,11 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
         };
         s.node.onprocessorerror = () => void end(s,'error',s.noiseReductionState === 'active' ? 'noise_reduction_failed' : 'processing_error');
         s.source.connect(s.node); s.node.connect(s.gain); s.gain.connect(s.context.destination);
+        if(speaker?.registered&&s.noiseReductionState==='active'&&s.node.vadStatus==='ready'){s.speakerEnabled=true;s.speakerWindowNotBefore=s.context.currentTime;s.speakerGeneration=(s.speakerGeneration||0)+1;s.node.port.postMessage({type:'speaker_capture',enabled:true,generation:s.speakerGeneration});}
         s.timer = platform.setInterval(() => {
           const now = platform.now();
           try { publishSettings(); } catch(error) { void end(s,'error',errorReason(error)); return; }
+          if(s.speakerExpiresAt!==undefined&&s.context.currentTime>=s.speakerExpiresAt){s.speakerExpiresAt=undefined;onEvent({type:'speaker',speaker:{state:'confirming',reason:'speaker_stale'}});}
           if (now - s.lastFrame >= 1500) void end(s,'error','frame_timeout');
           else if (s.lastAnalysisAt !== undefined && now-s.lastAnalysisAt >= 250) {
             s.lastAnalysisAt = undefined; s.lastAnalysisSignature = null; s.speechFrames = 0; s.estimator.hold();
@@ -274,7 +313,16 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
   async function stop() {
     if (active) await end(active,'idle');
   }
-  return {start,stop};
+  async function beginSpeakerEnrollment(){
+    const s=active;
+    if(!s||s.noiseReductionState!=='active'||s.node?.vadStatus!=='ready'){onEvent({type:'speaker',speaker:{state:'unavailable'}});return;}
+    try{
+      if(!speaker){const engine=platform.createSpeakerEmbedding();speaker=createSpeakerFlow({...engine,now:()=>active?.context?.currentTime??-1,onStatus:status=>{if(!active)return;active.speakerExpiresAt=['similar','dissimilar','uncertain'].includes(status.state)?status.endTime+1:undefined;onEvent({type:'speaker',speaker:status});if(status.state==='unavailable'&&active?.speakerEnabled){active.speakerEnabled=false;active.speakerGeneration=(active.speakerGeneration||0)+1;active.node?.port.postMessage({type:'speaker_capture',enabled:false,generation:active.speakerGeneration});}}});}
+      speaker.begin();s.speakerEnabled=true;s.speakerWindowNotBefore=s.context.currentTime;s.speakerGeneration=(s.speakerGeneration||0)+1;s.node.port.postMessage({type:'speaker_capture',enabled:true,generation:s.speakerGeneration});
+    }catch{onEvent({type:'speaker',speaker:{state:'unavailable'}});}
+  }
+  function deleteSpeaker(){const s=active;if(s?.speakerEnabled){s.speakerEnabled=false;s.speakerGeneration=(s.speakerGeneration||0)+1;s.node.port.postMessage({type:'speaker_capture',enabled:false,generation:s.speakerGeneration});}speaker?.remove();if(!speaker)onEvent({type:'speaker',speaker:{state:'unregistered'}});}
+  return {start,stop,beginSpeakerEnrollment,deleteSpeaker};
 }
 
 if (typeof window !== 'undefined') window.voiceMateAudio = {createCapture};

@@ -36,7 +36,7 @@ class ScenarioScreen extends StatelessWidget {
       ),
       const SizedBox(height: 38),
       const Text(
-        '상황 선택',
+        '모드 선택',
         style: TextStyle(
           color: blue,
           fontWeight: FontWeight.w700,
@@ -45,7 +45,7 @@ class ScenarioScreen extends StatelessWidget {
       ),
       const SizedBox(height: 12),
       const Text(
-        '대화할 상황을\n선택한다.',
+        '사용할 모드를\n선택한다.',
         style: TextStyle(
           fontSize: 29,
           fontWeight: FontWeight.w800,
@@ -67,6 +67,7 @@ class ScenarioScreen extends StatelessWidget {
             spacing: 12,
             runSpacing: 12,
             children: Scenario.values
+                .where((s) => s.id == 'quiet' || s.id == 'meeting')
                 .map((s) => SizedBox(width: width, child: _card(s)))
                 .toList(),
           );

@@ -14,5 +14,10 @@ class UnsupportedAudioPort implements AudioPort {
   @override
   Future<void> stop() async {}
   @override
+  Future<void> beginSpeakerEnrollment() async =>
+      _events.add(const AudioEvent.speaker({'state': 'unavailable'}));
+  @override
+  Future<void> deleteSpeaker() async {}
+  @override
   Future<void> dispose() async => _events.close();
 }

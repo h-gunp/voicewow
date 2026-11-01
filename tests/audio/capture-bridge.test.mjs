@@ -19,6 +19,141 @@ function harness({permission, moduleGate}={}) {
 }
 async function settle(){for(let i=0;i<8;i++)await Promise.resolve();}
 
+test('speaker capability is reported without starting speaker capture', async()=>{
+ const h=harness();h.platform.speakerAvailable=()=>false;await h.capture.start();
+ assert.equal(h.events.findLast(e=>e.type==='settings').settings.speakerAvailable,false);
+ assert.equal(h.port.messages.some(m=>m.type==='speaker_capture'&&m.enabled),false);await h.capture.stop();
+});
+
+test('partial first window before enrollment is discarded without a false failure',async()=>{
+ const h=harness(),{node}=addNoiseReduction(h);node.vadStatus='ready';let calls=0;
+ h.platform.createSpeakerEmbedding=()=>({embed:async()=>{calls++;return new Float32Array([1,0]);},cancel:()=>{}});
+ await h.capture.start();h.frame({},node);await h.tick(15);await h.capture.beginSpeakerEnrollment();
+ node.port.onmessage({data:{type:'analysis',seq:1,sampleStart:480,sampleEnd:960,sampleTime:.02,power:.01,clipped:false,speech:'nonSpeech',meterRms:.1}});
+ h.frame({},node);await h.tick(1000);const pcm=new Float32Array(48000).fill(.01);
+ node.port.onmessage({data:{type:'speaker_window',generation:1,pcm,sampleStart:480,sampleEnd:48480,startTime:.01,endTime:1.01,speechFrames:90,clipped:false}});
+ await settle();assert.equal(calls,0);assert.ok(pcm.every(x=>x===0));
+ assert.equal(h.events.findLast(e=>e.type==='speaker').speaker.state,'registering');await h.capture.stop();
+});
+
+test('voluntary speaker enrollment stays separate from meter, preserves window time and deletes profile', async()=>{
+ const h=harness(),{node}=addNoiseReduction(h);node.vadStatus='ready';
+ h.platform.createSpeakerEmbedding=()=>({embed:async()=>new Float32Array([1,0]),cancel:()=>{}});
+ await h.capture.start();
+ assert.equal(h.events.some(e=>e.type==='speaker'),false);
+ await h.capture.beginSpeakerEnrollment();
+ assert.ok(node.port.messages.some(x=>x.type==='speaker_capture'&&x.enabled));
+ node.port.onmessage({data:{type:'analysis',seq:0,sampleStart:0,sampleEnd:480,sampleTime:.01,power:.01,clipped:false,speech:'nonSpeech',meterRms:.1}});
+ for(let i=0;i<4;i++){
+  h.frame({},node);await h.tick(1000);
+  node.port.onmessage({data:{type:'speaker_window',generation:1,pcm:new Float32Array(48000).fill(.01),sampleStart:i*48000,sampleEnd:(i+1)*48000,startTime:i,endTime:i+1,speechFrames:90,clipped:false}});
+  await new Promise(setImmediate);
+ }
+ assert.ok(h.events.some(e=>e.type==='speaker'&&e.speaker.state==='registered'));
+ const result=h.events.findLast(e=>e.type==='speaker'&&e.speaker.state==='similar');assert.ok(result);assert.equal(result.speaker.startTime,3);assert.equal(result.speaker.endTime,4);
+ assert.ok(h.events.some(e=>e.type==='level'));h.capture.deleteSpeaker();assert.equal(h.events.at(-1).speaker.state,'unregistered');
+ await h.capture.stop();
+});
+
+test('speaker enrollment fails closed when local model is unavailable', async()=>{
+ const h=harness();const {node}=addNoiseReduction(h);node.vadStatus='ready';await h.capture.start();
+ await h.capture.beginSpeakerEnrollment();assert.equal(h.events.at(-1).speaker.state,'unavailable');
+ assert.equal(node.port.messages.some(x=>x.type==='speaker_capture'&&x.enabled),false);await h.capture.stop();
+});
+test('late permission cleanup cannot reset a newer speaker enrollment',async()=>{
+ const h=harness(),oldPermission=deferred(),oldTrack={stops:0,stop(){this.stops++;}};let requests=0,cancels=0;
+ h.platform.getUserMedia=()=>++requests===1?oldPermission.promise:Promise.resolve(h.stream);
+ h.platform.createSpeakerEmbedding=()=>({embed:async()=>new Float32Array([1,0]),cancel:()=>{cancels++;}});
+ const oldStart=h.capture.start();await h.capture.stop();h.ctx.state='running';
+ const {node}=addNoiseReduction(h);node.vadStatus='ready';await h.capture.start();await h.capture.beginSpeakerEnrollment();
+ const before=cancels,events=h.events.length;assert.equal(h.events.at(-1).speaker.state,'registering');
+ oldPermission.resolve({getTracks:()=>[oldTrack]});await oldStart;await settle();
+ assert.equal(oldTrack.stops,1);assert.equal(cancels,before);assert.equal(h.events.length,events);
+ assert.equal(h.events.findLast(e=>e.type==='speaker').speaker.state,'registering');await h.capture.stop();
+});
+test('late noise module cleanup cannot reset a newer speaker enrollment',async()=>{
+ const h=harness(),gate=deferred(),oldNode=h.makeWorkletNode();let cancels=0;
+ h.platform.createNoiseReductionNode=()=>gate.promise;
+ h.platform.createSpeakerEmbedding=()=>({embed:async()=>new Float32Array([1,0]),cancel:()=>{cancels++;}});
+ const oldStart=h.capture.start();await settle();await h.capture.stop();h.ctx.state='running';h.track.readyState='live';
+ const next=h.makeWorkletNode();next.vadStatus='ready';h.platform.createNoiseReductionNode=async()=>next;await h.capture.start();await h.capture.beginSpeakerEnrollment();
+ const before=cancels,events=h.events.length;gate.resolve(oldNode);await oldStart;await settle();
+ assert.equal(oldNode.port.closed,true);assert.equal(cancels,before);assert.equal(h.events.length,events);
+ assert.equal(h.events.findLast(e=>e.type==='speaker').speaker.state,'registering');await h.capture.stop();
+});
+test('failed speaker inference discards queued audio and stop blocks late events',async()=>{
+ const h=harness(),{node}=addNoiseReduction(h);node.vadStatus='ready';let calls=0,cancels=0;const failed=deferred(),late=deferred();
+ h.platform.createSpeakerEmbedding=()=>({embed:()=>{calls++;return calls<=3?Promise.resolve(new Float32Array([1,0])):calls===4?failed.promise:late.promise;},cancel:()=>{cancels++;}});
+ await h.capture.start();await h.capture.beginSpeakerEnrollment();
+ node.port.onmessage({data:{type:'analysis',seq:0,sampleStart:0,sampleEnd:480,sampleTime:.01,power:.01,clipped:false,speech:'nonSpeech',meterRms:.1}});
+ for(let i=0;i<5;i++){h.frame({},node);await h.tick(1000);node.port.onmessage({data:{type:'speaker_window',generation:1,pcm:new Float32Array(48000).fill(.01),sampleStart:i*48000,sampleEnd:(i+1)*48000,startTime:i,endTime:i+1,speechFrames:90,clipped:false}});await new Promise(setImmediate);}
+ assert.equal(calls,4);failed.reject(Error('failed'));await new Promise(setImmediate);
+ assert.equal(h.events.findLast(e=>e.type==='speaker').speaker.state,'unavailable');assert.equal(calls,4);
+ const beforeStop=cancels;await h.capture.stop();assert.ok(cancels>beforeStop);
+ const count=h.events.length;late.resolve(new Float32Array([1,0]));await new Promise(setImmediate);
+ assert.equal(calls,4);assert.equal(h.events.length,count);
+ const next=h.makeWorkletNode();next.vadStatus='ready';h.platform.createNoiseReductionNode=async()=>next;h.track.readyState='live';h.ctx.state='running';await h.capture.start();
+ assert.ok(next.port.messages.some(message=>message.type==='speaker_capture'&&message.enabled));assert.equal(calls,4);await h.capture.stop();
+});
+test('stale speaker inference discards queued audio without deleting registration',async()=>{
+ const h=harness(),{node}=addNoiseReduction(h);node.vadStatus='ready';let calls=0;const slow=deferred();
+ h.platform.createSpeakerEmbedding=()=>({embed:()=>++calls<=3?Promise.resolve(new Float32Array([1,0])):slow.promise,cancel:()=>{}});
+ await h.capture.start();await h.capture.beginSpeakerEnrollment();
+ node.port.onmessage({data:{type:'analysis',seq:0,sampleStart:0,sampleEnd:480,sampleTime:.01,power:.01,clipped:false,speech:'nonSpeech',meterRms:.1}});
+ for(let i=0;i<5;i++){h.frame({},node);await h.tick(1000);node.port.onmessage({data:{type:'speaker_window',generation:1,pcm:new Float32Array(48000).fill(.01),sampleStart:i*48000,sampleEnd:(i+1)*48000,startTime:i,endTime:i+1,speechFrames:90,clipped:false}});await new Promise(setImmediate);}
+ assert.equal(calls,4);h.frame({},node);await h.tick(100);slow.resolve(new Float32Array([1,0]));await new Promise(setImmediate);
+ assert.equal(h.events.findLast(e=>e.type==='speaker').speaker.state,'unavailable');assert.equal(calls,4);
+ await h.capture.stop();const next=h.makeWorkletNode();next.vadStatus='ready';h.platform.createNoiseReductionNode=async()=>next;h.track.readyState='live';h.ctx.state='running';await h.capture.start();
+ assert.ok(next.port.messages.some(message=>message.type==='speaker_capture'&&message.enabled));await h.capture.stop();
+});
+test('speaker gap discards in-flight status and immediate meter keeps working',async()=>{
+ const h=harness(),{node}=addNoiseReduction(h);node.vadStatus='ready';let count=0;const delayed=deferred();
+ h.platform.createSpeakerEmbedding=()=>({embed:()=>++count<=3?Promise.resolve(new Float32Array([1,0])):delayed.promise,cancel:()=>{}});
+ await h.capture.start();await h.capture.beginSpeakerEnrollment();
+ node.port.onmessage({data:{type:'analysis',seq:0,sampleStart:0,sampleEnd:480,sampleTime:.01,power:.01,clipped:false,speech:'nonSpeech',meterRms:.1}});
+ for(let i=0;i<4;i++){h.frame({},node);await h.tick(1000);node.port.onmessage({data:{type:'speaker_window',generation:1,pcm:new Float32Array(48000).fill(.01),sampleStart:i*48000,sampleEnd:(i+1)*48000,startTime:i,endTime:i+1,speechFrames:90,clipped:false}});await settle();}
+ assert.ok(h.events.some(e=>e.type==='speaker'&&e.speaker.state==='registered'));
+ node.port.onmessage({data:{type:'analysis_reset'}});delayed.resolve(new Float32Array([1,0]));await settle();
+ assert.equal(h.events.some(e=>e.type==='speaker'&&e.speaker.state==='similar'),false);
+ h.frame({},node);assert.equal(h.events.at(-1).type,'level');h.capture.deleteSpeaker();await h.capture.stop();
+});
+test('speaker result expires even if no new speaker window arrives',async()=>{
+ const h=harness(),{node}=addNoiseReduction(h);node.vadStatus='ready';h.platform.createSpeakerEmbedding=()=>({embed:async()=>new Float32Array([1,0]),cancel:()=>{}});
+ await h.capture.start();await h.capture.beginSpeakerEnrollment();node.port.onmessage({data:{type:'analysis',seq:0,sampleStart:0,sampleEnd:480,sampleTime:.01,power:.01,clipped:false,speech:'nonSpeech',meterRms:.1}});
+ for(let i=0;i<4;i++){h.frame({},node);await h.tick(1000);node.port.onmessage({data:{type:'speaker_window',generation:1,pcm:new Float32Array(48000).fill(.01),sampleStart:i*48000,sampleEnd:(i+1)*48000,startTime:i,endTime:i+1,speechFrames:90,clipped:false}});await new Promise(setImmediate);}
+ assert.equal(h.events.findLast(e=>e.type==='speaker').speaker.state,'similar');h.frame({},node);await h.tick(1000);
+ assert.equal(h.events.findLast(e=>e.type==='speaker').speaker.state,'confirming');h.capture.deleteSpeaker();await h.capture.stop();
+});
+test('settings change clears worklet window and rejects pre-change audio after registration',async()=>{
+ const h=harness(),{node}=addNoiseReduction(h);node.vadStatus='ready';let calls=0;h.platform.createSpeakerEmbedding=()=>({embed:async()=>{calls++;return new Float32Array([1,0]);},cancel:()=>{}});
+ h.track.getSettings=()=>({autoGainControl:false,noiseSuppression:false,echoCancellation:false});await h.capture.start();await h.capture.beginSpeakerEnrollment();node.port.onmessage({data:{type:'analysis',seq:0,sampleStart:0,sampleEnd:480,sampleTime:.01,power:.01,clipped:false,speech:'nonSpeech',meterRms:.1}});
+ for(let i=0;i<3;i++){h.frame({},node);await h.tick(1000);node.port.onmessage({data:{type:'speaker_window',generation:1,pcm:new Float32Array(48000).fill(.01),sampleStart:i*48000,sampleEnd:(i+1)*48000,startTime:i,endTime:i+1,speechFrames:90,clipped:false}});await new Promise(setImmediate);}
+ assert.equal(calls,3);h.track.getSettings=()=>({autoGainControl:true,noiseSuppression:false,echoCancellation:false});h.frame({},node);
+ assert.deepEqual(node.port.messages.filter(x=>x.type==='speaker_capture').slice(-2).map(x=>x.enabled),[false,true]);
+ node.port.onmessage({data:{type:'analysis',seq:300,sampleStart:144000,sampleEnd:144480,sampleTime:3.01,power:.01,clipped:false,speech:'nonSpeech',meterRms:.1}});
+ const old=new Float32Array(48000).fill(.02);node.port.onmessage({data:{type:'speaker_window',generation:1,pcm:old,sampleStart:100800,sampleEnd:148800,startTime:2.1,endTime:3.1,speechFrames:90,clipped:false}});await new Promise(setImmediate);
+ assert.equal(calls,3);assert.ok(old.every(x=>x===0));
+ h.frame({},node);await h.tick(1000);
+ const late=new Float32Array(48000).fill(.03);node.port.onmessage({data:{type:'speaker_window',generation:1,pcm:late,sampleStart:144000,sampleEnd:192000,startTime:3,endTime:4,speechFrames:90,clipped:false}});await new Promise(setImmediate);
+ assert.equal(calls,3);assert.ok(late.every(x=>x===0));h.capture.deleteSpeaker();await h.capture.stop();
+});
+test('registered speaker resumes on a new capture but device change removes registration',async()=>{
+ const h=harness(),{node}=addNoiseReduction(h);node.vadStatus='ready';h.platform.createSpeakerEmbedding=()=>({embed:async()=>new Float32Array([1,0]),cancel:()=>{}});
+ await h.capture.start();await h.capture.beginSpeakerEnrollment();node.port.onmessage({data:{type:'analysis',seq:0,sampleStart:0,sampleEnd:480,sampleTime:.01,power:.01,clipped:false,speech:'nonSpeech',meterRms:.1}});
+ for(let i=0;i<3;i++){h.frame({},node);await h.tick(1000);node.port.onmessage({data:{type:'speaker_window',generation:1,pcm:new Float32Array(48000).fill(.01),sampleStart:i*48000,sampleEnd:(i+1)*48000,startTime:i,endTime:i+1,speechFrames:90,clipped:false}});await new Promise(setImmediate);}
+ assert.ok(h.events.some(e=>e.type==='speaker'&&e.speaker.state==='registered'));await h.capture.stop();
+ const next=h.makeWorkletNode();next.vadStatus='ready';h.platform.createNoiseReductionNode=async()=>next;h.track.readyState='live';h.ctx.state='running';await h.capture.start();
+ assert.ok(next.port.messages.some(x=>x.type==='speaker_capture'&&x.enabled));h.track.readyState='ended';await h.changeDevice();
+ assert.equal(h.events.findLast(e=>e.type==='speaker').speaker.state,'unregistered');
+});
+test('deleting during registration prevents delayed completion and turns raw capture off',async()=>{
+ const h=harness(),{node}=addNoiseReduction(h);node.vadStatus='ready';const delayed=deferred();h.platform.createSpeakerEmbedding=()=>({embed:()=>delayed.promise,cancel:()=>{}});
+ await h.capture.start();await h.capture.beginSpeakerEnrollment();node.port.onmessage({data:{type:'analysis',seq:0,sampleStart:0,sampleEnd:480,sampleTime:.01,power:.01,clipped:false,speech:'nonSpeech',meterRms:.1}});
+ h.frame({},node);await h.tick(1000);node.port.onmessage({data:{type:'speaker_window',generation:1,pcm:new Float32Array(48000).fill(.01),sampleStart:0,sampleEnd:48000,startTime:0,endTime:1,speechFrames:90,clipped:false}});await settle();
+ h.capture.deleteSpeaker();delayed.resolve(new Float32Array([1,0]));await new Promise(setImmediate);
+ assert.equal(h.events.findLast(e=>e.type==='speaker').speaker.state,'unregistered');assert.equal(node.port.messages.filter(x=>x.type==='speaker_capture').at(-1).enabled,false);await h.capture.stop();
+});
+
 test('successive input epochs use current speech immediately and preserve noise baseline', async () => {
   const h=harness(), {node}=addNoiseReduction(h);
   h.track.getSettings=()=>({autoGainControl:false,noiseSuppression:false,echoCancellation:false});
@@ -599,7 +734,7 @@ test('processing_setting_change_is_reported_before_the_next_level', async () => 
   autoGainControl=true; h.frame();
   const settingsEvents=h.events.filter(event=>event.type==='settings');
   assert.equal(settingsEvents.length, 2);
-  assert.deepEqual(h.events.at(-2), {type:'settings',settings:{contextSampleRate:48000,contextState:'running',sampleRate:48000,autoGainControl:true,echoCancellation:false,noiseReductionState:'unavailable',noiseReductionReason:'unsupported'}});
+  assert.deepEqual(h.events.at(-2), {type:'settings',settings:{contextSampleRate:48000,contextState:'running',sampleRate:48000,autoGainControl:true,echoCancellation:false,noiseReductionState:'unavailable',speakerAvailable:false,noiseReductionReason:'unsupported'}});
   assert.equal(h.events.at(-1).type, 'level');
   h.frame();
   assert.equal(h.events.filter(event=>event.type==='settings').length, 2);
@@ -609,7 +744,7 @@ test('processing_setting_change_is_reported_before_the_next_level', async () => 
 test('processing_setting_disappearance_is_reported', async () => {
   const h=harness(); await h.capture.start();
   h.track.getSettings=()=>({sampleRate:48000}); h.frame();
-  assert.deepEqual(h.events.at(-2), {type:'settings',settings:{contextSampleRate:48000,contextState:'running',sampleRate:48000,noiseReductionState:'unavailable',noiseReductionReason:'unsupported'}});
+  assert.deepEqual(h.events.at(-2), {type:'settings',settings:{contextSampleRate:48000,contextState:'running',sampleRate:48000,noiseReductionState:'unavailable',speakerAvailable:false,noiseReductionReason:'unsupported'}});
   await h.capture.stop();
 });
 
@@ -742,7 +877,7 @@ test('noise_reduction_status_survives_browser_processing_setting_changes', async
   const h=harness(), noise=addNoiseReduction(h); await h.capture.start();
   h.track.getSettings=()=>({autoGainControl:true,noiseSuppression:false});
   h.frame({},noise.node);
-  assert.deepEqual(h.events.at(-2),{type:'settings',settings:{contextSampleRate:48000,contextState:'running',autoGainControl:true,noiseSuppression:false,noiseReductionState:'active'}});
+  assert.deepEqual(h.events.at(-2),{type:'settings',settings:{contextSampleRate:48000,contextState:'running',autoGainControl:true,noiseSuppression:false,noiseReductionState:'active',speakerAvailable:false}});
   assert.equal(h.events.at(-1).type,'level');
   await h.capture.stop();
 });

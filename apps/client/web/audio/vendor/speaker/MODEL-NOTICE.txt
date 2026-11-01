@@ -1,0 +1,27 @@
+WeSpeaker VoxCeleb ResNet34 ONNX model
+
+Creator and attribution: WeSpeaker contributors.
+Source file: https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34/blob/ff1ac5bca8ef11e90662b879aa923979e0bd277b/voxceleb_resnet34.onnx
+Source revision: ff1ac5bca8ef11e90662b879aa923979e0bd277b
+File size: 26534127 bytes
+SHA-256: 9fea6516d7ad6bf0a76c7689f5a49b65d330fad6dde96c91bb4435ffbfe056a1
+Changes: none; the model file is distributed byte-for-byte unchanged.
+
+WeSpeaker's official v1.2.0 model documentation describes its VoxCeleb pretrained
+models, including ONNX runtime models, under Creative Commons Attribution 4.0
+International: https://github.com/wenet-e2e/wespeaker/blob/820acb41d3ea1ffe2c465375189d7578f4553996/docs/pretrained.md
+CC BY 4.0 legal code: https://creativecommons.org/licenses/by/4.0/legalcode.en
+The model is provided without warranties as described in that license. Attribution
+does not suggest that the WeSpeaker contributors endorse this project or its use.
+
+The source repository's README metadata separately states:
+---
+license: apache-2.0
+---
+Source: https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34/blob/ff1ac5bca8ef11e90662b879aa923979e0bd277b/README.md
+The Apache License 2.0 text is provided separately in LICENSE-APACHE-2.0.txt.
+These source notices are reproduced without resolving them into a new combined
+license designation or imposing additional conditions on the model.
+
+ONNX Runtime code and its third-party notices concern the runtime, not the model;
+see LICENSE-ONNXRUNTIME and ONNXRUNTIME-THIRD-PARTY-NOTICES.txt separately.
