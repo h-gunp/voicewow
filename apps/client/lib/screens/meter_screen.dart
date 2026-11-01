@@ -60,12 +60,61 @@ class MeterScreen extends StatelessWidget {
     final offset = a['offset'] as num?;
     final voice = a['voiceDbfs'] as num?;
     final noise = a['noiseDbfs'] as num?;
-    final analysisStatus = switch (a['state']) {
-      'ready' => '환경 분석 중',
-      'collecting' => '비발화 증거를 수집하고 있다.',
-      'held' => '잡음 정보가 오래됐거나 불확실해 보류했다.',
-      'unsupported' => '자동 조절 지원 범위를 초과했다.',
-      _ => '환경 분석을 사용할 수 없다.',
+    final settings = session.settings;
+    String flag(String key) => settings[key] == true
+        ? '켜짐'
+        : settings[key] == false
+        ? '꺼짐'
+        : '확인 불가';
+    final vadLabel = a['reason'] == 'vad_runtime_failed'
+        ? '실행 오류'
+        : switch (settings['vadStatus']) {
+            'ready' => '준비됨',
+            'load_timeout' => '파일 시간 초과',
+            'load_failed' => '파일 로드 실패',
+            'init_failed' => '초기화 실패',
+            'runtime_failed' => '실행 오류',
+            _ => '확인 불가',
+          };
+    final processingUnknown = [
+      'autoGainControl',
+      'noiseSuppression',
+      'echoCancellation',
+    ].any((key) => settings[key] != true && settings[key] != false);
+    final analysisStatus = switch ((
+      session.state,
+      settings['noiseReductionState'],
+      settings['vadStatus'],
+      a['reason'],
+      a['state'],
+    )) {
+      (CaptureState.requesting, _, _, _, _) => '환경 분석을 준비하고 있다.',
+      (CaptureState.idle || CaptureState.error, _, _, _, _) => '환경 분석이 중지됐다.',
+      (_, 'disabled', _, _, _) => '소음 억제가 꺼져 환경 분석을 보류했다.',
+      (_, 'unavailable', _, _, _)
+          when settings['noiseReductionReason'] == 'unsupported_sample_rate' =>
+        '오디오 처리 주파수 ${settings['contextSampleRate'] ?? '확인 불가'} Hz는 소음 억제를 지원하지 않는다.',
+      (_, 'unavailable', _, _, _)
+          when settings['noiseReductionReason'] == 'load_timeout' =>
+        '소음 억제 준비 시간이 초과됐다.',
+      (_, 'unavailable', _, _, _)
+          when settings['noiseReductionReason'] == 'load_failed' =>
+        '소음 억제 파일을 불러오거나 준비하지 못했다.',
+      (_, 'unavailable', _, _, _) => '이 브라우저에서 소음 억제를 준비하지 못했다.',
+      (_, _, 'load_timeout', _, _) => '발화 판별 파일을 불러오는 시간이 초과됐다.',
+      (_, _, 'load_failed', _, _) => '발화 판별 파일을 불러오지 못했다.',
+      (_, _, 'init_failed', _, _) => '발화 판별기를 준비하지 못했다.',
+      (_, _, 'runtime_failed', _, _) => '발화 판별 중 오류가 발생했다.',
+      (_, _, _, 'vad_runtime_failed', _) => '발화 판별 중 오류가 발생했다.',
+      (_, _, _, 'invalid_analysis', _) => '분석 신호를 확인하지 못했다.',
+      (_, _, _, 'processing_settings', _) when processingUnknown =>
+        '브라우저 처리 설정을 확인할 수 없어 분석을 보류했다.',
+      (_, _, _, 'processing_settings', _) => '브라우저 처리 설정이 켜져 있어 분석을 보류했다.',
+      (_, _, _, _, 'ready') => '환경 분석 중',
+      (_, _, _, _, 'collecting') => '비발화 증거를 수집하고 있다.',
+      (_, _, _, _, 'held') => '잡음 정보가 오래됐거나 불확실해 보류했다.',
+      (_, _, _, _, 'unsupported') => '자동 조절 지원 범위를 초과했다.',
+      _ => '환경 분석 신호를 기다리고 있다.',
     };
     final inputLabel =
         session.state == CaptureState.running &&
@@ -132,6 +181,14 @@ class MeterScreen extends StatelessWidget {
               ? null
               : session.setNoiseReductionEnabled,
         ),
+        Semantics(
+          liveRegion: true,
+          child: Text(
+            '$analysisStatus\n발화 판별기 $vadLabel\n자동 이득 ${flag('autoGainControl')} · 잡음 억제 ${flag('noiseSuppression')} · 반향 제거 ${flag('echoCancellation')}',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: muted, fontSize: 12, height: 1.7),
+          ),
+        ),
         VolumeGauge(scenario: s, displayLevel: session.displayLevel),
         Text(
           '입력 수준 ${session.displayLevel?.toStringAsFixed(1) ?? '—'}',
@@ -149,7 +206,6 @@ class MeterScreen extends StatelessWidget {
           liveRegion: true,
           child: Text(
             [
-              analysisStatus,
               if (a['state'] == 'ready') ...[
                 '발화 판정 ${a['speech'] == 'speech'
                     ? '발화 감지'

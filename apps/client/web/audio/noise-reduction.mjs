@@ -54,13 +54,14 @@ export async function createNoiseReductionNode(context, signal) {
         const wasmBinary = new Uint8Array(await response.arrayBuffer());
         if (finished) return;
         let vadBinary = null;
+        let vadStatus = 'load_failed';
         const vadRequest = new AbortController();
         let cancelVad;
         const cancelled = new Promise(resolve => { cancelVad = () => { vadRequest.abort(); resolve(null); }; });
         request.signal.addEventListener('abort', cancelVad, {once:true});
         let vadTimer;
         try {
-          const timeout = new Promise(resolve => { vadTimer = setTimeout(() => { vadRequest.abort(); resolve(null); }, 1500); });
+          const timeout = new Promise(resolve => { vadTimer = setTimeout(() => { vadStatus = 'load_timeout'; vadRequest.abort(); resolve(null); }, 1500); });
           const download = (async () => {
             const vadResponse = await fetch(new URL('./vendor/libfvad/libfvad.wasm', import.meta.url), {
               signal: vadRequest.signal, mode: 'same-origin', credentials: 'same-origin',
@@ -79,7 +80,10 @@ export async function createNoiseReductionNode(context, signal) {
         });
         if (finished) { dispose(node); return; }
         node.port.onmessage = ({data}) => {
-          if (data?.type === 'ready') finish();
+          if (data?.type === 'ready') {
+            node.vadStatus = vadBinary ? (data.vadStatus || 'unknown') : vadStatus;
+            finish();
+          }
           else if (data?.type === 'error') finish(failure('load_failed'));
         };
         node.port.onmessageerror = node.onprocessorerror = () => finish(failure('load_failed'));
