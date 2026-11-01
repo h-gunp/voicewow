@@ -38,7 +38,7 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(find.text('입력 수준 83.0'), findsOneWidget);
+    expect(find.text('입력 수준 —'), findsOneWidget);
     port.stopGate = Completer<void>();
     port.gate = Completer<void>();
     await tester.ensureVisible(toggle);
@@ -60,7 +60,7 @@ void main() {
     port.gate!.complete();
     port.stopGate!.complete();
     await tester.pumpAndSettle();
-    expect(find.text('소음 억제를 끄고 원본 입력을 표시한다.'), findsOneWidget);
+    expect(find.text('소음 억제가 꺼져 발화 막대를 표시하지 않는다.'), findsOneWidget);
     expect(find.textContaining('앱 소음 억제 꺼짐'), findsOneWidget);
     await tester.ensureVisible(toggle);
     await tester.tap(toggle);

@@ -19,6 +19,49 @@ function harness({permission, moduleGate}={}) {
 }
 async function settle(){for(let i=0;i<8;i++)await Promise.resolve();}
 
+for (const initialNoise of [false,true]) test(`continuous speech stays visible with ${initialNoise ? 'stale noise' : 'no initial noise'}`, async () => {
+  const h=harness(), {node}=addNoiseReduction(h);
+  h.track.getSettings=()=>({autoGainControl:false,noiseSuppression:false,echoCancellation:false});
+  await h.capture.start();
+  const send=(seq,speech)=>node.port.onmessage({data:{type:'analysis',seq,sampleStart:seq*480,sampleEnd:(seq+1)*480,sampleTime:(seq+1)/100,power:.01,clipped:false,speech,meterRms:.5}});
+  for(let seq=0;seq<(initialNoise?400:0);seq++){send(seq,'nonSpeech');if(seq%10===0)h.frame({},node);await h.tick(10);}
+  const start=initialNoise?400:0;
+  for(let seq=start;seq<start+3000;seq++){send(seq,'speech');if(seq%10===0)h.frame({},node);await h.tick(10);}
+  const a=h.events.findLast(e=>e.type==='analysis').analysis;
+  assert.equal(a.state, initialNoise?'held':'collecting');
+  assert.equal(a.meterState,'speech');
+  assert.ok(Math.abs(a.meterDbfs-20*Math.log10(.5))<1e-9);
+  h.frame({},node); await h.tick(250);
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.meterState,'unavailable');
+  await h.capture.stop();
+});
+
+test('speech meter follows the matching fresh analysis frame and clears immediately', async () => {
+  const h=harness(), {node}=addNoiseReduction(h);
+  h.track.getSettings=()=>({autoGainControl:false,noiseSuppression:false,echoCancellation:false});
+  await h.capture.start();
+  const send=(seq,speech,meterRms)=>node.port.onmessage({data:{type:'analysis',seq,sampleStart:seq*480,sampleEnd:(seq+1)*480,sampleTime:(seq+1)/100,power:.01,clipped:false,speech,meterRms}});
+  for(let i=0;i<400;i++){send(i,'nonSpeech',.1);if(i%10===0)h.frame({},node);await h.tick(10);}
+  h.frame({rms:.01,dbfs:-40},node);
+  send(400,'speech',.5);
+  let a=h.events.findLast(e=>e.type==='analysis').analysis;
+  assert.equal(a.speech,'speech'); assert.ok(Math.abs(a.meterDbfs-20*Math.log10(.5))<1e-9);
+  h.frame({rms:.9,dbfs:-1},node);
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.meterDbfs,a.meterDbfs);
+  send(401,'nonSpeech',.9);
+  a=h.events.findLast(e=>e.type==='analysis').analysis;
+  assert.equal(a.speech,'nonSpeech'); assert.equal(a.meterState,'nonSpeech'); assert.equal(a.meterDbfs,null);
+  await h.tick(10); send(402,'uncertain',.9);
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.meterState,'uncertain');
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.meterDbfs,null);
+  await h.tick(10); send(403,'speech',.7);
+  assert.ok(h.events.findLast(e=>e.type==='analysis').analysis.meterDbfs != null);
+  h.frame({},node); await h.tick(250);
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.state,'held');
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.meterDbfs,undefined);
+  await h.capture.stop();
+});
+
 test('VAD runtime failure remains in settings after processing settings change', async () => {
   const h=harness(), {node}=addNoiseReduction(h);
   node.vadStatus='ready';

@@ -107,6 +107,14 @@ void main() {
         sampleCount: 4800,
       ),
     );
+    port.send(
+      const AudioEvent.analysis({
+        'state': 'ready',
+        'speech': 'speech',
+        'meterState': 'speech',
+        'meterDbfs': -6.0,
+      }),
+    );
     await tester.pump();
     expect(find.text('입력 수준 108.0'), findsOneWidget);
     expect(find.byKey(const Key('input-fill')), findsOneWidget);
@@ -222,6 +230,14 @@ void main() {
           sampleCount: 4800,
         ),
       );
+      port.send(
+        AudioEvent.analysis({
+          'state': 'ready',
+          'speech': 'speech',
+          'meterState': 'speech',
+          'meterDbfs': fixture.$4,
+        }),
+      );
       await tester.pump();
       expect(find.text('입력 수준 ${fixture.$2}.0'), findsOneWidget);
       await tester.pumpAndSettle();
@@ -241,58 +257,68 @@ void main() {
     });
   }
 
-  testWidgets(
-    'silence stays at zero while stopped and missing input have no fill',
-    (tester) async {
-      final port = FakeAudioPort();
-      await tester.pumpWidget(VoiceMateApp(audioPort: port));
-      await tester.tap(find.byKey(const Key('scenario-quiet')));
-      await tester.pump();
-      await tester.ensureVisible(find.byKey(const Key('start')));
-      await tester.tap(find.byKey(const Key('start')));
-      await tester.pumpAndSettle();
-      port.send(const AudioEvent.state(CaptureState.running));
-      for (final fixture in [
-        (-50.0, '64.0'),
-        (-20.0, '94.0'),
-        (-9.0, '105.0'),
-        (0.0, '114.0'),
-        (5.0, '119.0'),
-        (6.0, '120.0'),
-        (15.0, '120.0'),
-        (16.0, '120.0'),
-        (26.0, '120.0'),
-        (30.0, '120.0'),
-        (-79.0, '35.0'),
-        (-100.0, '14.0'),
-        (-104.0, '10.0'),
-        (-113.0, '1.0'),
-        (-114.0, '0.0'),
-        (-120.0, '0.0'),
-        (null, '0.0'),
-      ]) {
-        port.send(
-          AudioEvent.level(
-            rms: fixture.$1 == null ? 0 : .03,
-            dbfs: fixture.$1,
-            normalized: .5,
-            sampleCount: 4800,
-          ),
-        );
-        await tester.pump();
-        expect(find.text('입력 수준 ${fixture.$2}'), findsOneWidget);
-        expect(find.byKey(const Key('input-fill')), findsOneWidget);
-      }
+  testWidgets('speech levels clamp while missing input has no fill', (
+    tester,
+  ) async {
+    final port = FakeAudioPort();
+    await tester.pumpWidget(VoiceMateApp(audioPort: port));
+    await tester.tap(find.byKey(const Key('scenario-quiet')));
+    await tester.pump();
+    await tester.ensureVisible(find.byKey(const Key('start')));
+    await tester.tap(find.byKey(const Key('start')));
+    await tester.pumpAndSettle();
+    port.send(const AudioEvent.state(CaptureState.running));
+    for (final fixture in [
+      (-50.0, '64.0'),
+      (-20.0, '94.0'),
+      (-9.0, '105.0'),
+      (0.0, '114.0'),
+      (5.0, '119.0'),
+      (6.0, '120.0'),
+      (15.0, '120.0'),
+      (16.0, '120.0'),
+      (26.0, '120.0'),
+      (30.0, '120.0'),
+      (-79.0, '35.0'),
+      (-100.0, '14.0'),
+      (-104.0, '10.0'),
+      (-113.0, '1.0'),
+      (-114.0, '0.0'),
+      (-120.0, '0.0'),
+      (null, '—'),
+    ]) {
       port.send(
-        const AudioEvent.state(CaptureState.error, reason: 'device_missing'),
+        AudioEvent.level(
+          rms: fixture.$1 == null ? 0 : .03,
+          dbfs: fixture.$1,
+          normalized: .5,
+          sampleCount: 4800,
+        ),
+      );
+      port.send(
+        AudioEvent.analysis({
+          'state': 'ready',
+          'speech': 'speech',
+          'meterState': 'speech',
+          'meterDbfs': fixture.$1,
+        }),
       );
       await tester.pump();
-      expect(find.byKey(const Key('input-fill')), findsNothing);
-      expect(find.text('입력 수준 —'), findsOneWidget);
-      expect(find.text('하한 53'), findsOneWidget);
-      expect(find.text('상한 75'), findsOneWidget);
-    },
-  );
+      expect(find.text('입력 수준 ${fixture.$2}'), findsOneWidget);
+      expect(
+        find.byKey(const Key('input-fill')),
+        fixture.$1 == null ? findsNothing : findsOneWidget,
+      );
+    }
+    port.send(
+      const AudioEvent.state(CaptureState.error, reason: 'device_missing'),
+    );
+    await tester.pump();
+    expect(find.byKey(const Key('input-fill')), findsNothing);
+    expect(find.text('입력 수준 —'), findsOneWidget);
+    expect(find.text('하한 53'), findsOneWidget);
+    expect(find.text('상한 75'), findsOneWidget);
+  });
 
   for (final agc in [null, false, true]) {
     testWidgets('AGC $agc neither requires registration nor blocks input', (
@@ -317,7 +343,7 @@ void main() {
         ),
       );
       await tester.pump();
-      expect(find.text('입력 수준 83.0'), findsOneWidget);
+      expect(find.text('입력 수준 —'), findsOneWidget);
       expect(find.text('하한 53'), findsOneWidget);
       expect(find.text('상한 75'), findsOneWidget);
       expect(find.byKey(const Key('configure-range')), findsNothing);
@@ -381,7 +407,7 @@ void main() {
         CaptureState.running,
         'disabled',
         '입력을 확인하고 있다.',
-        '소음 억제를 끄고 원본 입력을 표시한다.',
+        '소음 억제가 꺼져 발화 막대를 표시하지 않는다.',
         '꺼짐',
         '원본 입력 -31.0 dBFS',
       ),
@@ -389,7 +415,7 @@ void main() {
         CaptureState.running,
         'unavailable',
         '입력을 확인하고 있다.',
-        '소음 억제를 사용할 수 없어 원본 입력을 표시한다.',
+        '소음 억제를 사용할 수 없어 발화 막대를 표시하지 않는다.',
         '사용 불가',
         '원본 입력 -31.0 dBFS',
       ),
