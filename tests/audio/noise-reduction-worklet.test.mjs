@@ -28,7 +28,8 @@ const create = () => new Processor({processorOptions:{wasmBinary}});
 
 test('real RNNoise and VAD worklet emits aligned raw analysis without samples', {timeout:2000}, async () => {
   const processor = new Processor({processorOptions:{wasmBinary,vadBinary}});
-  await processor.port.next('ready');
+  const ready = await processor.port.next('ready');
+  assert.equal(ready.vadStatus, 'ready');
   globalThis.currentFrame = 96000;
   processor.process([[new Float32Array(480).fill(.25)]]);
   processor.process([[new Float32Array(480).fill(.5)]]);
@@ -44,7 +45,8 @@ test('real RNNoise and VAD worklet emits aligned raw analysis without samples', 
 
 test('invalid VAD binary keeps RNNoise level meter running', {timeout:2000}, async () => {
   const processor = new Processor({processorOptions:{wasmBinary,vadBinary:new Uint8Array([0])}});
-  await processor.port.next('ready');
+  const ready = await processor.port.next('ready');
+  assert.equal(ready.vadStatus, 'init_failed');
   processor.process([[new Float32Array(4800)]]);
   assert.equal(processor.port.messages.filter(m=>m.type === 'level').length, 1);
   assert.equal(processor.port.messages.some(m=>m.type === 'analysis'), false);

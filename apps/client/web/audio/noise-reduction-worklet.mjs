@@ -8,8 +8,10 @@ class NoiseMeterProcessor extends AudioWorkletProcessor {
     this.meter = null;
     this.port.onmessage = ({data}) => { if (data?.type === 'dispose') this.dispose(); };
     const {wasmBinary, vadBinary} = options.processorOptions;
+    let vadStatus = vadBinary ? 'init_failed' : 'load_failed';
     const prepareVad = vadBinary ? createVoiceActivity(vadBinary).catch(() => null) : Promise.resolve(null);
     prepareVad.then(async vad => {
+      if (vad) vadStatus = 'ready';
       try {
         return await createNoiseMeter(wasmBinary, sampleRate, vad ? {
           vad,
@@ -20,7 +22,7 @@ class NoiseMeterProcessor extends AudioWorkletProcessor {
     }).then(meter => {
       if (this.finished) { meter.dispose(); return; }
       this.meter = meter;
-      this.port.postMessage({type:'ready'});
+      this.port.postMessage({type:'ready',vadStatus});
     }).catch(() => {
       if (this.finished) return;
       this.dispose();

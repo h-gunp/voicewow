@@ -134,6 +134,7 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
           const raw = track.getSettings(), settings = {contextSampleRate:s.context.sampleRate};
           for (const key of ['sampleRate','channelCount','autoGainControl','noiseSuppression','echoCancellation']) if (raw[key] !== undefined) settings[key] = raw[key];
           settings.noiseReductionState = s.noiseReductionState;
+          if (s.node?.vadStatus) settings.vadStatus = s.node.vadStatus;
           if (s.noiseReductionReason) settings.noiseReductionReason = s.noiseReductionReason;
           const settingsKey = JSON.stringify(settings);
           if (settingsKey !== lastSettingsKey) {
@@ -175,7 +176,9 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
           if (data?.type === 'error') { void end(s,'error',s.noiseReductionState === 'active' ? 'noise_reduction_failed' : 'invalid_samples'); return; }
           if (data?.type === 'analysis_unavailable') {
             s.estimator = new EnvironmentEstimator();
-            onEvent({type:'analysis',analysis:{state:'unavailable'}}); return;
+            s.node.vadStatus = 'runtime_failed';
+            try { publishSettings(); } catch { void end(s,'error','processing_error'); return; }
+            onEvent({type:'analysis',analysis:{state:'unavailable',reason:'vad_runtime_failed'}}); return;
           }
           if (data?.type === 'analysis') {
             try {
@@ -183,7 +186,7 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
               const settings = track.getSettings();
               if (s.noiseReductionState !== 'active' || ['autoGainControl','noiseSuppression','echoCancellation'].some(key=>settings[key] !== false)) {
                 s.estimator = new EnvironmentEstimator(); s.analysisOrigin = null;
-                onEvent({type:'analysis',analysis:{state:'unavailable'}}); return;
+                onEvent({type:'analysis',analysis:{state:'unavailable',reason:'processing_settings'}}); return;
               }
               const now = platform.now();
               if (!Number.isSafeInteger(data.seq) || data.seq < 0 || data.sampleStart !== data.seq*480 || data.sampleEnd !== (data.seq+1)*480 || typeof data.clipped !== 'boolean' || !Number.isFinite(data.sampleTime) || !Number.isFinite(s.context.currentTime)) throw new Error('invalid analysis');
@@ -194,7 +197,7 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
               if (age > 1000 || age < -250) { s.estimator.hold(); onEvent({type:'analysis',analysis:{state:'held'}}); return; }
               s.estimator.add(data);
               if (data.seq%10===0) onEvent({type:'analysis',analysis:{...s.estimator.snapshot(),sessionId:s.sessionId,deviceEpoch:s.sessionId,settingsRevision:s.settingsRevision,seq:data.seq,sampleStart:data.sampleStart,sampleEnd:data.sampleEnd,sampleTime:data.sampleTime,receivedAt:now}});
-            } catch { s.estimator.hold(); onEvent({type:'analysis',analysis:{state:'unavailable'}}); }
+            } catch { s.estimator.hold(); onEvent({type:'analysis',analysis:{state:'unavailable',reason:'invalid_analysis'}}); }
             return;
           }
           if (data?.type !== 'level') return;

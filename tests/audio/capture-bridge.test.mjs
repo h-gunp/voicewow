@@ -19,6 +19,30 @@ function harness({permission, moduleGate}={}) {
 }
 async function settle(){for(let i=0;i<8;i++)await Promise.resolve();}
 
+test('VAD runtime failure remains in settings after processing settings change', async () => {
+  const h=harness(), {node}=addNoiseReduction(h);
+  node.vadStatus='ready';
+  let agc=false;
+  h.track.getSettings=()=>({autoGainControl:agc,noiseSuppression:false,echoCancellation:false});
+  await h.capture.start();
+  node.port.onmessage({data:{type:'analysis_unavailable'}});
+  agc=true;
+  h.frame({},node);
+  assert.equal(h.events.findLast(e=>e.type==='settings').settings.vadStatus,'runtime_failed');
+  await h.capture.stop();
+});
+
+test('capture publishes VAD initialization status without device identity', async () => {
+  const h=harness(), noise=addNoiseReduction(h);
+  noise.node.vadStatus='init_failed';
+  h.track.getSettings=()=>({deviceId:'private',autoGainControl:false,noiseSuppression:false,echoCancellation:false});
+  await h.capture.start();
+  const settings=h.events.findLast(e=>e.type==='settings').settings;
+  assert.equal(settings.vadStatus,'init_failed');
+  assert.equal('deviceId' in settings,false);
+  await h.capture.stop();
+});
+
 test('analysis only accepts fresh frames when processing settings are known disabled', async () => {
   const h=harness(), noise=addNoiseReduction(h);
   h.track.getSettings=()=>({sampleRate:48000,autoGainControl:false,noiseSuppression:false,echoCancellation:false});
@@ -33,6 +57,7 @@ test('analysis only accepts fresh frames when processing settings are known disa
   h.track.getSettings=()=>({sampleRate:48000,autoGainControl:true,noiseSuppression:false,echoCancellation:false});
   node.port.onmessage({data:{type:'analysis',seq:410,sampleStart:196800,sampleEnd:197280,sampleTime:4.11,power:.01,clipped:false,speech:'nonSpeech'}});
   assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.state,'unavailable');
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.reason,'processing_settings');
   await h.capture.stop();
 });
 

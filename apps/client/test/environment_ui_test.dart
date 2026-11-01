@@ -7,6 +7,122 @@ import 'package:voicemate/session_controller.dart';
 import 'fake_audio_port.dart';
 
 void main() {
+  testWidgets(
+    'VAD failure and RNNoise unsupported sample rate are distinguishable',
+    (tester) async {
+      final port = FakeAudioPort();
+      final session = SessionController(port)
+        ..selectScenario(Scenario.values.first);
+      await session.start();
+      port.send(
+        const AudioEvent.settings({
+          'noiseReductionState': 'active',
+          'vadStatus': 'init_failed',
+        }),
+      );
+      port.send(const AudioEvent.state(CaptureState.running));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: AnimatedBuilder(
+                animation: session,
+                builder: (_, _) => MeterScreen(session: session, onBack: () {}),
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(find.textContaining('발화 판별기를 준비하지 못했다.'), findsOneWidget);
+      port.send(
+        const AudioEvent.settings({
+          'noiseReductionState': 'unavailable',
+          'noiseReductionReason': 'unsupported_sample_rate',
+          'contextSampleRate': 44100,
+        }),
+      );
+      await tester.pump();
+      expect(
+        find.textContaining('오디오 처리 주파수 44100 Hz는 소음 억제를 지원하지 않는다.'),
+        findsOneWidget,
+      );
+      session.dispose();
+    },
+  );
+  testWidgets('unknown preprocessing is identified above the meter', (
+    tester,
+  ) async {
+    final port = FakeAudioPort();
+    final session = SessionController(port)
+      ..selectScenario(Scenario.values.first);
+    await session.start();
+    port.send(
+      const AudioEvent.settings({
+        'noiseReductionState': 'active',
+        'vadStatus': 'ready',
+        'echoCancellation': false,
+      }),
+    );
+    port.send(const AudioEvent.state(CaptureState.running));
+    port.send(
+      const AudioEvent.analysis({
+        'state': 'unavailable',
+        'reason': 'processing_settings',
+      }),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: MeterScreen(session: session, onBack: () {}),
+          ),
+        ),
+      ),
+    );
+    expect(
+      find.textContaining('브라우저 처리 설정을 확인할 수 없어 분석을 보류했다.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('자동 이득 확인 불가'), findsOneWidget);
+    expect(find.textContaining('잡음 억제 확인 불가'), findsOneWidget);
+    expect(find.textContaining('반향 제거 꺼짐'), findsOneWidget);
+    port.send(
+      const AudioEvent.analysis({
+        'state': 'unavailable',
+        'reason': 'vad_runtime_failed',
+      }),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: MeterScreen(session: session, onBack: () {}),
+          ),
+        ),
+      ),
+    );
+    expect(find.textContaining('발화 판별 중 오류가 발생했다.'), findsOneWidget);
+    expect(find.textContaining('발화 판별기 실행 오류'), findsOneWidget);
+    port.send(
+      const AudioEvent.settings({
+        'noiseReductionState': 'active',
+        'vadStatus': 'runtime_failed',
+        'autoGainControl': true,
+      }),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: MeterScreen(session: session, onBack: () {}),
+          ),
+        ),
+      ),
+    );
+    expect(find.textContaining('발화 판별 중 오류가 발생했다.'), findsOneWidget);
+    expect(find.textContaining('발화 판별기 실행 오류'), findsOneWidget);
+    session.dispose();
+  });
   testWidgets('analysis shows separate reference and clears when held', (
     tester,
   ) async {

@@ -80,6 +80,7 @@ for (const stage of ['response','body']) test(`stalled VAD ${stage} times out wi
   assert.equal(h.nodes[0].options.processorOptions.vadBinary,null);
   h.ready();
   assert.equal(await pending,h.nodes[0]);
+  assert.equal(h.nodes[0].vadStatus,'load_timeout');
   gate.resolve(stage === 'response' ? {ok:true,arrayBuffer:async()=>new ArrayBuffer(4)} : new ArrayBuffer(4));
 });
 
@@ -131,6 +132,14 @@ test('loader_returns_only_a_ready_mono_node_and_hands_runtime_handlers_to_captur
   assert.equal(node.port.closed, false);
   assert.equal(node.disconnected, false);
   assert.equal(h.context.closes, 0);
+});
+
+test('loader preserves VAD initialization status from worklet', async t => {
+  const h=harness(t);
+  const pending=createNoiseReductionNode(h.context, new AbortController().signal);
+  await settle();
+  h.nodes[0].port.onmessage({data:{type:'ready',vadStatus:'init_failed'}});
+  assert.equal((await pending).vadStatus,'init_failed');
 });
 
 for (const kind of ['http', 'network', 'body']) test(`loader_${kind}_fetch_failure_rejects_without_a_node`, async t => {
