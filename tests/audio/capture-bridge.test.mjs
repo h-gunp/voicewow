@@ -19,6 +19,80 @@ function harness({permission, moduleGate}={}) {
 }
 async function settle(){for(let i=0;i<8;i++)await Promise.resolve();}
 
+test('stalled context resume after permission reports a recoverable error and releases track', async () => {
+  const h=harness(), gate=deferred();
+  h.ctx.state='suspended'; h.ctx.resume=()=>gate.promise;
+  let timeout;
+  h.platform.setTimeout=(fn,ms)=>{assert.equal(ms,5000);timeout=fn;return 9;};
+  h.platform.clearTimeout=()=>{};
+  const pending=h.capture.start(false);
+  await settle();
+  assert.equal(typeof timeout,'function');
+  timeout(); await pending;
+  assert.equal(h.events.at(-1).state,'error');
+  assert.equal(h.events.at(-1).reason,'context_resume_timeout');
+  assert.ok(h.track.stops>0);
+  gate.resolve(); await settle();
+  assert.notEqual(h.events.at(-1).state,'running');
+});
+
+test('context resume rejection has an actionable distinct reason', async () => {
+  const h=harness(); h.ctx.resume=async()=>{throw new Error('blocked');};
+  await h.capture.start(false);
+  assert.equal(h.events.at(-1).reason,'context_resume_failed');
+  assert.ok(h.track.stops>0);
+});
+
+test('synchronous resume failure reports the context error', async () => {
+  const h=harness(); h.ctx.resume=()=>{throw new Error('blocked');};
+  await h.capture.start(false);
+  assert.equal(h.events.at(-1).reason,'context_resume_failed');
+});
+
+test('resolved resume with suspended context does not claim capture is running', async () => {
+  const h=harness(); h.ctx.state='suspended'; h.ctx.resume=async()=>{};
+  await h.capture.start(false);
+  assert.equal(h.events.at(-1).reason,'context_not_running');
+  assert.ok(h.track.stops>0);
+});
+
+test('resume begins before permission wait and cancellation clears its timeout', async () => {
+  const h=harness(), permission=deferred(), resume=deferred(); let cleared=false, resumeCalled=false;
+  h.ctx.state='suspended'; h.ctx.resume=()=>{resumeCalled=true;return resume.promise;};
+  h.platform.getUserMedia=()=>{assert.equal(resumeCalled,true);return permission.promise;};
+  h.platform.setTimeout=()=>9;
+  h.platform.clearTimeout=id=>{assert.equal(id,9);cleared=true;};
+  const pending=h.capture.start(false);
+  permission.resolve(h.stream); await settle();
+  await h.capture.stop(); await pending;
+  assert.equal(cleared,true); assert.ok(h.track.stops>0);
+  resume.resolve(); await settle();
+  assert.notEqual(h.events.at(-1).state,'running');
+});
+
+test('settings include context state without exposing track identity', async () => {
+  const h=harness();
+  await h.capture.start(false);
+  const settings=h.events.findLast(e=>e.type==='settings').settings;
+  assert.equal(settings.contextState,'running');
+  assert.equal('deviceId' in settings,false);
+  await h.capture.stop();
+});
+
+test('unreadable track settings report their own failure reason', async () => {
+  const h=harness(); h.track.getSettings=()=>{throw new Error('not available');};
+  await h.capture.start(false);
+  assert.equal(h.events.at(-1).reason,'settings_unavailable');
+  assert.ok(h.track.stops>0);
+});
+
+test('context suspension is reported even when input frames stop', async () => {
+  const h=harness(); await h.capture.start(false);
+  h.ctx.state='suspended'; await h.tick(250);
+  assert.equal(h.events.findLast(e=>e.type==='settings').settings.contextState,'suspended');
+  await h.capture.stop();
+});
+
 test('synthetic 10–60ms speech decisions compare onset duration without an RMS threshold', async () => {
   for (let length=1;length<=6;length++) {
     const h=harness(), {node}=addNoiseReduction(h);
@@ -365,7 +439,7 @@ test('unreadable_or_inactive_track_is_not_ignored_on_device_notification', async
     else if(state==='muted') h.track.muted=true;
     else h.track.getSettings=()=>{throw new Error('read failed');};
     await h.changeDevice(); assertReleased(h);
-    assert.equal(h.events.at(-1).reason,state==='settings_error'?'processing_error':'device_changed');
+    assert.equal(h.events.at(-1).reason,state==='settings_error'?'settings_unavailable':'device_changed');
   }
 });
 
@@ -403,7 +477,7 @@ test('processing_setting_change_is_reported_before_the_next_level', async () => 
   autoGainControl=true; h.frame();
   const settingsEvents=h.events.filter(event=>event.type==='settings');
   assert.equal(settingsEvents.length, 2);
-  assert.deepEqual(h.events.at(-2), {type:'settings',settings:{contextSampleRate:48000,sampleRate:48000,autoGainControl:true,echoCancellation:false,noiseReductionState:'unavailable',noiseReductionReason:'unsupported'}});
+  assert.deepEqual(h.events.at(-2), {type:'settings',settings:{contextSampleRate:48000,contextState:'running',sampleRate:48000,autoGainControl:true,echoCancellation:false,noiseReductionState:'unavailable',noiseReductionReason:'unsupported'}});
   assert.equal(h.events.at(-1).type, 'level');
   h.frame();
   assert.equal(h.events.filter(event=>event.type==='settings').length, 2);
@@ -413,7 +487,7 @@ test('processing_setting_change_is_reported_before_the_next_level', async () => 
 test('processing_setting_disappearance_is_reported', async () => {
   const h=harness(); await h.capture.start();
   h.track.getSettings=()=>({sampleRate:48000}); h.frame();
-  assert.deepEqual(h.events.at(-2), {type:'settings',settings:{contextSampleRate:48000,sampleRate:48000,noiseReductionState:'unavailable',noiseReductionReason:'unsupported'}});
+  assert.deepEqual(h.events.at(-2), {type:'settings',settings:{contextSampleRate:48000,contextState:'running',sampleRate:48000,noiseReductionState:'unavailable',noiseReductionReason:'unsupported'}});
   await h.capture.stop();
 });
 
@@ -422,7 +496,7 @@ test('settings_read_failure_during_capture_stops_input', async () => {
   h.track.getSettings=()=>{throw new Error('Track settings unavailable');};
   h.frame(); await settle();
   assertReleased(h);
-  assert.equal(h.events.at(-1).reason, 'processing_error');
+  assert.equal(h.events.at(-1).reason, 'settings_unavailable');
 });
 
 test('insecure_context_rejects_before_requesting_microphone_access', async () => {
@@ -546,7 +620,7 @@ test('noise_reduction_status_survives_browser_processing_setting_changes', async
   const h=harness(), noise=addNoiseReduction(h); await h.capture.start();
   h.track.getSettings=()=>({autoGainControl:true,noiseSuppression:false});
   h.frame({},noise.node);
-  assert.deepEqual(h.events.at(-2),{type:'settings',settings:{contextSampleRate:48000,autoGainControl:true,noiseSuppression:false,noiseReductionState:'active'}});
+  assert.deepEqual(h.events.at(-2),{type:'settings',settings:{contextSampleRate:48000,contextState:'running',autoGainControl:true,noiseSuppression:false,noiseReductionState:'active'}});
   assert.equal(h.events.at(-1).type,'level');
   await h.capture.stop();
 });

@@ -29,6 +29,9 @@ function errorReason(error) {
   return ({NotAllowedError:'permission_denied',SecurityError:'permission_denied',NotFoundError:'device_missing',NotReadableError:'device_busy',OverconstrainedError:'constraints_unavailable'})[error?.name] || error?.captureReason || 'processing_error';
 }
 function failure(reason) { return Object.assign(new Error(reason), {captureReason:reason}); }
+function readTrackSettings(track) {
+  try { return track.getSettings(); } catch { throw failure('settings_unavailable'); }
+}
 function disposeNode(node) {
   if (!node) return;
   node.port.onmessage = null; node.onprocessorerror = null;
@@ -105,33 +108,45 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
             if (track !== s.track || track.readyState !== 'live' || track.muted) {
               void end(s,'idle','device_changed'); return;
             }
-            const deviceId = track.getSettings().deviceId || null;
+            const deviceId = readTrackSettings(track).deviceId || null;
             if (s.deviceId && deviceId === s.deviceId) return;
             if (!s.hasFrame && !s.deviceId) { s.deviceId = deviceId; return; }
             // Without a stable identity after audio starts, do not mix uncertain inputs.
             void end(s,'idle','device_changed');
-          } catch { void end(s,'error','processing_error'); }
+          } catch(error) { void end(s,'error',errorReason(error)); }
         });
         // Create/resume within the start click's activation. Await after permission.
         s.context = platform.createContext();
-        const resumed = s.context.resume().then(() => null, error => error);
+        let resumed;
+        try { resumed = Promise.resolve(s.context.resume()).then(() => null, error => error); }
+        catch { throw failure('context_resume_failed'); }
         s.stream = await platform.getUserMedia({audio:{channelCount:1,autoGainControl:false,noiseSuppression:false,echoCancellation:false},video:false});
         if (!current(s)) { await release(s); return; }
         const track = s.stream.getAudioTracks()[0];
         if (!track || track.readyState === 'ended') throw failure('input_ended');
         if (track.muted) throw failure('input_muted');
         s.track = track;
-        s.deviceId = track.getSettings().deviceId || null;
+        s.deviceId = readTrackSettings(track).deviceId || null;
         listen(s,track,'mute',()=>void end(s,'error','input_muted'));
         listen(s,track,'ended',()=>void end(s,'error','input_ended'));
-        const resumeError = await resumed;
+        if (s.context.state !== 'running') onEvent({type:'state',state:'requesting',reason:'context_resuming'});
+        const schedule = platform.setTimeout || globalThis.setTimeout;
+        const clear = platform.clearTimeout || globalThis.clearTimeout;
+        let resumeTimer, cancelResume;
+        const timeout = new Promise(resolve => { resumeTimer = schedule(() => resolve(failure('context_resume_timeout')), 5000); });
+        const cancelled = new Promise(resolve => { cancelResume = () => resolve(failure('cancelled')); s.abort.signal.addEventListener('abort',cancelResume,{once:true}); });
+        if (s.abort.signal.aborted) cancelResume();
+        let resumeError;
+        try { resumeError = await Promise.race([resumed, timeout, cancelled]); }
+        finally { clear(resumeTimer); s.abort.signal.removeEventListener('abort',cancelResume); }
         if (!current(s)) { await release(s); return; }
-        if (resumeError) throw resumeError;
+        if (resumeError) throw failure(resumeError.captureReason === 'context_resume_timeout' ? 'context_resume_timeout' : 'context_resume_failed');
+        if (s.context.state !== 'running') throw failure('context_not_running');
         if (!s.context.audioWorklet) throw failure('unsupported');
         let lastSettingsKey;
         function publishSettings() {
           // Only non-identifying processing settings leave the audio bridge.
-          const raw = track.getSettings(), settings = {contextSampleRate:s.context.sampleRate};
+          const raw = readTrackSettings(track), settings = {contextSampleRate:s.context.sampleRate, contextState:s.context.state};
           for (const key of ['sampleRate','channelCount','autoGainControl','noiseSuppression','echoCancellation']) if (raw[key] !== undefined) settings[key] = raw[key];
           settings.noiseReductionState = s.noiseReductionState;
           if (s.node?.vadStatus) settings.vadStatus = s.node.vadStatus;
@@ -179,13 +194,13 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
             s.estimator = new EnvironmentEstimator();
             s.lastAnalysisAt = undefined; s.lastAnalysisSignature = null; s.speechFrames = 0;
             s.node.vadStatus = 'runtime_failed';
-            try { publishSettings(); } catch { void end(s,'error','processing_error'); return; }
+            try { publishSettings(); } catch(error) { void end(s,'error',errorReason(error)); return; }
             onEvent({type:'analysis',analysis:{state:'unavailable',meterState:'unavailable',reason:'vad_runtime_failed'}}); return;
           }
           if (data?.type === 'analysis') {
             try {
               publishSettings();
-              const settings = track.getSettings();
+              const settings = readTrackSettings(track);
               if (s.noiseReductionState !== 'active' || ['autoGainControl','noiseSuppression','echoCancellation'].some(key=>settings[key] !== false)) {
                 s.estimator = new EnvironmentEstimator(); s.analysisOrigin = null;
                 s.lastAnalysisAt = undefined; s.lastAnalysisSignature = null; s.speechFrames = 0;
@@ -214,12 +229,12 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
                 s.lastAnalysisSignature = signature;
                 onEvent({type:'analysis',analysis:{...snapshot,meterState,meterDbfs,sessionId:s.sessionId,deviceEpoch:s.sessionId,settingsRevision:s.settingsRevision,seq:data.seq,sampleStart:data.sampleStart,sampleEnd:data.sampleEnd,sampleTime:data.sampleTime,receivedAt:now}});
               }
-            } catch { s.lastAnalysisAt = undefined; s.lastAnalysisSignature = null; s.speechFrames = 0; s.estimator.hold(); onEvent({type:'analysis',analysis:{state:'unavailable',meterState:'unavailable',reason:'invalid_analysis'}}); }
+            } catch(error) { if (error?.captureReason === 'settings_unavailable') { void end(s,'error','settings_unavailable'); return; } s.lastAnalysisAt = undefined; s.lastAnalysisSignature = null; s.speechFrames = 0; s.estimator.hold(); onEvent({type:'analysis',analysis:{state:'unavailable',meterState:'unavailable',reason:'invalid_analysis'}}); }
             return;
           }
           if (data?.type !== 'level') return;
           if (!Number.isFinite(data.rms) || data.rms < 0 || !Number.isFinite(data.peak) || data.peak < 0 || !(data.dbfs === null || Number.isFinite(data.dbfs)) || !Number.isFinite(data.normalized) || data.normalized < 0 || data.normalized > 1 || !Number.isInteger(data.sampleCount) || data.sampleCount < 1) { void end(s,'error','invalid_samples'); return; }
-          try { publishSettings(); } catch { void end(s,'error','processing_error'); return; }
+          try { publishSettings(); } catch(error) { void end(s,'error',errorReason(error)); return; }
           if (!current(s)) return;
           s.lastFrame = platform.now();
           s.hasFrame = true;
@@ -229,6 +244,7 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
         s.source.connect(s.node); s.node.connect(s.gain); s.gain.connect(s.context.destination);
         s.timer = platform.setInterval(() => {
           const now = platform.now();
+          try { publishSettings(); } catch(error) { void end(s,'error',errorReason(error)); return; }
           if (now - s.lastFrame >= 1500) void end(s,'error','frame_timeout');
           else if (s.lastAnalysisAt !== undefined && now-s.lastAnalysisAt >= 250) {
             s.lastAnalysisAt = undefined; s.lastAnalysisSignature = null; s.speechFrames = 0; s.estimator.hold();
