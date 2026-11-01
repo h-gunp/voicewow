@@ -6,6 +6,10 @@ Source revision: ff1ac5bca8ef11e90662b879aa923979e0bd277b
 File size: 26534127 bytes
 SHA-256: 9fea6516d7ad6bf0a76c7689f5a49b65d330fad6dde96c91bb4435ffbfe056a1
 Changes: none; the model file is distributed byte-for-byte unchanged.
+For hosting, the unmodified model bytes are transmitted as two consecutive parts,
+then reassembled and verified before inference. This split changes no model data.
+Part 1: 13267064 bytes; SHA-256 5f13c76053904da95d8c4019d0daa4b46fc264e617f8cf2e900cf84da740eadc
+Part 2: 13267063 bytes; SHA-256 04df71456b0571247284f97e13680ca2f642617af0e6cf0d8658094e2432b342
 
 WeSpeaker's official v1.2.0 model documentation describes its VoxCeleb pretrained
 models, including ONNX runtime models, under Creative Commons Attribution 4.0

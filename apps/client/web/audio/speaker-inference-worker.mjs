@@ -8,7 +8,7 @@ self.onmessage = async ({data}) => {
   const {id,value} = data;
   try {
     engine ??= await loadSpeakerModel({
-      fetchModel:()=>fetch(new URL('./vendor/speaker/voxceleb_resnet34.onnx',import.meta.url)),
+      fetchPart:index=>fetch(new URL(`./vendor/speaker/voxceleb_resnet34.onnx.part${index+1}`,import.meta.url)),
       digest:bytes=>crypto.subtle.digest('SHA-256',bytes),
       create:bytes=>createSpeakerEngine(ort,bytes),
     });
