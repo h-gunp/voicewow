@@ -37,9 +37,17 @@ class NoiseMeterProcessor extends AudioWorkletProcessor {
   process(inputs) {
     if (this.finished) return false;
     const input = inputs[0]?.[0];
-    if (!this.meter || !input) return true;
-    if (this.origin === undefined) this.origin = (globalThis.currentFrame ?? 0) / sampleRate;
+    if (!this.meter) return true;
+    if (!input || input.length === 0) {
+      if (this.origin !== undefined && !this.gap) {
+        this.gap = true;
+        this.port.postMessage({type:'analysis_reset'});
+      }
+      return true;
+    }
     try {
+      if (this.gap) { this.meter.reset(); this.origin = undefined; this.gap = false; }
+      if (this.origin === undefined) this.origin = (globalThis.currentFrame ?? 0) / sampleRate;
       for (const frame of this.meter.push(input)) this.port.postMessage({type:'level', ...frame});
     } catch {
       this.dispose();

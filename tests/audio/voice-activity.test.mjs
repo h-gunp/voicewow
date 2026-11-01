@@ -10,6 +10,9 @@ test('real VAD accepts 10ms silence and rejects invalid input and use after disp
   assert.throws(() => vad.process(new Float32Array(479)), /frame/i);
   const bad = new Float32Array(480); bad[1] = NaN;
   assert.throws(() => vad.process(bad), /finite/i);
+  vad.reset();
+  assert.equal(vad.process(new Float32Array(480)), false);
   vad.dispose();
   assert.throws(() => vad.process(new Float32Array(480)), /disposed/i);
+  assert.throws(() => vad.reset(), /disposed/i);
 });

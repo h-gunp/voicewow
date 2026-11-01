@@ -7,6 +7,32 @@ import 'package:voicemate/session_controller.dart';
 import 'fake_audio_port.dart';
 
 void main() {
+  testWidgets('input gap reports that analysis is restarting', (tester) async {
+    final port = FakeAudioPort();
+    final session = SessionController(port)
+      ..selectScenario(Scenario.values.first);
+    await session.start();
+    port.send(const AudioEvent.state(CaptureState.running));
+    port.send(
+      const AudioEvent.analysis({
+        'state': 'held',
+        'meterState': 'unavailable',
+        'reason': 'input_gap',
+      }),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: MeterScreen(session: session, onBack: () {}),
+          ),
+        ),
+      ),
+    );
+    expect(find.textContaining('입력 프레임이 끊겨 분석을 다시 준비한다.'), findsOneWidget);
+    expect(find.byKey(const Key('input-fill')), findsNothing);
+    session.dispose();
+  });
   testWidgets(
     'relative speech remains visible when environment processing is unknown',
     (tester) async {

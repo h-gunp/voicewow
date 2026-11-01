@@ -21,9 +21,19 @@ export async function createNoiseMeter(wasmBinary, sampleRate = 48000, analysis 
   const inputOffset = buffer / Float32Array.BYTES_PER_ELEMENT;
   const outputOffset = inputOffset + frameSize;
   const output = new Float32Array(frameSize);
-  const meter = new LevelMeter(sampleRate);
+  let meter = new LevelMeter(sampleRate);
   let count = 0, disposed = false, energy = 0, peak = 0, sequence = 0, previous = null;
   return {
+    reset() {
+      if (disposed) throw new Error('Noise meter is disposed');
+      const next = engine._rnnoise_create(0);
+      if (!next) throw new Error('RNNoise reset failed');
+      engine._rnnoise_destroy(state); state = next;
+      analysis?.vad?.reset();
+      engine.HEAPF32.fill(0, inputOffset, outputOffset + frameSize);
+      output.fill(0); meter = new LevelMeter(sampleRate);
+      count = energy = peak = sequence = 0; previous = null;
+    },
     push(samples) {
       if (disposed) throw new Error('Noise meter is disposed');
       const levels = [];

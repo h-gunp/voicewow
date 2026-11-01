@@ -6,6 +6,20 @@ function feed(e, from, count, power, speech='nonSpeech') {
   for (let i=from;i<from+count;i++) e.add({seq:i, power, speech, clipped:false});
 }
 
+test('new epoch clears sequence, evidence clock and speech while preserving baseline and offset', () => {
+  const e=new EnvironmentEstimator();
+  feed(e,0,1000,.01); feed(e,1000,8000,.03);
+  const initial=e.initial, offset=e.offset;
+  assert.ok(offset>0);
+  e.resetEpoch();
+  assert.equal(e.seq,-1); assert.equal(e.lastEvidence,-Infinity);
+  assert.equal(e.speech,undefined); assert.equal(e.initial,initial); assert.equal(e.offset,offset);
+  e.add({seq:0,power:.01,speech:'speech',clipped:false});
+  assert.equal(e.snapshot().speech,'speech');
+  e.add({seq:1,power:.01,speech:'nonSpeech',clipped:false});
+  assert.equal(e.snapshot().speech,'nonSpeech');
+});
+
 test('requires fresh non-speech evidence and holds on stale or low SNR', () => {
   const e = new EnvironmentEstimator();
   feed(e, 0, 400, .01);

@@ -14,6 +14,10 @@ export class EnvironmentEstimator {
     this.pending = []; this.noise = []; this.smooth = null; this.candidate = null;
     this.evidenceSinceStats = 0; this.post = 50; this.voice = null; this.state = 'held'; this.transition = false;
   }
+  resetEpoch() {
+    this.hold();
+    this.seq = -1; this.lastEvidence = -Infinity; this.speech = undefined;
+  }
   add(frame) {
     const {seq,power,speech,clipped} = frame;
     if (!Number.isSafeInteger(seq) || seq <= this.seq) return;

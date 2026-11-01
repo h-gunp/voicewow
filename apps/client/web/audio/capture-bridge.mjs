@@ -190,6 +190,11 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
         s.node.port.onmessage = ({data}) => {
           if (!current(s)) return;
           if (data?.type === 'error') { void end(s,'error',s.noiseReductionState === 'active' ? 'noise_reduction_failed' : 'invalid_samples'); return; }
+          if (data?.type === 'analysis_reset') {
+            s.lastAnalysisAt = undefined; s.lastAnalysisSignature = null; s.lastAnalysisSeq = undefined;
+            s.analysisOrigin = null; s.speechFrames = 0; s.estimator.resetEpoch();
+            onEvent({type:'analysis',analysis:{state:'held',meterState:'unavailable',reason:'input_gap'}}); return;
+          }
           if (data?.type === 'analysis_unavailable') {
             s.estimator = new EnvironmentEstimator();
             s.lastAnalysisAt = undefined; s.lastAnalysisSignature = null; s.speechFrames = 0;
