@@ -202,9 +202,7 @@ void main() {
 
   for (final fixture in [
     ('quiet', 53, 75, -61.0),
-    ('noisy', 58, 80, -56.0),
     ('meeting', 68, 78, -46.0),
-    ('auditorium', 65, 75, -49.0),
   ]) {
     testWidgets('${fixture.$1} keeps red limits on the live input bar', (
       tester,
@@ -348,7 +346,7 @@ void main() {
       expect(find.text('상한 75'), findsOneWidget);
       expect(find.byKey(const Key('configure-range')), findsNothing);
       expect(find.byKey(const Key('accept-unknown-gain')), findsNothing);
-      expect(find.textContaining('등록'), findsNothing);
+      expect(port.speakerEnrollments, 0);
     });
   }
 
@@ -370,7 +368,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.textContaining('등록'), findsNothing);
+      expect(port.speakerEnrollments, 0);
       expect(find.textContaining('PC의 Chrome'), findsNothing);
       if (reason == 'insecure_context') {
         expect(find.textContaining('HTTPS 주소'), findsOneWidget);

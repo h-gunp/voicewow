@@ -72,7 +72,7 @@ class MeterScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = session.scenario!;
     final a = session.analysis;
-    final offset = a['offset'] as num?;
+    final range = session.effectiveRange;
     final voice = a['voiceDbfs'] as num?;
     final noise = a['noiseDbfs'] as num?;
     final settings = session.settings;
@@ -218,11 +218,81 @@ class MeterScreen extends StatelessWidget {
             style: const TextStyle(color: muted, fontSize: 12, height: 1.7),
           ),
         ),
-        VolumeGauge(scenario: s, displayLevel: session.displayLevel),
+        VolumeGauge(
+          scenario: s,
+          displayLevel: session.displayLevel,
+          lower: range.lower,
+          upper: range.upper,
+        ),
         Text(
           '입력 수준 ${session.displayLevel?.toStringAsFixed(1) ?? '—'}',
           textAlign: TextAlign.center,
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+        ),
+        const Text(
+          '상대 입력 막대 · 본인 목소리로 확인된 음량이 아니다.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: muted, fontSize: 12, height: 1.7),
+        ),
+        Text(
+          session.settings['speakerAvailable'] == true
+              ? '화자 확인은 실험 기능이다. 등록 시 모델 약 26.5 MB를 내려받는다. 음성은 기기에서 처리하며 등록 정보는 이 페이지의 메모리에만 둔다. 새로고침하면 삭제된다. 다른 사람·재생음이 섞일 수 있다.'
+              : session.settings['speakerAvailable'] == false
+              ? '현재 공개 버전에서는 화자 등록을 제공하지 않음'
+              : '화자 등록 제공 여부를 확인 중이다.',
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: muted, fontSize: 12, height: 1.7),
+        ),
+        TextButton(
+          key: const Key('speaker-model-notice'),
+          onPressed: () => showDialog<void>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('화자 모델 및 라이선스'),
+              content: const SingleChildScrollView(
+                child: SelectableText(
+                  'WeSpeaker contributors의 VoxCeleb ResNet34 ONNX 모델을 변경 없이 사용한다.\n\n'
+                  'WeSpeaker 공식 모델 문서는 VoxCeleb 모델에 CC BY 4.0을 명시한다. 원본 Hugging Face README 메타데이터는 license: apache-2.0을 명시한다. 모델은 보증 없이 제공되며 제작자가 이 프로젝트를 보증한다는 뜻이 아니다.\n\n'
+                  '모델 출처: https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34/blob/ff1ac5bca8ef11e90662b879aa923979e0bd277b/voxceleb_resnet34.onnx\n\n'
+                  'CC BY 4.0: https://creativecommons.org/licenses/by/4.0/legalcode.en\n\n'
+                  '전체 고지와 Apache 원문 및 ONNX Runtime 고지: audio/vendor/speaker/MODEL-NOTICE.txt',
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('닫기'),
+                ),
+              ],
+            ),
+          ),
+          child: const Text('모델 및 라이선스'),
+        ),
+        Text(
+          _speakerStatus(),
+          key: const Key('speaker-status'),
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: muted, fontSize: 12, height: 1.7),
+        ),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 8,
+          children: [
+            OutlinedButton(
+              key: const Key('begin-speaker-enrollment'),
+              onPressed:
+                  session.state == CaptureState.running &&
+                      session.settings['speakerAvailable'] == true
+                  ? session.beginSpeakerEnrollment
+                  : null,
+              child: const Text('내 목소리 등록'),
+            ),
+            TextButton(
+              key: const Key('delete-speaker'),
+              onPressed: session.deleteSpeaker,
+              child: const Text('등록 삭제'),
+            ),
+          ],
         ),
         Text(
           session.displayLevel != null
@@ -245,7 +315,7 @@ class MeterScreen extends StatelessWidget {
           ),
         const SizedBox(height: 5),
         const Text(
-          '빨간 선은 선택한 상황의 하한·상한이다.\n참고 척도 · 실제 데시벨은 아니다.',
+          '빨간 선은 참고 범위의 하한·상한이다.\n참고 척도 · 실제 데시벨은 아니다.',
           textAlign: TextAlign.center,
           style: TextStyle(color: muted, fontSize: 12, height: 1.7),
         ),
@@ -262,10 +332,16 @@ class MeterScreen extends StatelessWidget {
                     : '불확실'}',
                 '주변 잡음 추정 ${noise?.toStringAsFixed(1) ?? '—'} dBFS',
                 '발화 수준 추정 ${voice == null ? '—' : (voice + SessionController.inputLevelOffset).clamp(0, 120).toStringAsFixed(1)}',
-                if (offset != null)
-                  '환경 적응 참고범위 ${(s.referenceLower + offset).clamp(0, 120).toStringAsFixed(1)}–${(s.referenceUpper + offset).clamp(0, 120).toStringAsFixed(1)}',
+                '환경 적응 참고범위 ${range.lower.toStringAsFixed(1)}–${range.upper.toStringAsFixed(1)}',
               ],
-              '실험적 추정 · 본인 화자 구분 및 실제 음압 아님',
+              if (!range.adjusted) '환경 적응 보류 · 기본 참고범위',
+              if (session.displayLevel case final level?)
+                '참고 범위 비교 ${double.parse(level.toStringAsFixed(1)) < range.lower
+                    ? '하한 미만'
+                    : double.parse(level.toStringAsFixed(1)) > range.upper
+                    ? '상한 초과'
+                    : '범위 안'} · 척도 정합성 미검증',
+              '실험적 환경 추정 · 화자 확인과 별개이며 실제 음압이 아니다.',
             ].join('\n'),
             textAlign: TextAlign.center,
             style: const TextStyle(color: muted, fontSize: 12, height: 1.7),
@@ -328,5 +404,36 @@ class MeterScreen extends StatelessWidget {
         ? '꺼짐'
         : '확인 불가';
     return '앱 소음 억제 $noiseReduction\n오디오 처리 ${settings['contextSampleRate'] ?? '—'} Hz\n자동 이득 ${flag('autoGainControl')} · 브라우저 잡음 억제 ${flag('noiseSuppression')}\n반향 제거 ${flag('echoCancellation')}';
+  }
+
+  String _speakerStatus() {
+    final data = session.speaker;
+    final state = data['state'];
+    if (state == 'similar' || state == 'dissimilar' || state == 'uncertain') {
+      final start = data['startTime'],
+          end = data['endTime'],
+          delay = data['delayMs'];
+      if (start is! num ||
+          end is! num ||
+          delay is! num ||
+          !start.isFinite ||
+          !end.isFinite ||
+          !delay.isFinite)
+        return '화자 확인 보류';
+      final label = state == 'similar'
+          ? '등록 음성과 유사'
+          : state == 'dissimilar'
+          ? '등록 음성과 불일치'
+          : '화자 불확실';
+      return '$label · 실험 결과\n오디오 시간 ${start.toStringAsFixed(2)}–${end.toStringAsFixed(2)}초 · 지연 ${delay.toStringAsFixed(0)}ms';
+    }
+    return switch (state) {
+      'registering' => '화자 등록 중 · ${data['samples'] ?? 0}/3',
+      'registered' => '화자 등록 완료 · 발화 확인 대기',
+      'confirming' => '화자 확인 대기',
+      'quality' => '음성 품질 부족 · 다시 말한다',
+      'unavailable' => '화자 확인 준비되지 않음 · 사용할 수 없다',
+      _ => '화자 확인 준비되지 않음 · 등록되지 않음',
+    };
   }
 }

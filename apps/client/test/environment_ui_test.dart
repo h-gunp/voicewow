@@ -7,6 +7,177 @@ import 'package:voicemate/session_controller.dart';
 import 'fake_audio_port.dart';
 
 void main() {
+  testWidgets('public version disables unavailable speaker enrollment', (
+    tester,
+  ) async {
+    final port = FakeAudioPort();
+    final session = SessionController(port)
+      ..selectScenario(Scenario.values.first);
+    await session.start();
+    port.send(const AudioEvent.settings({'speakerAvailable': false}));
+    port.send(const AudioEvent.state(CaptureState.running));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: MeterScreen(session: session, onBack: () {}),
+          ),
+        ),
+      ),
+    );
+    expect(find.text('현재 공개 버전에서는 화자 등록을 제공하지 않음'), findsOneWidget);
+    expect(
+      tester
+          .widget<OutlinedButton>(
+            find.byKey(const Key('begin-speaker-enrollment')),
+          )
+          .onPressed,
+      isNull,
+    );
+    session.dispose();
+  });
+
+  test(
+    'mode change keeps registration and clears old speaker result',
+    () async {
+      final port = FakeAudioPort();
+      final session = SessionController(port)
+        ..selectScenario(Scenario.values.first);
+      await session.start();
+      port.send(const AudioEvent.state(CaptureState.running));
+      port.send(const AudioEvent.speaker({'state': 'registered'}));
+      port.send(
+        const AudioEvent.speaker({
+          'state': 'similar',
+          'startTime': 1.0,
+          'endTime': 2.0,
+        }),
+      );
+      await session.stop();
+      session.selectScenario(Scenario.values.last);
+      await session.start();
+      port.send(const AudioEvent.state(CaptureState.running));
+      expect(session.speakerRegistered, isTrue);
+      expect(session.speaker, {'state': 'confirming'});
+      expect(port.speakerDeletes, 0);
+      session.dispose();
+    },
+  );
+  test(
+    'stopping during registration clears stale registration state',
+    () async {
+      final port = FakeAudioPort();
+      final session = SessionController(port)
+        ..selectScenario(Scenario.values.first);
+      await session.start();
+      port.send(const AudioEvent.settings({'speakerAvailable': true}));
+      port.send(const AudioEvent.state(CaptureState.running));
+      port.send(
+        const AudioEvent.speaker({'state': 'registering', 'samples': 1}),
+      );
+      port.send(const AudioEvent.state(CaptureState.idle));
+      port.send(const AudioEvent.speaker({'state': 'unregistered'}));
+      expect(session.speaker['state'], 'unregistered');
+      session.dispose();
+    },
+  );
+  testWidgets(
+    'speaker registration is voluntary, deletable, and independent of relative input',
+    (tester) async {
+      final port = FakeAudioPort();
+      final session = SessionController(port)
+        ..selectScenario(Scenario.values.first);
+      await session.start();
+      port.send(const AudioEvent.settings({'speakerAvailable': true}));
+      port.send(const AudioEvent.state(CaptureState.running));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: AnimatedBuilder(
+                animation: session,
+                builder: (_, _) => MeterScreen(session: session, onBack: () {}),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.ensureVisible(
+        find.byKey(const Key('begin-speaker-enrollment')),
+      );
+      await tester.tap(find.byKey(const Key('begin-speaker-enrollment')));
+      await tester.pump();
+      expect(port.speakerEnrollments, 1);
+      port.send(const AudioEvent.speaker({'state': 'registered'}));
+      port.send(
+        const AudioEvent.analysis({
+          'state': 'unavailable',
+          'reason': 'processing_settings',
+          'speech': 'speech',
+          'meterState': 'speech',
+          'meterDbfs': -40.0,
+        }),
+      );
+      await tester.pump();
+      expect(find.byKey(const Key('input-fill')), findsOneWidget);
+      expect(find.textContaining('등록 완료'), findsOneWidget);
+      await tester.ensureVisible(find.byKey(const Key('speaker-model-notice')));
+      await tester.tap(find.byKey(const Key('speaker-model-notice')));
+      await tester.pumpAndSettle();
+      expect(find.text('화자 모델 및 라이선스'), findsOneWidget);
+      expect(find.textContaining('WeSpeaker contributors'), findsOneWidget);
+      await tester.tap(find.text('닫기'));
+      await tester.pumpAndSettle();
+      port.send(
+        const AudioEvent.speaker({
+          'state': 'similar',
+          'startTime': 1.0,
+          'endTime': 2.0,
+          'delayMs': 200.0,
+        }),
+      );
+      await tester.pump();
+      expect(find.textContaining('1.00–2.00'), findsOneWidget);
+      await tester.ensureVisible(find.byKey(const Key('delete-speaker')));
+      await tester.tap(find.byKey(const Key('delete-speaker')));
+      await tester.pump();
+      expect(port.speakerDeletes, 1);
+      expect(find.textContaining('등록되지 않음'), findsOneWidget);
+      session.dispose();
+    },
+  );
+  testWidgets(
+    'unavailable speaker verifier is explicit and does not block the relative meter',
+    (tester) async {
+      final port = FakeAudioPort();
+      final session = SessionController(port)
+        ..selectScenario(Scenario.values.first);
+      await session.start();
+      port.send(const AudioEvent.state(CaptureState.running));
+      port.send(
+        const AudioEvent.analysis({
+          'state': 'unavailable',
+          'reason': 'processing_settings',
+          'speech': 'speech',
+          'meterState': 'speech',
+          'meterDbfs': -40.0,
+        }),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: MeterScreen(session: session, onBack: () {}),
+            ),
+          ),
+        ),
+      );
+      expect(find.textContaining('화자 확인 준비되지 않음'), findsOneWidget);
+      expect(find.textContaining('상대 입력'), findsWidgets);
+      expect(find.byKey(const Key('input-fill')), findsOneWidget);
+      session.dispose();
+    },
+  );
   testWidgets('input gap reports that analysis is restarting', (tester) async {
     final port = FakeAudioPort();
     final session = SessionController(port)
@@ -357,6 +528,13 @@ void main() {
       ..selectScenario(Scenario.values.first);
     await session.start();
     port.send(const AudioEvent.state(CaptureState.running));
+    port.send(
+      const AudioEvent.settings({
+        'autoGainControl': false,
+        'noiseSuppression': false,
+        'echoCancellation': false,
+      }),
+    );
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(

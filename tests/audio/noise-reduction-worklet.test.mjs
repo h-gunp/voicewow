@@ -26,6 +26,18 @@ const wasmBinary = await readFile(new URL('../../apps/client/web/audio/vendor/rn
 const vadBinary = await readFile(new URL('../../apps/client/web/audio/vendor/libfvad/libfvad.wasm', import.meta.url));
 const create = () => new Processor({processorOptions:{wasmBinary}});
 
+test('worklet sends aligned raw PCM only while speaker capture is explicitly enabled', {timeout:3000}, async()=>{
+ const processor=new Processor({processorOptions:{wasmBinary,vadBinary}});await processor.port.next('ready');
+ for(let i=0;i<110;i++)processor.process([[new Float32Array(480).fill(.02)]]);
+ assert.equal(processor.port.messages.some(x=>x.type==='speaker_window'),false);
+ processor.port.onmessage({data:{type:'speaker_capture',enabled:true,generation:1}});
+ for(let i=0;i<110;i++)processor.process([[new Float32Array(480).fill(.03)]]);
+ const windows=processor.port.messages.filter(x=>x.type==='speaker_window');assert.equal(windows.length,1);assert.equal(windows[0].generation,1);assert.equal(windows[0].pcm.length,48000);assert.equal(windows[0].sampleEnd-windows[0].sampleStart,48000);
+ processor.port.onmessage({data:{type:'speaker_capture',enabled:false,generation:2}});
+ for(let i=0;i<110;i++)processor.process([[new Float32Array(480).fill(.04)]]);
+ assert.equal(processor.port.messages.filter(x=>x.type==='speaker_window').length,1);processor.port.onmessage({data:{type:'dispose'}});
+});
+
 test('real RNNoise and VAD worklet emits aligned raw analysis without samples', {timeout:2000}, async () => {
   const processor = new Processor({processorOptions:{wasmBinary,vadBinary}});
   const ready = await processor.port.next('ready');

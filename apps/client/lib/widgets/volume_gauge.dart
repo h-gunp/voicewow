@@ -5,11 +5,20 @@ import '../scenario.dart';
 class VolumeGauge extends StatelessWidget {
   final Scenario scenario;
   final double? displayLevel;
-  const VolumeGauge({super.key, required this.scenario, this.displayLevel});
+  final double? lower, upper;
+  const VolumeGauge({
+    super.key,
+    required this.scenario,
+    this.displayLevel,
+    this.lower,
+    this.upper,
+  });
   @override
   Widget build(BuildContext context) {
     final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
     final railHeight = 310.0 * scale;
+    final low = lower ?? scenario.referenceLower.toDouble();
+    final high = upper ?? scenario.referenceUpper.toDouble();
     return SizedBox(
       height: railHeight + 40,
       child: LayoutBuilder(
@@ -17,7 +26,10 @@ class VolumeGauge extends StatelessWidget {
           const railWidth = 72.0, top = 20.0;
           final large = MediaQuery.textScalerOf(context).scale(14) > 20;
           final left = large ? 18.0 : (box.maxWidth - railWidth) / 2;
-          Widget marker(int value, String name, Key key) {
+          Widget marker(double value, String name, Key key) {
+            final label = value == value.roundToDouble()
+                ? value.toInt().toString()
+                : value.toStringAsFixed(1);
             final y = top + (1 - value / 120) * railHeight;
             return Positioned(
               top: y,
@@ -28,7 +40,7 @@ class VolumeGauge extends StatelessWidget {
                 child: Row(
                   children: [
                     Container(
-                      key: Key('reference-line-$value'),
+                      key: Key('reference-line-$label'),
                       width: railWidth + 20,
                       height: 2,
                       color: red,
@@ -36,7 +48,7 @@ class VolumeGauge extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        '$name $value',
+                        '$name $label',
                         key: key,
                         style: const TextStyle(
                           color: red,
@@ -52,8 +64,7 @@ class VolumeGauge extends StatelessWidget {
           }
 
           return Semantics(
-            label:
-                '발화로 판정된 입력 수준과 상황별 참고 범위, 하한 ${scenario.referenceLower}, 상한 ${scenario.referenceUpper}',
+            label: '발화로 판정된 입력 수준과 상황별 참고 범위, 하한 $low, 상한 $high',
             child: Stack(
               clipBehavior: Clip.none,
               children: [
@@ -111,24 +122,13 @@ class VolumeGauge extends StatelessWidget {
                   ),
                 Positioned(
                   left: left + 1,
-                  top: top + (1 - scenario.referenceUpper / 120) * railHeight,
+                  top: top + (1 - high / 120) * railHeight,
                   width: railWidth - 2,
-                  height:
-                      (scenario.referenceUpper - scenario.referenceLower) /
-                      120 *
-                      railHeight,
+                  height: (high - low) / 120 * railHeight,
                   child: ColoredBox(color: red.withValues(alpha: .07)),
                 ),
-                marker(
-                  scenario.referenceUpper,
-                  '상한',
-                  const Key('reference-upper'),
-                ),
-                marker(
-                  scenario.referenceLower,
-                  '하한',
-                  const Key('reference-lower'),
-                ),
+                marker(high, '상한', const Key('reference-upper')),
+                marker(low, '하한', const Key('reference-lower')),
               ],
             ),
           );

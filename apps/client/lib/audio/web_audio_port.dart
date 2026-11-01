@@ -13,6 +13,8 @@ extension type _Options._(JSObject _) implements JSObject {
 extension type _Capture(JSObject _) implements JSObject {
   external JSPromise<JSAny?> start(JSBoolean noiseReductionEnabled);
   external JSPromise<JSAny?> stop();
+  external JSPromise<JSAny?> beginSpeakerEnrollment();
+  external void deleteSpeaker();
 }
 
 AudioPort createAudioPort() => WebAudioPort();
@@ -62,6 +64,13 @@ class WebAudioPort implements AudioPort {
                   ),
                 );
               }
+            case 'speaker':
+              if (decoded['speaker'] is Map)
+                _events.add(
+                  AudioEvent.speaker(
+                    Map<String, Object?>.from(decoded['speaker'] as Map),
+                  ),
+                );
           }
         }).toJS,
       ),
@@ -83,6 +92,20 @@ class WebAudioPort implements AudioPort {
   @override
   Future<void> stop() async {
     await _capture?.stop().toDart;
+  }
+
+  @override
+  Future<void> beginSpeakerEnrollment() async {
+    if (_capture == null) {
+      _events.add(const AudioEvent.speaker({'state': 'unavailable'}));
+      return;
+    }
+    await _capture!.beginSpeakerEnrollment().toDart;
+  }
+
+  @override
+  Future<void> deleteSpeaker() async {
+    _capture?.deleteSpeaker();
   }
 
   @override
