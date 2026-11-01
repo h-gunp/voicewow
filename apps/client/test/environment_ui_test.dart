@@ -8,6 +8,102 @@ import 'fake_audio_port.dart';
 
 void main() {
   testWidgets(
+    'input diagnostics distinguish received frames from analysis availability',
+    (tester) async {
+      final port = FakeAudioPort();
+      final session = SessionController(port)
+        ..selectScenario(Scenario.values.first);
+      await session.start();
+      port.send(
+        const AudioEvent.settings({
+          'noiseReductionState': 'active',
+          'vadStatus': 'ready',
+          'contextState': 'running',
+          'contextSampleRate': 48000,
+        }),
+      );
+      port.send(const AudioEvent.state(CaptureState.running));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: AnimatedBuilder(
+                animation: session,
+                builder: (_, _) => MeterScreen(session: session, onBack: () {}),
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(find.textContaining('입력 프레임을 기다리고 있다.'), findsOneWidget);
+      port.send(
+        const AudioEvent.level(
+          rms: .1,
+          dbfs: -20,
+          normalized: .75,
+          sampleCount: 4800,
+        ),
+      );
+      port.send(
+        const AudioEvent.analysis({
+          'state': 'unavailable',
+          'reason': 'processing_settings',
+        }),
+      );
+      await tester.pump();
+      expect(find.textContaining('입력 프레임 수신: 1'), findsOneWidget);
+      expect(find.textContaining('소음 억제 후 -20.0 dBFS'), findsOneWidget);
+      expect(find.textContaining('오디오 엔진 실행 중'), findsOneWidget);
+      expect(find.byKey(const Key('input-fill')), findsNothing);
+      session.dispose();
+    },
+  );
+
+  testWidgets('resume timeout and no-frame errors have distinct guidance', (
+    tester,
+  ) async {
+    final port = FakeAudioPort();
+    final session = SessionController(port)
+      ..selectScenario(Scenario.values.first);
+    await session.start();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: AnimatedBuilder(
+              animation: session,
+              builder: (_, _) => MeterScreen(session: session, onBack: () {}),
+            ),
+          ),
+        ),
+      ),
+    );
+    port.send(
+      const AudioEvent.state(
+        CaptureState.error,
+        reason: 'context_resume_timeout',
+      ),
+    );
+    await tester.pump();
+    expect(find.textContaining('오디오 엔진이 제때 시작되지 않았다.'), findsOneWidget);
+    await session.start();
+    port.send(
+      const AudioEvent.state(CaptureState.error, reason: 'frame_timeout'),
+    );
+    await tester.pump();
+    expect(find.textContaining('오디오 프레임을 받지 못했다.'), findsOneWidget);
+    await session.start();
+    port.send(
+      const AudioEvent.state(
+        CaptureState.error,
+        reason: 'settings_unavailable',
+      ),
+    );
+    await tester.pump();
+    expect(find.textContaining('마이크 입력 설정을 읽지 못했다.'), findsOneWidget);
+    session.dispose();
+  });
+  testWidgets(
     'speech bar clears immediately for non-speech, uncertainty and held',
     (tester) async {
       final port = FakeAudioPort();

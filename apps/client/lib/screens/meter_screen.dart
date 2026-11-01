@@ -10,6 +10,8 @@ class MeterScreen extends StatelessWidget {
   const MeterScreen({super.key, required this.session, required this.onBack});
   String get title {
     return switch (session.state) {
+      CaptureState.requesting when session.reason == 'context_resuming' =>
+        '마이크 연결 후 오디오 엔진을 시작하고 있다.',
       CaptureState.requesting =>
         session.settings['noiseReductionState'] == 'loading'
             ? '소음 억제를 준비하고 있다.'
@@ -19,6 +21,13 @@ class MeterScreen extends StatelessWidget {
         'permission_denied' => '마이크 권한이 필요하다.',
         'device_missing' => '마이크를 찾지 못했다.',
         'device_busy' => '마이크를 사용할 수 없다.',
+        'context_resume_timeout' => '오디오 엔진이 제때 시작되지 않았다.',
+        'context_resume_failed' => '오디오 엔진을 시작하지 못했다.',
+        'context_not_running' => '오디오 엔진이 실행 상태가 아니다.',
+        'frame_timeout' => '오디오 프레임을 받지 못했다.',
+        'input_muted' => '마이크 입력이 일시 중단됐다.',
+        'input_ended' => '마이크 입력이 종료됐다.',
+        'settings_unavailable' => '마이크 입력 설정을 읽지 못했다.',
         _ => '지금은 입력이 끊겼다.',
       },
       CaptureState.idle => '입력이 중지됐다.',
@@ -44,6 +53,12 @@ class MeterScreen extends StatelessWidget {
         'device_missing' => '마이크 연결을 확인한 뒤 다시 시작한다.',
         'device_busy' => '다른 앱의 마이크 사용을 확인한다.',
         'noise_reduction_failed' => '소음 억제 중 문제가 발생했다. 다시 시작한다.',
+        'context_resume_timeout' ||
+        'context_resume_failed' ||
+        'context_not_running' => '다시 시작을 눌러 오디오 엔진을 다시 시작한다.',
+        'frame_timeout' => '오디오 엔진 상태와 연결을 확인한 뒤 다시 시작한다.',
+        'input_muted' || 'input_ended' => '마이크 연결을 확인한 뒤 다시 시작한다.',
+        'settings_unavailable' => '브라우저와 마이크 연결을 확인한 뒤 다시 시작한다.',
         'insecure_context' => '마이크를 사용하려면 이 페이지를 HTTPS 주소로 연다.',
         'unsupported' =>
           '이 브라우저에서는 필요한 입력 기능을 지원하지 않는다. HTTPS 페이지를 최신 Safari 또는 Chrome에서 연다.',
@@ -61,6 +76,18 @@ class MeterScreen extends StatelessWidget {
     final voice = a['voiceDbfs'] as num?;
     final noise = a['noiseDbfs'] as num?;
     final settings = session.settings;
+    final contextLabel = switch (settings['contextState']) {
+      'running' => '실행 중',
+      'suspended' => '일시 중지',
+      'interrupted' => '중단됨',
+      'closed' => '종료됨',
+      _ => '확인 불가',
+    };
+    final frameStatus = session.state != CaptureState.running
+        ? '입력 상태 ${session.state.name}'
+        : session.level == null
+        ? '입력 프레임을 기다리고 있다.'
+        : '입력 프레임 수신: ${session.frameCount} · ${settings['noiseReductionState'] == 'active' ? '소음 억제 후' : '브라우저 입력'} ${session.level!.dbfs?.toStringAsFixed(1) ?? '디지털 무음'}${session.level!.dbfs == null ? '' : ' dBFS'}';
     String flag(String key) => settings[key] == true
         ? '켜짐'
         : settings[key] == false
@@ -184,7 +211,7 @@ class MeterScreen extends StatelessWidget {
         Semantics(
           liveRegion: true,
           child: Text(
-            '$analysisStatus\n발화 판별기 $vadLabel\n자동 이득 ${flag('autoGainControl')} · 잡음 억제 ${flag('noiseSuppression')} · 반향 제거 ${flag('echoCancellation')}',
+            '$frameStatus\n오디오 엔진 $contextLabel · 처리 주파수 ${settings['contextSampleRate'] ?? '확인 불가'} Hz\n$analysisStatus\n발화 판별기 $vadLabel\n자동 이득 ${flag('autoGainControl')} · 잡음 억제 ${flag('noiseSuppression')} · 반향 제거 ${flag('echoCancellation')}',
             textAlign: TextAlign.center,
             style: const TextStyle(color: muted, fontSize: 12, height: 1.7),
           ),
