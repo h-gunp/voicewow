@@ -198,6 +198,8 @@ class MeterScreen extends StatelessWidget {
         Text(
           session.displayLevel != null
               ? '발화로 판정된 입력이다. 다른 사람의 소리도 포함될 수 있다.'
+              : a['meterState'] == 'confirming'
+              ? '발화 판정을 연속 확인하고 있다.'
               : a['meterState'] == 'nonSpeech'
               ? '발화가 감지되지 않아 막대를 비웠다.'
               : '발화 판정이 없거나 확인할 수 없어 막대를 비웠다.',

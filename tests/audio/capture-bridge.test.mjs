@@ -19,6 +19,73 @@ function harness({permission, moduleGate}={}) {
 }
 async function settle(){for(let i=0;i<8;i++)await Promise.resolve();}
 
+test('synthetic 10–60ms speech decisions compare onset duration without an RMS threshold', async () => {
+  for (let length=1;length<=6;length++) {
+    const h=harness(), {node}=addNoiseReduction(h);
+    h.track.getSettings=()=>({autoGainControl:false,noiseSuppression:false,echoCancellation:false});
+    await h.capture.start();
+    for(let seq=0;seq<length;seq++) {
+      node.port.onmessage({data:{type:'analysis',seq,sampleStart:seq*480,sampleEnd:(seq+1)*480,sampleTime:(seq+1)/100,power:1e-8,clipped:false,speech:'speech',meterRms:.0001}});
+      await h.tick(10);
+    }
+    assert.equal(h.events.some(e=>e.type==='analysis' && e.analysis.meterState==='speech'),length>=3,`frames=${length}`);
+    await h.capture.stop();
+  }
+});
+
+test('invalid frame and new session discard previous onset evidence', async () => {
+  const h=harness(), {node}=addNoiseReduction(h);
+  h.track.getSettings=()=>({autoGainControl:false,noiseSuppression:false,echoCancellation:false});
+  await h.capture.start();
+  const send=(seq,rms)=>node.port.onmessage({data:{type:'analysis',seq,sampleStart:seq*480,sampleEnd:(seq+1)*480,sampleTime:(seq+1)/100,power:.01,clipped:false,speech:'speech',meterRms:rms}});
+  send(0,.1); await h.tick(10); send(1,.1); await h.tick(10); send(2,NaN);
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.meterState,'unavailable');
+  await h.tick(10); send(3,.1);
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.meterState,'confirming');
+  await h.capture.stop();
+  h.track.readyState='live'; h.ctx.state='running';
+  const next=addNoiseReduction(h); await h.capture.start();
+  next.node.port.onmessage({data:{type:'analysis',seq:0,sampleStart:0,sampleEnd:480,sampleTime:h.ctx.currentTime+.01,power:.01,clipped:false,speech:'speech',meterRms:.1}});
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.meterState,'confirming');
+  await h.capture.stop();
+});
+
+test('speech onset requires three consecutive frames and uses only the latest RMS', async () => {
+  const h=harness(), {node}=addNoiseReduction(h);
+  h.track.getSettings=()=>({autoGainControl:false,noiseSuppression:false,echoCancellation:false});
+  await h.capture.start();
+  const send=async(seq,speech,rms)=>{node.port.onmessage({data:{type:'analysis',seq,sampleStart:seq*480,sampleEnd:(seq+1)*480,sampleTime:(seq+1)/100,power:.01,clipped:false,speech,meterRms:rms}});await h.tick(10);return h.events.findLast(e=>e.type==='analysis').analysis;};
+  assert.equal((await send(0,'speech',.9)).meterState,'confirming');
+  assert.equal((await send(1,'nonSpeech',.2)).meterState,'nonSpeech');
+  assert.equal((await send(2,'speech',.9)).meterState,'confirming');
+  assert.equal((await send(3,'speech',.8)).meterState,'confirming');
+  const confirmed=await send(4,'speech',.02);
+  assert.equal(confirmed.meterState,'speech');
+  assert.ok(Math.abs(confirmed.meterDbfs-20*Math.log10(.02))<1e-9);
+  assert.equal((await send(5,'uncertain',.5)).meterState,'uncertain');
+  assert.equal((await send(6,'speech',.01)).meterState,'confirming');
+  assert.equal((await send(7,'speech',.01)).meterState,'confirming');
+  assert.equal((await send(8,'speech',.01)).meterState,'speech');
+  await h.capture.stop();
+});
+
+test('speech confirmation resets on frame gap, settings change and stale input', async () => {
+  const h=harness(), {node}=addNoiseReduction(h); let agc=false;
+  h.track.getSettings=()=>({autoGainControl:agc,noiseSuppression:false,echoCancellation:false});
+  await h.capture.start();
+  const send=async(seq)=>{node.port.onmessage({data:{type:'analysis',seq,sampleStart:seq*480,sampleEnd:(seq+1)*480,sampleTime:(seq+1)/100,power:.01,clipped:false,speech:'speech',meterRms:.05}});await h.tick(10);return h.events.findLast(e=>e.type==='analysis').analysis;};
+  await send(0); await send(1); assert.equal((await send(2)).meterState,'speech');
+  await h.tick(10); assert.equal((await send(4)).meterState,'confirming');
+  await send(5); assert.equal((await send(6)).meterState,'speech');
+  agc=true; assert.equal((await send(7)).meterState,'unavailable');
+  agc=false; assert.equal((await send(8)).meterState,'confirming');
+  await send(9); assert.equal((await send(10)).meterState,'speech');
+  h.frame({},node); await h.tick(250);
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.meterState,'unavailable');
+  assert.equal((await send(36)).meterState,'confirming');
+  await h.capture.stop();
+});
+
 for (const initialNoise of [false,true]) test(`continuous speech stays visible with ${initialNoise ? 'stale noise' : 'no initial noise'}`, async () => {
   const h=harness(), {node}=addNoiseReduction(h);
   h.track.getSettings=()=>({autoGainControl:false,noiseSuppression:false,echoCancellation:false});
@@ -44,17 +111,21 @@ test('speech meter follows the matching fresh analysis frame and clears immediat
   for(let i=0;i<400;i++){send(i,'nonSpeech',.1);if(i%10===0)h.frame({},node);await h.tick(10);}
   h.frame({rms:.01,dbfs:-40},node);
   send(400,'speech',.5);
+  await h.tick(10); send(401,'speech',.5);
+  await h.tick(10); send(402,'speech',.5);
   let a=h.events.findLast(e=>e.type==='analysis').analysis;
   assert.equal(a.speech,'speech'); assert.ok(Math.abs(a.meterDbfs-20*Math.log10(.5))<1e-9);
   h.frame({rms:.9,dbfs:-1},node);
   assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.meterDbfs,a.meterDbfs);
-  send(401,'nonSpeech',.9);
+  await h.tick(10); send(403,'nonSpeech',.9);
   a=h.events.findLast(e=>e.type==='analysis').analysis;
   assert.equal(a.speech,'nonSpeech'); assert.equal(a.meterState,'nonSpeech'); assert.equal(a.meterDbfs,null);
-  await h.tick(10); send(402,'uncertain',.9);
+  await h.tick(10); send(404,'uncertain',.9);
   assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.meterState,'uncertain');
   assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.meterDbfs,null);
-  await h.tick(10); send(403,'speech',.7);
+  await h.tick(10); send(405,'speech',.7);
+  await h.tick(10); send(406,'speech',.7);
+  await h.tick(10); send(407,'speech',.7);
   assert.ok(h.events.findLast(e=>e.type==='analysis').analysis.meterDbfs != null);
   h.frame({},node); await h.tick(250);
   assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.state,'held');
