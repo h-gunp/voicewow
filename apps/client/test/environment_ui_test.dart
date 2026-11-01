@@ -48,15 +48,27 @@ void main() {
         await tester.pump();
         expect(find.byKey(const Key('input-fill')), findsNothing);
       }
-      port.send(const AudioEvent.analysis({
-        'state': 'held',
-        'speech': 'speech',
-        'meterState': 'speech',
-        'meterDbfs': -40.0,
-      }));
+      port.send(
+        const AudioEvent.analysis({
+          'state': 'held',
+          'speech': 'speech',
+          'meterState': 'speech',
+          'meterDbfs': -40.0,
+        }),
+      );
       await tester.pump();
       expect(find.byKey(const Key('input-fill')), findsOneWidget);
       expect(find.textContaining('잡음 정보가 오래됐거나 불확실해 보류했다.'), findsOneWidget);
+      port.send(
+        const AudioEvent.analysis({
+          'state': 'collecting',
+          'speech': 'speech',
+          'meterState': 'confirming',
+        }),
+      );
+      await tester.pump();
+      expect(find.byKey(const Key('input-fill')), findsNothing);
+      expect(find.text('발화 판정을 연속 확인하고 있다.'), findsOneWidget);
       session.dispose();
     },
   );
