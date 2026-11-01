@@ -135,8 +135,9 @@ class MeterScreen extends StatelessWidget {
       (_, _, _, 'vad_runtime_failed', _) => '발화 판별 중 오류가 발생했다.',
       (_, _, _, 'invalid_analysis', _) => '분석 신호를 확인하지 못했다.',
       (_, _, _, 'processing_settings', _) when processingUnknown =>
-        '브라우저 처리 설정을 확인할 수 없어 분석을 보류했다.',
-      (_, _, _, 'processing_settings', _) => '브라우저 처리 설정이 켜져 있어 분석을 보류했다.',
+        '브라우저 처리 설정을 확인할 수 없어 환경 잡음 추정과 자동 범위를 보류했다.',
+      (_, _, _, 'processing_settings', _) =>
+        '브라우저 처리가 켜져 있어 환경 잡음 추정과 자동 범위를 보류했다.',
       (_, _, _, _, 'ready') => '환경 분석 중',
       (_, _, _, _, 'collecting') => '비발화 증거를 수집하고 있다.',
       (_, _, _, _, 'held') => '잡음 정보가 오래됐거나 불확실해 보류했다.',
@@ -233,6 +234,14 @@ class MeterScreen extends StatelessWidget {
           textAlign: TextAlign.center,
           style: const TextStyle(color: muted, fontSize: 12, height: 1.7),
         ),
+        if (a['reason'] == 'processing_settings')
+          Text(
+            processingUnknown
+                ? '전처리 미확인 · 막대는 상대 참고값이다.'
+                : '전처리 적용 · 막대는 상대 참고값이다.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: muted, fontSize: 12, height: 1.7),
+          ),
         const SizedBox(height: 5),
         const Text(
           '빨간 선은 선택한 상황의 하한·상한이다.\n참고 척도 · 실제 데시벨은 아니다.',
