@@ -7,7 +7,13 @@ import '../widgets/volume_gauge.dart';
 class MeterScreen extends StatelessWidget {
   final SessionController session;
   final VoidCallback onBack;
-  const MeterScreen({super.key, required this.session, required this.onBack});
+  final VoidCallback? onEnroll;
+  const MeterScreen({
+    super.key,
+    required this.session,
+    required this.onBack,
+    this.onEnroll,
+  });
   String get title {
     return switch (session.state) {
       CaptureState.requesting when session.reason == 'context_resuming' =>
@@ -76,33 +82,6 @@ class MeterScreen extends StatelessWidget {
     final voice = a['voiceDbfs'] as num?;
     final noise = a['noiseDbfs'] as num?;
     final settings = session.settings;
-    final contextLabel = switch (settings['contextState']) {
-      'running' => '실행 중',
-      'suspended' => '일시 중지',
-      'interrupted' => '중단됨',
-      'closed' => '종료됨',
-      _ => '확인 불가',
-    };
-    final frameStatus = session.state != CaptureState.running
-        ? '입력 상태 ${session.state.name}'
-        : session.level == null
-        ? '입력 프레임을 기다리고 있다.'
-        : '입력 프레임 수신: ${session.frameCount} · ${settings['noiseReductionState'] == 'active' ? '소음 억제 후' : '브라우저 입력'} ${session.level!.dbfs?.toStringAsFixed(1) ?? '디지털 무음'}${session.level!.dbfs == null ? '' : ' dBFS'}';
-    String flag(String key) => settings[key] == true
-        ? '켜짐'
-        : settings[key] == false
-        ? '꺼짐'
-        : '확인 불가';
-    final vadLabel = a['reason'] == 'vad_runtime_failed'
-        ? '실행 오류'
-        : switch (settings['vadStatus']) {
-            'ready' => '준비됨',
-            'load_timeout' => '파일 시간 초과',
-            'load_failed' => '파일 로드 실패',
-            'init_failed' => '초기화 실패',
-            'runtime_failed' => '실행 오류',
-            _ => '확인 불가',
-          };
     final processingUnknown = [
       'autoGainControl',
       'noiseSuppression',
@@ -145,11 +124,6 @@ class MeterScreen extends StatelessWidget {
       (_, _, _, _, 'unsupported') => '자동 조절 지원 범위를 초과했다.',
       _ => '환경 분석 신호를 기다리고 있다.',
     };
-    final inputLabel =
-        session.state == CaptureState.running &&
-            session.settings['noiseReductionState'] == 'active'
-        ? '소음 억제 후 입력'
-        : '원본 입력';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -210,13 +184,10 @@ class MeterScreen extends StatelessWidget {
               ? null
               : session.setNoiseReductionEnabled,
         ),
-        Semantics(
-          liveRegion: true,
-          child: Text(
-            '$frameStatus\n오디오 엔진 $contextLabel · 처리 주파수 ${settings['contextSampleRate'] ?? '확인 불가'} Hz\n$analysisStatus\n발화 판별기 $vadLabel\n자동 이득 ${flag('autoGainControl')} · 잡음 억제 ${flag('noiseSuppression')} · 반향 제거 ${flag('echoCancellation')}',
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: muted, fontSize: 12, height: 1.7),
-          ),
+        Text(
+          analysisStatus,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: muted, fontSize: 12),
         ),
         VolumeGauge(
           scenario: s,
@@ -235,40 +206,6 @@ class MeterScreen extends StatelessWidget {
           style: TextStyle(color: muted, fontSize: 12, height: 1.7),
         ),
         Text(
-          session.settings['speakerAvailable'] == true
-              ? '화자 확인은 실험 기능이다. 등록 시 모델 약 26.5 MB를 내려받는다. 음성은 기기에서 처리하며 등록 정보는 이 페이지의 메모리에만 둔다. 새로고침하면 삭제된다. 다른 사람·재생음이 섞일 수 있다.'
-              : session.settings['speakerAvailable'] == false
-              ? '현재 공개 버전에서는 화자 등록을 제공하지 않음'
-              : '화자 등록 제공 여부를 확인 중이다.',
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: muted, fontSize: 12, height: 1.7),
-        ),
-        TextButton(
-          key: const Key('speaker-model-notice'),
-          onPressed: () => showDialog<void>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('화자 모델 및 라이선스'),
-              content: const SingleChildScrollView(
-                child: SelectableText(
-                  'WeSpeaker contributors의 VoxCeleb ResNet34 ONNX 모델을 변경 없이 사용한다.\n\n'
-                  'WeSpeaker 공식 모델 문서는 VoxCeleb 모델에 CC BY 4.0을 명시한다. 원본 Hugging Face README 메타데이터는 license: apache-2.0을 명시한다. 모델은 보증 없이 제공되며 제작자가 이 프로젝트를 보증한다는 뜻이 아니다.\n\n'
-                  '모델 출처: https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34/blob/ff1ac5bca8ef11e90662b879aa923979e0bd277b/voxceleb_resnet34.onnx\n\n'
-                  'CC BY 4.0: https://creativecommons.org/licenses/by/4.0/legalcode.en\n\n'
-                  '전체 고지와 Apache 원문 및 ONNX Runtime 고지: audio/vendor/speaker/MODEL-NOTICE.txt',
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('닫기'),
-                ),
-              ],
-            ),
-          ),
-          child: const Text('모델 및 라이선스'),
-        ),
-        Text(
           _speakerStatus(),
           key: const Key('speaker-status'),
           textAlign: TextAlign.center,
@@ -281,10 +218,13 @@ class MeterScreen extends StatelessWidget {
             OutlinedButton(
               key: const Key('begin-speaker-enrollment'),
               onPressed:
-                  session.state == CaptureState.running &&
-                      session.settings['speakerAvailable'] == true
-                  ? session.beginSpeakerEnrollment
-                  : null,
+                  onEnroll ??
+                  (session.state == CaptureState.running &&
+                          session.settings['speakerAvailable'] == true &&
+                          session.settings['noiseReductionState'] == 'active' &&
+                          session.settings['vadStatus'] == 'ready'
+                      ? session.beginSpeakerEnrollment
+                      : null),
               child: const Text('내 목소리 등록'),
             ),
             TextButton(
@@ -365,21 +305,159 @@ class MeterScreen extends StatelessWidget {
           onPressed: onBack,
           child: const Text('상황 변경', style: TextStyle(color: muted)),
         ),
-        ExpansionTile(
-          tilePadding: EdgeInsets.zero,
-          title: const Text(
-            '입력 정보',
-            style: TextStyle(fontSize: 12, color: muted),
-          ),
-          children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                '$inputLabel ${session.level?.dbfs?.toStringAsFixed(1) ?? '—'} dBFS\n수신 프레임 ${session.frameCount}\n입력 상태 ${session.state.name}\n${_settingsText()}',
-                style: const TextStyle(fontSize: 12, color: muted, height: 1.8),
+        TextButton(
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => Scaffold(
+                appBar: AppBar(title: const Text('앱 정보 · 진단')),
+                body: SafeArea(
+                  child: SingleChildScrollView(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: ListenableBuilder(
+                        listenable: session,
+                        builder: (context, _) => diagnostics(context),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
-          ],
+          ),
+          child: const Text('앱 정보 · 진단'),
+        ),
+      ],
+    );
+  }
+
+  Widget diagnostics(BuildContext context) {
+    final a = session.analysis;
+    final settings = session.settings;
+    final contextLabel = switch (settings['contextState']) {
+      'running' => '실행 중',
+      'suspended' => '일시 중지',
+      'interrupted' => '중단됨',
+      'closed' => '종료됨',
+      _ => '확인 불가',
+    };
+    final frameStatus = session.state != CaptureState.running
+        ? '입력 상태 ${session.state.name}'
+        : session.level == null
+        ? '입력 프레임을 기다리고 있다.'
+        : '입력 프레임 수신: ${session.frameCount} · ${settings['noiseReductionState'] == 'active' ? '소음 억제 후' : '브라우저 입력'} ${session.level!.dbfs?.toStringAsFixed(1) ?? '디지털 무음'}${session.level!.dbfs == null ? '' : ' dBFS'}';
+    String flag(String key) => settings[key] == true
+        ? '켜짐'
+        : settings[key] == false
+        ? '꺼짐'
+        : '확인 불가';
+    final vadLabel = a['reason'] == 'vad_runtime_failed'
+        ? '실행 오류'
+        : switch (settings['vadStatus']) {
+            'ready' => '준비됨',
+            'load_timeout' => '파일 시간 초과',
+            'load_failed' => '파일 로드 실패',
+            'init_failed' => '초기화 실패',
+            'runtime_failed' => '실행 오류',
+            _ => '확인 불가',
+          };
+    final processingUnknown = [
+      'autoGainControl',
+      'noiseSuppression',
+      'echoCancellation',
+    ].any((key) => settings[key] != true && settings[key] != false);
+    final analysisStatus = switch ((
+      session.state,
+      settings['noiseReductionState'],
+      settings['vadStatus'],
+      a['reason'],
+      a['state'],
+    )) {
+      (CaptureState.requesting, _, _, _, _) => '환경 분석을 준비하고 있다.',
+      (CaptureState.idle || CaptureState.error, _, _, _, _) => '환경 분석이 중지됐다.',
+      (_, 'disabled', _, _, _) => '소음 억제가 꺼져 환경 분석을 보류했다.',
+      (_, 'unavailable', _, _, _)
+          when settings['noiseReductionReason'] == 'unsupported_sample_rate' =>
+        '오디오 처리 주파수 ${settings['contextSampleRate'] ?? '확인 불가'} Hz는 소음 억제를 지원하지 않는다.',
+      (_, 'unavailable', _, _, _)
+          when settings['noiseReductionReason'] == 'load_timeout' =>
+        '소음 억제 준비 시간이 초과됐다.',
+      (_, 'unavailable', _, _, _)
+          when settings['noiseReductionReason'] == 'load_failed' =>
+        '소음 억제 파일을 불러오거나 준비하지 못했다.',
+      (_, 'unavailable', _, _, _) => '이 브라우저에서 소음 억제를 준비하지 못했다.',
+      (_, _, 'load_timeout', _, _) => '발화 판별 파일을 불러오는 시간이 초과됐다.',
+      (_, _, 'load_failed', _, _) => '발화 판별 파일을 불러오지 못했다.',
+      (_, _, 'init_failed', _, _) => '발화 판별기를 준비하지 못했다.',
+      (_, _, 'runtime_failed', _, _) => '발화 판별 중 오류가 발생했다.',
+      (_, _, _, 'vad_runtime_failed', _) => '발화 판별 중 오류가 발생했다.',
+      (_, _, _, 'invalid_analysis', _) => '분석 신호를 확인하지 못했다.',
+      (_, _, _, 'input_gap', _) => '입력 프레임이 끊겨 분석을 다시 준비한다.',
+      (_, _, _, 'processing_settings', _) when processingUnknown =>
+        '브라우저 처리 설정을 확인할 수 없어 환경 잡음 추정과 자동 범위를 보류했다.',
+      (_, _, _, 'processing_settings', _) =>
+        '브라우저 처리가 켜져 있어 환경 잡음 추정과 자동 범위를 보류했다.',
+      (_, _, _, _, 'ready') => '환경 분석 중',
+      (_, _, _, _, 'collecting') => '비발화 증거를 수집하고 있다.',
+      (_, _, _, _, 'held') => '잡음 정보가 오래됐거나 불확실해 보류했다.',
+      (_, _, _, _, 'unsupported') => '자동 조절 지원 범위를 초과했다.',
+      _ => '환경 분석 신호를 기다리고 있다.',
+    };
+    final inputLabel =
+        session.state == CaptureState.running &&
+            session.settings['noiseReductionState'] == 'active'
+        ? '소음 억제 후 입력'
+        : '원본 입력';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Semantics(
+          liveRegion: true,
+          child: Text(
+            '$frameStatus\n오디오 엔진 $contextLabel · 처리 주파수 ${settings['contextSampleRate'] ?? '확인 불가'} Hz\n$analysisStatus\n발화 판별기 $vadLabel\n자동 이득 ${flag('autoGainControl')} · 잡음 억제 ${flag('noiseSuppression')} · 반향 제거 ${flag('echoCancellation')}',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: muted, fontSize: 12, height: 1.7),
+          ),
+        ),
+        Text(
+          session.settings['speakerAvailable'] == true
+              ? '화자 확인은 실험 기능이다. 등록 시 모델 약 26.5 MB를 내려받는다. 음성은 기기에서 처리하며 등록 정보는 이 페이지의 메모리에만 둔다. 새로고침하면 삭제된다. 다른 사람·재생음이 섞일 수 있다.'
+              : session.settings['speakerAvailable'] == false
+              ? '현재 공개 버전에서는 화자 등록을 제공하지 않음'
+              : '화자 등록 제공 여부를 확인 중이다.',
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: muted, fontSize: 12, height: 1.7),
+        ),
+        TextButton(
+          key: const Key('speaker-model-notice'),
+          onPressed: () => showDialog<void>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('화자 모델 및 라이선스'),
+              content: const SingleChildScrollView(
+                child: SelectableText(
+                  'WeSpeaker contributors의 VoxCeleb ResNet34 ONNX 모델을 변경 없이 사용한다.\n\n'
+                  'WeSpeaker 공식 모델 문서는 VoxCeleb 모델에 CC BY 4.0을 명시한다. 원본 Hugging Face README 메타데이터는 license: apache-2.0을 명시한다. 모델은 보증 없이 제공되며 제작자가 이 프로젝트를 보증한다는 뜻이 아니다.\n\n'
+                  '모델 출처: https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34/blob/ff1ac5bca8ef11e90662b879aa923979e0bd277b/voxceleb_resnet34.onnx\n\n'
+                  'CC BY 4.0: https://creativecommons.org/licenses/by/4.0/legalcode.en\n\n'
+                  '전체 고지와 Apache 원문 및 ONNX Runtime 고지: audio/vendor/speaker/MODEL-NOTICE.txt',
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('닫기'),
+                ),
+              ],
+            ),
+          ),
+          child: const Text('모델 및 라이선스'),
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            '$inputLabel ${session.level?.dbfs?.toStringAsFixed(1) ?? '—'} dBFS\n수신 프레임 ${session.frameCount}\n입력 상태 ${session.state.name}\n${_settingsText()}',
+            style: const TextStyle(fontSize: 12, color: muted, height: 1.8),
+          ),
         ),
       ],
     );

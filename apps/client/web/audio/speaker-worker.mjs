@@ -18,7 +18,7 @@ export function createSpeakerWorker(makeWorker, {timeoutMs = 10000, loadingTimeo
     job?.reject(new DOMException('Speaker worker cancelled', 'AbortError'));
   }
   return {
-    run(value) {
+    run(value, onReady = () => {}) {
       if (!(value instanceof Float32Array) && !['string','number','boolean'].includes(typeof value)) return Promise.reject(new TypeError('PCM or scalar control required'));
       if (pending) return Promise.reject(new Error('Speaker worker is busy'));
       worker ??= makeWorker();
@@ -27,7 +27,7 @@ export function createSpeakerWorker(makeWorker, {timeoutMs = 10000, loadingTimeo
         const timeout = () => { clear(); worker.terminate(); worker = null; ready = false; reject(new Error('Speaker worker timeout')); };
         const onMessage = ({data}) => {
           if (data?.id !== id) return;
-          if (data.phase === 'inference') { if (!ready) { ready = true; clearTimer(pending.timer); pending.timer = setTimer(timeout, timeoutMs); } return; }
+          if (data.phase === 'inference') { if (!ready) { ready = true; clearTimer(pending.timer); pending.timer = setTimer(timeout, timeoutMs); onReady(); } return; }
           clear();
           if (data.error) { worker.terminate(); worker = null; ready = false; reject(new Error('Speaker worker failed')); }
           else resolve(data.result);

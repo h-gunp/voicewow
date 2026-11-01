@@ -21,7 +21,7 @@ function browserPlatform() {
     createSpeakerEmbedding: () => {
       if (!speakerAvailable()) throw failure('speaker_unavailable');
       const adapter=createSpeakerWorker(()=>new Worker(new URL('./speaker-inference-worker.mjs',import.meta.url),{type:'module'}));
-      return {embed:pcm=>adapter.run(pcm),cancel:()=>adapter.cancel()};
+      return {embed:(pcm,onReady)=>adapter.run(pcm,onReady),cancel:()=>adapter.cancel()};
     },
     isSecureContext: () => globalThis.isSecureContext !== false,
     now: () => performance.now(),

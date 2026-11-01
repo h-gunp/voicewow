@@ -25,7 +25,12 @@ void main() {
         ),
       ),
     );
+    await tester.ensureVisible(find.text('앱 정보 · 진단'));
+    await tester.tap(find.text('앱 정보 · 진단'));
+    await tester.pumpAndSettle();
     expect(find.text('현재 공개 버전에서는 화자 등록을 제공하지 않음'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     expect(
       tester
           .widget<OutlinedButton>(
@@ -70,7 +75,13 @@ void main() {
       final session = SessionController(port)
         ..selectScenario(Scenario.values.first);
       await session.start();
-      port.send(const AudioEvent.settings({'speakerAvailable': true}));
+      port.send(
+        const AudioEvent.settings({
+          'speakerAvailable': true,
+          'noiseReductionState': 'active',
+          'vadStatus': 'ready',
+        }),
+      );
       port.send(const AudioEvent.state(CaptureState.running));
       port.send(
         const AudioEvent.speaker({'state': 'registering', 'samples': 1}),
@@ -88,7 +99,13 @@ void main() {
       final session = SessionController(port)
         ..selectScenario(Scenario.values.first);
       await session.start();
-      port.send(const AudioEvent.settings({'speakerAvailable': true}));
+      port.send(
+        const AudioEvent.settings({
+          'speakerAvailable': true,
+          'noiseReductionState': 'active',
+          'vadStatus': 'ready',
+        }),
+      );
       port.send(const AudioEvent.state(CaptureState.running));
       await tester.pumpWidget(
         MaterialApp(
@@ -121,12 +138,17 @@ void main() {
       await tester.pump();
       expect(find.byKey(const Key('input-fill')), findsOneWidget);
       expect(find.textContaining('등록 완료'), findsOneWidget);
+      await tester.ensureVisible(find.text('앱 정보 · 진단'));
+      await tester.tap(find.text('앱 정보 · 진단'));
+      await tester.pumpAndSettle();
       await tester.ensureVisible(find.byKey(const Key('speaker-model-notice')));
       await tester.tap(find.byKey(const Key('speaker-model-notice')));
       await tester.pumpAndSettle();
       expect(find.text('화자 모델 및 라이선스'), findsOneWidget);
       expect(find.textContaining('WeSpeaker contributors'), findsOneWidget);
       await tester.tap(find.text('닫기'));
+      await tester.pumpAndSettle();
+      await tester.pageBack();
       await tester.pumpAndSettle();
       port.send(
         const AudioEvent.speaker({
@@ -271,6 +293,9 @@ void main() {
           ),
         ),
       );
+      await tester.ensureVisible(find.text('앱 정보 · 진단'));
+      await tester.tap(find.text('앱 정보 · 진단'));
+      await tester.pumpAndSettle();
       expect(find.textContaining('입력 프레임을 기다리고 있다.'), findsOneWidget);
       port.send(
         const AudioEvent.level(
@@ -480,9 +505,14 @@ void main() {
       find.textContaining('브라우저 처리 설정을 확인할 수 없어 환경 잡음 추정과 자동 범위를 보류했다.'),
       findsOneWidget,
     );
-    expect(find.textContaining('자동 이득 확인 불가'), findsOneWidget);
-    expect(find.textContaining('잡음 억제 확인 불가'), findsOneWidget);
-    expect(find.textContaining('반향 제거 꺼짐'), findsOneWidget);
+    await tester.ensureVisible(find.text('앱 정보 · 진단'));
+    await tester.tap(find.text('앱 정보 · 진단'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('자동 이득 확인 불가'), findsWidgets);
+    expect(find.textContaining('잡음 억제 확인 불가'), findsWidgets);
+    expect(find.textContaining('반향 제거 꺼짐'), findsWidgets);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     port.send(
       const AudioEvent.analysis({
         'state': 'unavailable',
@@ -498,8 +528,13 @@ void main() {
         ),
       ),
     );
-    expect(find.textContaining('발화 판별 중 오류가 발생했다.'), findsOneWidget);
+    expect(find.text('발화 판별 중 오류가 발생했다.'), findsOneWidget);
+    await tester.ensureVisible(find.text('앱 정보 · 진단'));
+    await tester.tap(find.text('앱 정보 · 진단'));
+    await tester.pumpAndSettle();
     expect(find.textContaining('발화 판별기 실행 오류'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     port.send(
       const AudioEvent.settings({
         'noiseReductionState': 'active',
@@ -516,8 +551,13 @@ void main() {
         ),
       ),
     );
-    expect(find.textContaining('발화 판별 중 오류가 발생했다.'), findsOneWidget);
+    expect(find.text('발화 판별 중 오류가 발생했다.'), findsOneWidget);
+    await tester.ensureVisible(find.text('앱 정보 · 진단'));
+    await tester.tap(find.text('앱 정보 · 진단'));
+    await tester.pumpAndSettle();
     expect(find.textContaining('발화 판별기 실행 오류'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     session.dispose();
   });
   testWidgets('analysis shows separate reference and clears when held', (

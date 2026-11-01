@@ -7,6 +7,7 @@ import 'audio/unsupported_audio_port.dart'
 import 'session_controller.dart';
 import 'screens/scenario_screen.dart';
 import 'screens/meter_screen.dart';
+import 'screens/enrollment_screen.dart';
 
 class VoiceMateApp extends StatefulWidget {
   final AudioPort? audioPort;
@@ -20,6 +21,8 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
   late final SessionController session;
   late final SemanticsHandle semantics;
   bool meter = false;
+  bool enrollment = true;
+  bool transitioning = false;
   @override
   void initState() {
     super.initState();
@@ -75,10 +78,39 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
                           color: canvas,
                           child: ListenableBuilder(
                             listenable: session,
-                            builder: (context, _) =>
-                                meter && session.scenario != null
+                            builder: (context, _) => transitioning
+                                ? const Center(
+                                    child: CircularProgressIndicator(),
+                                  )
+                                : enrollment
+                                ? EnrollmentScreen(
+                                    session: session,
+                                    onDone: () async {
+                                      if (transitioning) return;
+                                      setState(() => transitioning = true);
+                                      if (session.active) await session.stop();
+                                      if (mounted)
+                                        setState(() {
+                                          enrollment = false;
+                                          transitioning = false;
+                                        });
+                                    },
+                                  )
+                                : meter && session.scenario != null
                                 ? MeterScreen(
                                     session: session,
+                                    onEnroll: () async {
+                                      if (transitioning) return;
+                                      setState(() => transitioning = true);
+                                      await session.stop();
+                                      session.enrollmentComplete = false;
+                                      if (mounted)
+                                        setState(() {
+                                          meter = false;
+                                          enrollment = true;
+                                          transitioning = false;
+                                        });
+                                    },
                                     onBack: () {
                                       setState(() => meter = false);
                                       session.stop();

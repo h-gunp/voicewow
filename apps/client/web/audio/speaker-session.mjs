@@ -21,7 +21,7 @@ export function createSpeakerSession({run, onResult, onError = () => {}, cancel 
   }
   return {
     get registered() { return profile !== null; },
-    register(value) { if (!(value instanceof Float32Array) || !value.length || !value.every(Number.isFinite)) throw new TypeError('finite profile required'); revision++; discardQueued(); cancel(); profile?.fill(0); profile = value.slice(); },
+    register(value, {keepWorker = false} = {}) { if (!(value instanceof Float32Array) || !value.length || !value.every(Number.isFinite)) throw new TypeError('finite profile required'); revision++; discardQueued(); if (!keepWorker) cancel(); profile?.fill(0); profile = value.slice(); },
     remove() { revision++; discardQueued(); cancel(); profile?.fill(0); profile = null; },
     resetEpoch() { epoch++; discardQueued(); cancel(); },
     submit(value, metadata = null) {

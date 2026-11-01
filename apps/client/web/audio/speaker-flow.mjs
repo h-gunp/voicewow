@@ -16,21 +16,22 @@ export function createSpeakerFlow({embed,cancel,onStatus,now}) {
   function clear(){generation++;session.remove();clearSamples();busy=false;phase='unregistered';}
   return {
     get registered(){return phase==='registered';},
-    begin(){clear();phase='registering';onStatus({state:'registering',samples:0});},
+    begin(){if(phase==='registering')return;clear();phase='registering';onStatus({state:'registering',samples:0});},
     async feed(pcm,meta){
       if(phase==='unregistered')return;
-      if(!(pcm instanceof Float32Array)||pcm.length!==16000||!pcm.every(Number.isFinite)||!Number.isInteger(meta?.speechFrames)||meta.speechFrames<80||meta.speechFrames>100||meta.clipped!==false||!Number.isFinite(meta.startTime)||!Number.isFinite(meta.endTime)||Math.abs(meta.endTime-meta.startTime-1)>.001){onStatus({state:'quality'});return;}
+      if(!(pcm instanceof Float32Array)||pcm.length!==16000||!pcm.every(Number.isFinite)||!Number.isInteger(meta?.speechFrames)||meta.speechFrames<80||meta.speechFrames>100||meta.clipped!==false||!Number.isFinite(meta.startTime)||!Number.isFinite(meta.endTime)||Math.abs(meta.endTime-meta.startTime-1)>.001){onStatus({state:'quality',samples:samples.length});return;}
       if(phase==='registering'){
         if(busy)return;busy=true;const token=generation,owned=pcm.slice();
         try{
-          const embedding=await embed(owned);
+          if(!samples.length)onStatus({state:'loading',samples:0});
+          const embedding=await embed(owned,()=>{if(token===generation)onStatus({state:'registering',samples:samples.length});});
           if(token!==generation){embedding?.fill?.(0);return;}
           if(!(embedding instanceof Float32Array)||!embedding.length||!embedding.every(Number.isFinite)||!embedding.some(x=>x!==0)||samples.some(x=>x.length!==embedding.length))throw Error('Invalid embedding');
-          for(const previous of samples){let dot=0,a=0,b=0;for(let i=0;i<previous.length;i++){dot+=previous[i]*embedding[i];a+=previous[i]**2;b+=embedding[i]**2;}if(dot/Math.sqrt(a*b)<.43324563999132065){embedding.fill(0);onStatus({state:'quality'});return;}}
+          for(const previous of samples){let dot=0,a=0,b=0;for(let i=0;i<previous.length;i++){dot+=previous[i]*embedding[i];a+=previous[i]**2;b+=embedding[i]**2;}if(dot/Math.sqrt(a*b)<.43324563999132065){embedding.fill(0);onStatus({state:'quality',samples:samples.length});return;}}
           samples.push(embedding.slice());embedding.fill(0);
           if(samples.length<3){onStatus({state:'registering',samples:samples.length});return;}
           const mean=new Float32Array(samples[0].length);for(const sample of samples)for(let i=0;i<mean.length;i++)mean[i]+=sample[i]/samples.length;
-          session.register(mean);mean.fill(0);clearSamples();phase='registered';onStatus({state:'registered'});
+          session.register(mean,{keepWorker:true});mean.fill(0);clearSamples();phase='registered';onStatus({state:'registered'});
         }catch{if(token===generation){clear();onStatus({state:'unavailable'});}}
         finally{owned.fill(0);if(token===generation)busy=false;}
       }else session.submit(pcm,{startTime:meta.startTime,endTime:meta.endTime,epoch});

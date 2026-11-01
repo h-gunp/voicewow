@@ -41,6 +41,9 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(VoiceMateApp(audioPort: FakeAudioPort()));
+    await tester.ensureVisible(find.byKey(const Key('enrollment-skip')));
+    await tester.tap(find.byKey(const Key('enrollment-skip')));
+    await tester.pump();
     final node = tester.getSemantics(find.byKey(const Key('scenario-quiet')));
     expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
     node.owner!.performAction(node.id, SemanticsAction.tap);
@@ -55,6 +58,9 @@ void main() {
   ) async {
     final port = FakeAudioPort();
     await tester.pumpWidget(VoiceMateApp(audioPort: port));
+    await tester.ensureVisible(find.byKey(const Key('enrollment-skip')));
+    await tester.tap(find.byKey(const Key('enrollment-skip')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('scenario-quiet')));
     await tester.pump();
     await tester.ensureVisible(find.byKey(const Key('start')));
@@ -83,6 +89,9 @@ void main() {
   ) async {
     final port = FakeAudioPort();
     await tester.pumpWidget(VoiceMateApp(audioPort: port));
+    await tester.ensureVisible(find.byKey(const Key('enrollment-skip')));
+    await tester.tap(find.byKey(const Key('enrollment-skip')));
+    await tester.pump();
     expect(
       tester.widget<FilledButton>(find.byKey(const Key('start'))).onPressed,
       isNull,
@@ -147,6 +156,9 @@ void main() {
       await tester.pumpWidget(
         VoiceMateApp(audioPort: port, textScaler: TextScaler.linear(2)),
       );
+      await tester.ensureVisible(find.byKey(const Key('enrollment-skip')));
+      await tester.tap(find.byKey(const Key('enrollment-skip')));
+      await tester.pump();
       expect(tester.takeException(), isNull);
       await tester.ensureVisible(find.byKey(const Key('scenario-quiet')));
       await tester.tap(find.byKey(const Key('scenario-quiet')));
@@ -179,6 +191,9 @@ void main() {
         textScaler: TextScaler.linear(2),
       ),
     );
+    await tester.ensureVisible(find.byKey(const Key('enrollment-skip')));
+    await tester.tap(find.byKey(const Key('enrollment-skip')));
+    await tester.pump();
     await tester.ensureVisible(find.byKey(const Key('scenario-meeting')));
     await tester.tap(find.byKey(const Key('scenario-meeting')));
     await tester.pump();
@@ -209,6 +224,9 @@ void main() {
     ) async {
       final port = FakeAudioPort();
       await tester.pumpWidget(VoiceMateApp(audioPort: port));
+      await tester.ensureVisible(find.byKey(const Key('enrollment-skip')));
+      await tester.tap(find.byKey(const Key('enrollment-skip')));
+      await tester.pump();
       await tester.tap(find.byKey(Key('scenario-${fixture.$1}')));
       await tester.pump();
       await tester.ensureVisible(find.byKey(const Key('start')));
@@ -260,6 +278,9 @@ void main() {
   ) async {
     final port = FakeAudioPort();
     await tester.pumpWidget(VoiceMateApp(audioPort: port));
+    await tester.ensureVisible(find.byKey(const Key('enrollment-skip')));
+    await tester.tap(find.byKey(const Key('enrollment-skip')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('scenario-quiet')));
     await tester.pump();
     await tester.ensureVisible(find.byKey(const Key('start')));
@@ -324,6 +345,9 @@ void main() {
     ) async {
       final port = FakeAudioPort();
       await tester.pumpWidget(VoiceMateApp(audioPort: port));
+      await tester.ensureVisible(find.byKey(const Key('enrollment-skip')));
+      await tester.tap(find.byKey(const Key('enrollment-skip')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('scenario-quiet')));
       await tester.pump();
       await tester.ensureVisible(find.byKey(const Key('start')));
@@ -356,6 +380,9 @@ void main() {
     ) async {
       final port = FakeAudioPort();
       await tester.pumpWidget(VoiceMateApp(audioPort: port));
+      await tester.ensureVisible(find.byKey(const Key('enrollment-skip')));
+      await tester.tap(find.byKey(const Key('enrollment-skip')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('scenario-quiet')));
       await tester.pump();
       await tester.ensureVisible(find.byKey(const Key('start')));
@@ -429,6 +456,9 @@ void main() {
           await tester.pumpWidget(
             VoiceMateApp(audioPort: port, textScaler: TextScaler.linear(scale)),
           );
+          await tester.ensureVisible(find.byKey(const Key('enrollment-skip')));
+          await tester.tap(find.byKey(const Key('enrollment-skip')));
+          await tester.pump();
           await tester.ensureVisible(find.byKey(const Key('scenario-quiet')));
           await tester.tap(find.byKey(const Key('scenario-quiet')));
           await tester.pump();
@@ -456,13 +486,15 @@ void main() {
           expect(find.text(fixture.$3), findsOneWidget);
           expect(find.text(fixture.$4), findsOneWidget);
           expect(tester.takeException(), isNull);
-          await tester.ensureVisible(find.text('입력 정보'));
-          await tester.tap(find.text('입력 정보'));
+          await tester.ensureVisible(find.text('앱 정보 · 진단'));
+          await tester.tap(find.text('앱 정보 · 진단'));
           await tester.pumpAndSettle();
           expect(find.textContaining('앱 소음 억제 ${fixture.$5}'), findsOneWidget);
           expect(find.textContaining('브라우저 잡음 억제 꺼짐'), findsOneWidget);
           expect(find.textContaining(fixture.$6), findsOneWidget);
           expect(tester.takeException(), isNull);
+          await tester.pageBack();
+          await tester.pumpAndSettle();
           await tester.ensureVisible(find.byKey(const Key('toggle-capture')));
           await tester.pumpAndSettle();
           expect(
@@ -480,6 +512,9 @@ void main() {
     ) async {
       final port = FakeAudioPort();
       await tester.pumpWidget(VoiceMateApp(audioPort: port));
+      await tester.ensureVisible(find.byKey(const Key('enrollment-skip')));
+      await tester.tap(find.byKey(const Key('enrollment-skip')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('scenario-quiet')));
       await tester.pump();
       await tester.ensureVisible(find.byKey(const Key('start')));
@@ -496,10 +531,12 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('입력 정보'));
-      await tester.tap(find.text('입력 정보'));
+      await tester.ensureVisible(find.text('앱 정보 · 진단'));
+      await tester.tap(find.text('앱 정보 · 진단'));
       await tester.pumpAndSettle();
       expect(find.textContaining('앱 소음 억제 적용 중'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
       if (terminalState == CaptureState.idle) {
         await tester.ensureVisible(find.byKey(const Key('toggle-capture')));
         await tester.tap(find.byKey(const Key('toggle-capture')));
@@ -512,8 +549,13 @@ void main() {
         );
       }
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('앱 정보 · 진단'));
+      await tester.tap(find.text('앱 정보 · 진단'));
+      await tester.pumpAndSettle();
       expect(find.textContaining('앱 소음 억제 미사용'), findsOneWidget);
       expect(find.textContaining('소음 억제 후 입력'), findsNothing);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
       expect(find.textContaining('주변 소음을 줄인 입력'), findsNothing);
       expect(find.text('입력 수준 —'), findsOneWidget);
       expect(find.byKey(const Key('input-fill')), findsNothing);
