@@ -231,7 +231,7 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
               if (environmentSupported) s.estimator.add(data);
               const snapshot = environmentSupported ? s.estimator.snapshot() : {state:'unavailable',reason:'processing_settings',speech:data.clipped?'uncertain':data.speech,noiseDbfs:null,voiceDbfs:null,offset:null};
               const validSpeech = age <= 200 && !data.clipped && snapshot.speech === 'speech' && data.meterRms > 0;
-              // Experimental 30 ms onset confirmation; the VAD threshold is unchanged.
+              // Experimental 30 ms onset confirmation.
               s.speechFrames = validSpeech ? Math.min((s.speechFrames || 0) + 1, 3) : 0;
               const meterState = age > 200 || data.clipped ? 'unavailable' : snapshot.speech !== 'speech' ? snapshot.speech : !validSpeech ? 'unavailable' : s.speechFrames < 3 ? 'confirming' : 'speech';
               const meterDbfs = meterState === 'speech' ? 20*Math.log10(data.meterRms) : null;

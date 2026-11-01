@@ -7,7 +7,7 @@ export async function createVoiceActivity(binary) {
   if (!handle) throw new Error('VAD allocation failed');
   let ptr = 0;
   try {
-    if (api.fvad_set_mode(handle, 0) !== 0 || api.fvad_set_sample_rate(handle, 48000) !== 0) throw new Error('VAD setup failed');
+    if (api.fvad_set_mode(handle, 2) !== 0 || api.fvad_set_sample_rate(handle, 48000) !== 0) throw new Error('VAD setup failed');
     ptr = api.malloc(480 * 2);
     if (!ptr) throw new Error('VAD allocation failed');
   } catch (error) {
@@ -32,7 +32,7 @@ export async function createVoiceActivity(binary) {
     reset() {
       if (disposed) throw new Error('VAD disposed');
       api.fvad_reset(handle);
-      if (api.fvad_set_mode(handle, 0) !== 0 || api.fvad_set_sample_rate(handle, 48000) !== 0) throw new Error('VAD reset failed');
+      if (api.fvad_set_mode(handle, 2) !== 0 || api.fvad_set_sample_rate(handle, 48000) !== 0) throw new Error('VAD reset failed');
     },
     dispose() {
       if (disposed) return;
