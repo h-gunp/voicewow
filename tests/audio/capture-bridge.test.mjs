@@ -19,6 +19,76 @@ function harness({permission, moduleGate}={}) {
 }
 async function settle(){for(let i=0;i<8;i++)await Promise.resolve();}
 
+test('successive input epochs use current speech immediately and preserve noise baseline', async () => {
+  const h=harness(), {node}=addNoiseReduction(h);
+  h.track.getSettings=()=>({autoGainControl:false,noiseSuppression:false,echoCancellation:false});
+  await h.capture.start();
+  const send=(seq,origin,speech,power=.01)=>node.port.onmessage({data:{type:'analysis',seq,sampleStart:seq*480,sampleEnd:(seq+1)*480,sampleTime:origin+(seq+1)/100,power,clipped:false,speech,meterRms:.5}});
+  for(let i=0;i<400;i++){send(i,0,'nonSpeech');if(i%10===0)h.frame({},node);await h.tick(10);}
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.state,'ready');
+  for(let epoch=0;epoch<2;epoch++) {
+    node.port.onmessage({data:{type:'analysis_reset'}});
+    const origin=h.ctx.currentTime;
+    for(let i=0;i<3;i++){send(i,origin,'speech');await h.tick(10);}
+    assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.meterState,'speech');
+    send(3,origin,'nonSpeech'); await h.tick(10);
+    assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.meterState,'nonSpeech');
+  }
+  node.port.onmessage({data:{type:'analysis_reset'}});
+  const origin=h.ctx.currentTime;
+  for(let i=0;i<5000;i++){send(i,origin,'nonSpeech',.03);if(i%10===0)h.frame({},node);await h.tick(10);}
+  assert.ok(h.events.findLast(e=>e.type==='analysis').analysis.offset>0);
+  await h.capture.stop();
+});
+
+test('first non-speech frame after a gap clears previous speech', async () => {
+  const h=harness(), {node}=addNoiseReduction(h);
+  h.track.getSettings=()=>({autoGainControl:false,noiseSuppression:false,echoCancellation:false});
+  await h.capture.start();
+  const send=(seq,origin,speech)=>node.port.onmessage({data:{type:'analysis',seq,sampleStart:seq*480,sampleEnd:(seq+1)*480,sampleTime:origin+(seq+1)/100,power:.01,clipped:false,speech,meterRms:.5}});
+  for(let i=0;i<400;i++){send(i,0,'nonSpeech');if(i%10===0)h.frame({},node);await h.tick(10);}
+  for(let i=400;i<403;i++){send(i,0,'speech');await h.tick(10);}
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.meterState,'speech');
+  node.port.onmessage({data:{type:'analysis_reset'}});
+  send(0,h.ctx.currentTime,'nonSpeech');
+  const a=h.events.findLast(e=>e.type==='analysis').analysis;
+  assert.equal(a.speech,'nonSpeech'); assert.equal(a.meterState,'nonSpeech'); assert.equal(a.meterDbfs,null);
+  await h.capture.stop();
+});
+
+test('input gap invalidates meter and accepts a fresh sample-clock epoch', async () => {
+  const h=harness(), {node}=addNoiseReduction(h);
+  h.track.getSettings=()=>({echoCancellation:false});
+  await h.capture.start();
+  const send=(seq,origin)=>node.port.onmessage({data:{type:'analysis',seq,sampleStart:seq*480,sampleEnd:(seq+1)*480,sampleTime:origin+(seq+1)/100,power:.01,clipped:false,speech:'speech',meterRms:.5}});
+  for(let i=0;i<5;i++){send(i,0);await h.tick(10);}
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.meterState,'speech');
+  node.port.onmessage({data:{type:'analysis_reset'}});
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.meterState,'unavailable');
+  await h.tick(1200);
+  const origin=h.ctx.currentTime;
+  for(let i=0;i<3;i++){send(i,origin);await h.tick(10);}
+  const a=h.events.findLast(e=>e.type==='analysis').analysis;
+  assert.equal(a.meterState,'speech');
+  assert.equal(a.reason,'processing_settings');
+  await h.capture.stop();
+});
+
+test('input gap keeps the session noise baseline but requires new evidence', async () => {
+  const h=harness(), {node}=addNoiseReduction(h);
+  h.track.getSettings=()=>({autoGainControl:false,noiseSuppression:false,echoCancellation:false});
+  await h.capture.start();
+  const send=(seq,origin,power)=>node.port.onmessage({data:{type:'analysis',seq,sampleStart:seq*480,sampleEnd:(seq+1)*480,sampleTime:origin+(seq+1)/100,power,clipped:false,speech:'nonSpeech',meterRms:.1}});
+  for(let i=0;i<400;i++){send(i,0,.01);if(i%10===0)h.frame({},node);await h.tick(10);}
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.state,'ready');
+  node.port.onmessage({data:{type:'analysis_reset'}}); h.frame({},node); await h.tick(1000);
+  const origin=h.ctx.currentTime;
+  for(let i=0;i<5000;i++){send(i,origin,.03);if(i%10===0)h.frame({},node);await h.tick(10);}
+  const a=h.events.findLast(e=>e.type==='analysis').analysis;
+  assert.equal(a.state,'ready'); assert.ok(a.offset>0);
+  await h.capture.stop();
+});
+
 for (const trackSettings of [
   {echoCancellation:false},
   {autoGainControl:true,noiseSuppression:false,echoCancellation:false},

@@ -29,6 +29,11 @@ export async function createVoiceActivity(binary) {
       if (result !== 0 && result !== 1) throw new Error('VAD processing failed');
       return result === 1;
     },
+    reset() {
+      if (disposed) throw new Error('VAD disposed');
+      api.fvad_reset(handle);
+      if (api.fvad_set_mode(handle, 0) !== 0 || api.fvad_set_sample_rate(handle, 48000) !== 0) throw new Error('VAD reset failed');
+    },
     dispose() {
       if (disposed) return;
       new Int16Array(api.memory.buffer, ptr, 480).fill(0);

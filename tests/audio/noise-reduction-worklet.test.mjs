@@ -53,6 +53,25 @@ test('invalid VAD binary keeps RNNoise level meter running', {timeout:2000}, asy
   processor.port.onmessage({data:{type:'dispose'}});
 });
 
+test('input gap restarts the sample clock and does not mix pre-gap audio', {timeout:2000}, async () => {
+  const processor = new Processor({processorOptions:{wasmBinary,vadBinary}});
+  await processor.port.next('ready');
+  globalThis.currentFrame=96000;
+  for(let i=0;i<40;i++){processor.process([[new Float32Array(128).fill(.2)]]);globalThis.currentFrame+=128;}
+  const before=processor.port.messages.length;
+  for(let i=0;i<450;i++){processor.process([]);globalThis.currentFrame+=128;}
+  const resumeFrame=globalThis.currentFrame;
+  for(let i=0;i<40;i++){processor.process([[new Float32Array(128)]]);globalThis.currentFrame+=128;}
+  const messages=processor.port.messages.slice(before);
+  assert.equal(messages.filter(x=>x.type==='analysis_reset').length,1);
+  const analysis=messages.find(x=>x.type==='analysis');
+  assert.equal(analysis.seq,0);
+  assert.ok(Math.abs(analysis.sampleTime-(resumeFrame+480)/48000)<1e-8);
+  assert.equal(analysis.power,0);
+  assert.equal(messages.find(x=>x.type==='level').rms,0);
+  processor.port.onmessage({data:{type:'dispose'}}); delete globalThis.currentFrame;
+});
+
 test('real_engine_worklet_waits_for_ready_then_reports_100ms_without_sending_samples', {timeout:2000}, async () => {
   const processor = create();
   assert.equal(processor.process([[new Float32Array(128)]]), true);

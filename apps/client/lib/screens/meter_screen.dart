@@ -134,6 +134,7 @@ class MeterScreen extends StatelessWidget {
       (_, _, 'runtime_failed', _, _) => '발화 판별 중 오류가 발생했다.',
       (_, _, _, 'vad_runtime_failed', _) => '발화 판별 중 오류가 발생했다.',
       (_, _, _, 'invalid_analysis', _) => '분석 신호를 확인하지 못했다.',
+      (_, _, _, 'input_gap', _) => '입력 프레임이 끊겨 분석을 다시 준비한다.',
       (_, _, _, 'processing_settings', _) when processingUnknown =>
         '브라우저 처리 설정을 확인할 수 없어 환경 잡음 추정과 자동 범위를 보류했다.',
       (_, _, _, 'processing_settings', _) =>
