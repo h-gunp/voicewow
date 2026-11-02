@@ -1,5 +1,8 @@
 # VoiceMate
 
+발음 훈련 기능의 분류·퀴즈·내 문장 가이드·복습 및 Android 실행 방법은
+[발음 훈련 문서](docs/pronunciation-training.md)를 참고한다.
+
 상황별 고정 기준과 마이크 입력 수준을 보여주는 Flutter Web 앱이다. RNNoise로 주변 소음을 줄인 뒤 음량을 계산하며, 음성은 브라우저 메모리에서 처리한다.
 
 ## 실행 환경

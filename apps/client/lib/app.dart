@@ -8,11 +8,19 @@ import 'session_controller.dart';
 import 'screens/scenario_screen.dart';
 import 'screens/meter_screen.dart';
 import 'screens/enrollment_screen.dart';
+import 'features/pronunciation/presentation/pronunciation_screen.dart';
+import 'features/pronunciation/data/learning_store.dart';
 
 class VoiceMateApp extends StatefulWidget {
   final AudioPort? audioPort;
   final TextScaler? textScaler;
-  const VoiceMateApp({super.key, this.audioPort, this.textScaler});
+  final bool startWithPronunciation;
+  const VoiceMateApp({
+    super.key,
+    this.audioPort,
+    this.textScaler,
+    this.startWithPronunciation = false,
+  });
   @override
   State<VoiceMateApp> createState() => _VoiceMateAppState();
 }
@@ -23,15 +31,32 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
   bool meter = false;
   bool enrollment = true;
   bool transitioning = false;
+  late bool pronunciation;
+  bool changingSection = false;
+  LearningController? pronunciationLearning;
   @override
   void initState() {
     super.initState();
+    pronunciation = widget.startWithPronunciation;
     session = SessionController(widget.audioPort ?? createAudioPort());
     semantics = WidgetsBinding.instance.ensureSemantics();
   }
 
+  Future<void> _selectSection(int index) async {
+    final next = index == 1;
+    if (changingSection || next == pronunciation) return;
+    setState(() => changingSection = true);
+    try {
+      if (next && session.active) await session.stop();
+      if (mounted) setState(() => pronunciation = next);
+    } finally {
+      if (mounted) setState(() => changingSection = false);
+    }
+  }
+
   @override
   void dispose() {
+    pronunciationLearning?.dispose();
     session.dispose();
     semantics.dispose();
     super.dispose();
@@ -49,90 +74,116 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
       child: child!,
     ),
     home: Scaffold(
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: pronunciation ? 1 : 0,
+        onDestinationSelected: changingSection ? null : _selectSection,
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.graphic_eq), label: '음량 측정'),
+          NavigationDestination(
+            key: Key('open-pronunciation'),
+            icon: Icon(Icons.auto_stories_outlined),
+            selectedIcon: Icon(Icons.auto_stories),
+            label: '발음 훈련',
+          ),
+        ],
+      ),
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final wide = constraints.maxWidth > 600;
-            return ColoredBox(
-              color: wide ? const Color(0xffeef1f3) : canvas,
-              child: SingleChildScrollView(
-                key: ValueKey(meter),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                  child: Align(
-                    alignment: Alignment.topCenter,
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        vertical: wide ? 32 : 8,
-                        horizontal: wide ? 24 : 12,
-                      ),
-                      child: Container(
-                        width: 460,
-                        padding: EdgeInsets.all(wide ? 28 : 16),
-                        decoration: BoxDecoration(
-                          color: canvas,
-                          borderRadius: BorderRadius.circular(28),
-                          border: wide ? Border.all(color: line) : null,
+        child: pronunciation
+            ? PronunciationScreen(
+                learning: pronunciationLearning ??= LearningController(
+                  PreferencesLearningStore(),
+                ),
+              )
+            : LayoutBuilder(
+                builder: (context, constraints) {
+                  final wide = constraints.maxWidth > 600;
+                  return ColoredBox(
+                    color: wide ? const Color(0xffeef1f3) : canvas,
+                    child: SingleChildScrollView(
+                      key: ValueKey(meter),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: constraints.maxHeight,
                         ),
-                        child: Material(
-                          color: canvas,
-                          child: ListenableBuilder(
-                            listenable: session,
-                            builder: (context, _) => transitioning
-                                ? const Center(
-                                    child: CircularProgressIndicator(),
-                                  )
-                                : enrollment
-                                ? EnrollmentScreen(
-                                    session: session,
-                                    onDone: () async {
-                                      if (transitioning) return;
-                                      setState(() => transitioning = true);
-                                      if (session.active) await session.stop();
-                                      if (mounted)
-                                        setState(() {
-                                          enrollment = false;
-                                          transitioning = false;
-                                        });
-                                    },
-                                  )
-                                : meter && session.scenario != null
-                                ? MeterScreen(
-                                    session: session,
-                                    onEnroll: () async {
-                                      if (transitioning) return;
-                                      setState(() => transitioning = true);
-                                      await session.stop();
-                                      session.enrollmentComplete = false;
-                                      if (mounted)
-                                        setState(() {
-                                          meter = false;
-                                          enrollment = true;
-                                          transitioning = false;
-                                        });
-                                    },
-                                    onBack: () {
-                                      setState(() => meter = false);
-                                      session.stop();
-                                    },
-                                  )
-                                : ScenarioScreen(
-                                    session: session,
-                                    onStart: () {
-                                      setState(() => meter = true);
-                                      session.start();
-                                    },
-                                  ),
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              vertical: wide ? 32 : 8,
+                              horizontal: wide ? 24 : 12,
+                            ),
+                            child: Container(
+                              width: 460,
+                              padding: EdgeInsets.all(wide ? 28 : 16),
+                              decoration: BoxDecoration(
+                                color: canvas,
+                                borderRadius: BorderRadius.circular(28),
+                                border: wide ? Border.all(color: line) : null,
+                              ),
+                              child: Material(
+                                color: canvas,
+                                child: ListenableBuilder(
+                                  listenable: session,
+                                  builder: (context, _) => transitioning
+                                      ? const Center(
+                                          child: CircularProgressIndicator(),
+                                        )
+                                      : enrollment
+                                      ? EnrollmentScreen(
+                                          session: session,
+                                          onDone: () async {
+                                            if (transitioning) return;
+                                            setState(
+                                              () => transitioning = true,
+                                            );
+                                            if (session.active)
+                                              await session.stop();
+                                            if (mounted)
+                                              setState(() {
+                                                enrollment = false;
+                                                transitioning = false;
+                                              });
+                                          },
+                                        )
+                                      : meter && session.scenario != null
+                                      ? MeterScreen(
+                                          session: session,
+                                          onEnroll: () async {
+                                            if (transitioning) return;
+                                            setState(
+                                              () => transitioning = true,
+                                            );
+                                            await session.stop();
+                                            session.enrollmentComplete = false;
+                                            if (mounted)
+                                              setState(() {
+                                                meter = false;
+                                                enrollment = true;
+                                                transitioning = false;
+                                              });
+                                          },
+                                          onBack: () {
+                                            setState(() => meter = false);
+                                            session.stop();
+                                          },
+                                        )
+                                      : ScenarioScreen(
+                                          session: session,
+                                          onStart: () {
+                                            setState(() => meter = true);
+                                            session.start();
+                                          },
+                                        ),
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
-            );
-          },
-        ),
       ),
     ),
   );
