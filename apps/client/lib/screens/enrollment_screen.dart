@@ -26,12 +26,33 @@ class EnrollmentScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const Text(
-          '목소리 등록',
+          '내 목소리 등록하기',
           style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 16),
         const Text(
-          '혼자 자연스럽게 말한다. 등록에는 소음 억제가 필요하므로 마이크 준비 시 켠다. 모델 약 26.5MB를 준비한다. 음성은 기기에서 처리하며 등록 정보는 새로고침하면 삭제된다. 화자 확인은 실험 기능이다.',
+          '가능하면 조용한 곳에서 휴대폰을 움직이지 않고, 혼자 평소 대화하듯 말해 주세요. 일부러 크게 말하지 않아도 됩니다.',
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          '이 문장을 편하게 읽어 주세요',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        const Text('안녕하세요. 지금 제 목소리를 등록하고 있습니다. 평소 대화하는 편안한 목소리로 이야기하겠습니다.'),
+        const SizedBox(height: 16),
+        const Text('등록 중 안내', style: TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        if (session.state == CaptureState.running &&
+            ready &&
+            state == 'registering')
+          const Text(
+            '진행 표시가 3/3이 될 때까지 계속 말해 주세요. 문장을 다 읽었다면 다시 읽어도 됩니다. 주변 소리가 섞이면 조용해진 뒤 다시 시도해 주세요.',
+          ),
+        const SizedBox(height: 12),
+        const Text(
+          '음성은 기기 안에서 처리하며 외부로 전송하지 않습니다. 목소리 프로필은 임시 메모리에 저장되며 새로고침하거나 창을 닫으면 삭제됩니다. 화자 확인은 실험 기능입니다.',
+          style: TextStyle(fontSize: 12),
         ),
         const SizedBox(height: 20),
         Text(
@@ -42,7 +63,7 @@ class EnrollmentScreen extends StatelessWidget {
               : state == 'registered'
               ? '등록 완료 · 3/3'
               : state == 'quality'
-              ? '음성 품질이 부족하다. 계속 말한다. · ${session.speaker['samples'] ?? 0}/3'
+              ? '음성 품질이 부족합니다. 주변이 조용해진 뒤 다시 시도해 주세요. · ${session.speaker['samples'] ?? 0}/3'
               : state == 'loading'
               ? '음성 모델을 준비하고 있다.'
               : state == 'unavailable'
