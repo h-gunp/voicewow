@@ -1,0 +1,18 @@
+문서 수준 반례·정합성 검사. 제품/모델/마이크 시험이 아님.
+
+거짓안심 반례: C precision=0.5263157894736842, D precision=1.0, false_accept=0.900, E recall=0.100, A/E coverage=1.000/1.000, U confident=0/100, point gate=False (CI 미적용 전에도 불통과)
+전부 보류: C precision=None, D precision=None, false_accept=0.000, E recall=0.000, A/E coverage=0.000/0.000, U confident=0/0, point gate=False (CI 미적용 전에도 불통과)
+허용군만 피드백: C precision=1.0, D precision=None, false_accept=0.000, E recall=0.000, A/E coverage=1.000/0.000, U confident=0/0, point gate=False (CI 미적용 전에도 불통과)
+불확실 확신출력: C precision=0.9, D precision=1.0, false_accept=0.000, E recall=0.900, A/E coverage=0.900/0.900, U confident=100/100, point gate=False (CI 미적용 전에도 불통과)
+
+F0 100→200→150 Hz: first-last delta= 7.02 semitones; middle-last= -4.98 ; 국소 끝올리기 성공으로 표시 금지
+음량 작은 프레임 탈락 반례: 선택 median delta= 13.979 dB; 전체구간 energy delta= -6.021 dB. 낮아졌는데 개선/상승으로 표시하는 경로 차단
+UI 완료·호감 있으나 K1/K3/K4 실패: 자율 유효행동= False
+E ID 범위 확인: E01,E02,E03,E04,E05,E06,E07,E08,E09,E10,E11,E12,E13
+A ID 범위 확인: A01,A02,A03,A04,A05,A06
+R ID 범위 확인: R01,R02,R03,R04,R05,R06,R07,R08,R09,R10,R11,R12
+D ID 범위 확인: D01,D02,D03,D04,D05,D06,D07,D08,D09,D10,D11,D12
+T ID 범위 확인: T01,T02,T03,T04,T05,T06,T07,T08,T09,T10,T11
+Q ID 범위 확인: Q01,Q02,Q03,Q04,Q05,Q06,Q07
+
+Markdown fences/ID/금지 내부문구/핵심 수정 문자열 확인. PASS (기능 검증 아님)
