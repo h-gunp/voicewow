@@ -18,6 +18,7 @@ class ProsodyChart extends StatelessWidget {
     this.live = false,
     this.progress,
     this.selected,
+    this.regions = const [],
     this.domainSeconds,
     this.scaleBound,
     this.height = 270,
@@ -27,6 +28,7 @@ class ProsodyChart extends StatelessWidget {
   final bool volume, live;
   final double? progress, domainSeconds, scaleBound;
   final Segment? selected;
+  final List<Segment> regions;
   final double height;
 
   @override
@@ -34,7 +36,8 @@ class ProsodyChart extends StatelessWidget {
     image: true,
     label:
         '${volume ? '상대적인 소리 크기' : '상대적인 음높이'} 그래프. 파란 점선은 가이드, 주황 선과 점은 내 목소리. '
-        '${live ? '가로축은 녹음 경과 시간입니다.' : '앞부분, 중간, 끝부분은 시간 구간입니다.'}'
+        '${live ? '가로축은 녹음 경과 시간입니다.' : '가로축은 시간이며, 표시한 구간은 단어나 음절 경계가 아닙니다.'}'
+        '${!live && regions.isNotEmpty ? ' 비교 구간: ${regions.map((region) => region.label).join(', ')}.' : ''}'
         '${selected == null ? '' : ' 선택한 구간: ${selected!.label}.'} 확인할 수 없는 소리는 선을 비워 둡니다.',
     child: Column(
       mainAxisSize: MainAxisSize.min,
@@ -62,6 +65,7 @@ class ProsodyChart extends StatelessWidget {
               live: live,
               progress: progress,
               selected: selected,
+              regions: regions,
               domainSeconds: domainSeconds,
               scaleBound: scaleBound,
             ),
@@ -107,6 +111,7 @@ class _ProsodyPainter extends CustomPainter {
     required this.live,
     required this.progress,
     required this.selected,
+    required this.regions,
     required this.domainSeconds,
     required this.scaleBound,
   });
@@ -115,6 +120,7 @@ class _ProsodyPainter extends CustomPainter {
   final bool volume, live;
   final double? progress, domainSeconds, scaleBound;
   final Segment? selected;
+  final List<Segment> regions;
   double? value(AudioFrame f) => volume ? f.relativeDb : f.relativePitch;
   bool measured(AudioFrame f) =>
       f.time.isFinite && value(f) != null && value(f)!.isFinite;
@@ -145,16 +151,18 @@ class _ProsodyPainter extends CustomPainter {
         plot.left + (time / domain).clamp(0.0, 1.0) * plot.width;
     double y(double v) => plot.center.dy - v / bound * plot.height / 2;
     final regionDuration = live ? domain : reference?.duration ?? domain;
-    final oneRegion = !live && selected?.label == '선택 구간 전체';
-    final showTime = live || oneRegion;
-    for (var i = 0; i < 3; i++) {
+    final displayRegions = live ? const <Segment>[] : regions;
+    final showTime = displayRegions.length <= 1;
+    final bands = displayRegions.isEmpty
+        ? [
+            (0.0, regionDuration / 3),
+            (regionDuration / 3, regionDuration * 2 / 3),
+            (regionDuration * 2 / 3, regionDuration),
+          ]
+        : displayRegions.map((region) => (region.start, region.end)).toList();
+    for (var i = 0; i < bands.length; i++) {
       canvas.drawRect(
-        Rect.fromLTRB(
-          x(regionDuration * i / 3),
-          plot.top,
-          x(regionDuration * (i + 1) / 3),
-          plot.bottom,
-        ),
+        Rect.fromLTRB(x(bands[i].$1), plot.top, x(bands[i].$2), plot.bottom),
         Paint()
           ..color = i.isOdd ? const Color(0xfff8fafc) : const Color(0xfff0f5fc),
       );
@@ -180,10 +188,13 @@ class _ProsodyPainter extends CustomPainter {
       ..strokeWidth = 1;
     canvas.drawLine(plot.topLeft, plot.topRight, grid);
     canvas.drawLine(plot.bottomLeft, plot.bottomRight, grid);
-    for (var i = 0; i <= 3; i++) {
+    for (final time in {
+      0.0,
+      ...bands.expand((band) => [band.$1, band.$2]),
+    }) {
       canvas.drawLine(
-        Offset(x(regionDuration * i / 3), plot.top),
-        Offset(x(regionDuration * i / 3), plot.bottom),
+        Offset(x(time), plot.top),
+        Offset(x(time), plot.bottom),
         grid,
       );
     }
@@ -285,15 +296,19 @@ class _ProsodyPainter extends CustomPainter {
         _text(canvas, '가이드 끝', Offset(endX + 4, plot.top + 24), font: 10);
       }
     }
-    for (var i = 0; i < 3; i++) {
+    for (var i = 0; i < (showTime ? 3 : displayRegions.length); i++) {
       final time = showTime
           ? regionDuration * i / 2
-          : regionDuration * (i + .5) / 3;
+          : (displayRegions[i].start + displayRegions[i].end) / 2;
       _text(
         canvas,
-        showTime ? '${time.toStringAsFixed(1)}초' : ['앞부분', '중간', '끝부분'][i],
+        showTime ? '${time.toStringAsFixed(1)}초' : displayRegions[i].label,
         Offset(x(time), plot.bottom + 14),
-        align: TextAlign.center,
+        align: showTime && i == 0
+            ? TextAlign.left
+            : showTime && i == 2
+            ? TextAlign.right
+            : TextAlign.center,
         font: 12,
         bold: true,
       );

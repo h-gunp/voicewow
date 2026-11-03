@@ -10,6 +10,8 @@ import 'package:voicemate/features/prosody/services/device_audio.dart';
 class FakeAudio extends DeviceAudioService {
   void Function(List<double>)? receive;
   bool denied = false;
+  int recordingStops = 0;
+  void Function()? reachedLimit;
   List<double> samples = List.generate(
     16000,
     (i) => .2 * math.sin(2 * math.pi * 220 * i / 16000),
@@ -29,15 +31,20 @@ class FakeAudio extends DeviceAudioService {
   }) async {
     if (denied) throw const DeviceAudioException('마이크 권한을 확인해 주세요.');
     receive = onSamples;
+    reachedLimit = onLimitReached;
   }
 
   @override
-  Future<RecordedAudio> stop() async => RecordedAudio(
-    samples: samples,
-    sampleRate: 16000,
-    path: 'recording.wav',
-    bytes: encodeWav(samples, 16000),
-  );
+  Future<RecordedAudio> stop() async {
+    recordingStops++;
+    return RecordedAudio(
+      samples: samples,
+      sampleRate: 16000,
+      path: 'recording.wav',
+      bytes: encodeWav(samples, 16000),
+    );
+  }
+
   @override
   Future<GeneratedGuide> generateGuide(String text) async =>
       GeneratedGuide(path: 'invalid.wav', bytes: Uint8List(3));
@@ -60,6 +67,24 @@ class DeferredCancellationAudio extends FakeAudio {
 
   @override
   Future<void> cancel() async => recordingCancellations++;
+}
+
+class DeferredPresetAudio extends FakeAudio {
+  final storing = Completer<void>();
+  final release = Completer<String>();
+  bool delayed = false;
+  @override
+  Future<String> storeAudio(
+    Uint8List bytes, {
+    String name = 'audio.wav',
+  }) async {
+    if (!delayed) {
+      delayed = true;
+      storing.complete();
+      return release.future;
+    }
+    return '$name.wav';
+  }
 }
 
 void main() {
@@ -97,6 +122,7 @@ void main() {
       await active.stopRecording();
       final accepted = active.result, guide = active.reference;
       expect(accepted, isNotNull);
+      expect(accepted!.summary.segmentationNote, isNotEmpty);
       audio.denied = true;
       await active.startRecording();
       expect(identical(active.result, accepted), isTrue);
@@ -133,4 +159,54 @@ void main() {
     expect(session.status, isNot(contains('첫 중단')));
     session.dispose();
   });
+  test(
+    'cancelled preset loading cannot overwrite a newer script or state',
+    () async {
+      final audio = DeferredPresetAudio();
+      final session = PracticeSession(audio: audio);
+      final loading = session.initialize();
+      await audio.storing.future;
+      await session.cancelCurrent();
+      session.applyScript('제가 읽고 싶은 문장입니다.');
+      final status = session.status;
+      audio.release.complete('old-guide.wav');
+      await loading;
+      expect(session.usingScript, isTrue);
+      expect(session.reference, isNull);
+      expect(session.phase, PracticePhase.idle);
+      expect(session.status, status);
+      await session.initialize();
+      expect(session.usingScript, isTrue);
+      expect(session.reference, isNull);
+      session.setMode(false);
+      expect(session.reference, isNotNull);
+      session.dispose();
+    },
+  );
+
+  test(
+    'an auto-stop cannot accept a take while cancellation is waiting',
+    () async {
+      final audio = DeferredCancellationAudio();
+      final session = PracticeSession(audio: audio);
+      session.reference = ReferenceClip(
+        '안녕하세요.',
+        'guide.wav',
+        trimAnalysis(analyzeSamples(audio.samples, 16000)),
+        '시험용',
+      );
+      await session.startRecording();
+      final cancelling = session.cancelCurrent();
+      expect(session.phase, PracticePhase.cancelling);
+      expect(session.recording, isFalse);
+      audio.reachedLimit!();
+      await session.stopRecording();
+      expect(audio.recordingStops, 0);
+      expect(session.result, isNull);
+      audio.firstCancellation.complete();
+      await cancelling;
+      expect(session.phase, PracticePhase.idle);
+      session.dispose();
+    },
+  );
 }

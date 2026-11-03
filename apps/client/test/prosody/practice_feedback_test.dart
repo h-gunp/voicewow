@@ -1,8 +1,11 @@
 import 'dart:math' as math;
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:voicemate/features/prosody/audio/audio_analysis.dart';
+import 'package:voicemate/features/prosody/audio/wav.dart';
 import 'package:voicemate/features/prosody/practice_feedback.dart';
 
 AudioAnalysis curve(
@@ -33,6 +36,16 @@ const segment = Segment(
 );
 Comparison direct() =>
     Comparison(path: List.generate(61, (i) => (i, i)), voicedPairs: 61);
+
+AudioAnalysis realGuide(String name) {
+  final wav = decodeWav(
+    File('assets/prosody/guides/$name.wav').readAsBytesSync(),
+  );
+  return trimAnalysis(analyzeSamples(wav.samples, wav.sampleRate));
+}
+
+List<(String, double, double)> boundaries(ComparisonSummary summary) =>
+    summary.segments.map((s) => (s.label, s.start, s.end)).toList();
 
 void main() {
   test(
@@ -119,6 +132,204 @@ void main() {
       expect(feedback.action, contains('조금 키워서'));
       expect(feedback.detail, contains('dB'));
       expect(feedback.detail, contains('실제 소음계 데시벨이 아니'));
+    },
+  );
+
+  test(
+    'every displayed real guide self-comparison has measured endpoint support',
+    () {
+      for (final name in ['hello', 'sunglasses', 'phrase']) {
+        final reference = realGuide(name);
+        final comparison = compareAnalyses(reference, reference);
+        final summary = buildPracticeSummary(reference, reference, comparison);
+        expect(comparison.pitchError, 0, reason: name);
+        expect(summary.segments, isNotEmpty);
+        expect(summary.segmentationNote, isNotEmpty);
+        for (final segment in summary.segments) {
+          for (final volume in [false, true]) {
+            final feedback = practiceFeedback(
+              reference,
+              reference,
+              comparison,
+              segment,
+              volume: volume,
+            );
+            expect(
+              feedback.available,
+              isTrue,
+              reason: '$name ${segment.label}',
+            );
+            expect(feedback.referenceDelta, feedback.userDelta);
+            expect(feedback.detail, contains('측정 구간'));
+          }
+        }
+      }
+    },
+  );
+
+  test(
+    'short real guide uses reference-only halves instead of an unsupported middle third',
+    () {
+      final reference = realGuide('hello');
+      final comparison = compareAnalyses(reference, reference);
+      final summary = buildPracticeSummary(reference, reference, comparison);
+      expect(summary.segments.map((s) => s.label), ['앞부분', '뒷부분']);
+      expect(summary.segmentationNote, contains('두 구간'));
+      final phrase = realGuide('phrase');
+      final phraseSummary = buildPracticeSummary(
+        phrase,
+        phrase,
+        compareAnalyses(phrase, phrase),
+      );
+      expect(phraseSummary.segments, hasLength(3));
+      // The previously rejected 100–120ms blanks are still unmeasured.
+      expect(phrase.frames.where((f) => !f.active).length, greaterThan(5));
+      final trace = alignedTrace(
+        phrase,
+        phrase,
+        compareAnalyses(phrase, phrase).path,
+      );
+      for (var i = 0; i < trace.length; i++) {
+        if (!phrase.frames[i].active) expect(trace[i].relativePitch, isNull);
+      }
+    },
+  );
+
+  test(
+    'leading and internal pauses in actual WAV audio stay gaps without suppressing every comparison',
+    () {
+      final wav = decodeWav(
+        File('assets/prosody/guides/phrase.wav').readAsBytesSync(),
+      );
+      final split = (wav.sampleRate * .9).round();
+      final leading = List<double>.filled((wav.sampleRate * .3).round(), 0);
+      final pause = List<double>.filled((wav.sampleRate * .25).round(), 0);
+      final paused = trimAnalysis(
+        analyzeSamples([
+          ...leading,
+          ...wav.samples.take(split),
+          ...pause,
+          ...wav.samples.skip(split),
+        ], wav.sampleRate),
+      );
+      final original = realGuide('phrase');
+      final comparison = compareAnalyses(original, paused);
+      final summary = buildPracticeSummary(original, paused, comparison);
+      expect(paused.startTime, greaterThan(.2));
+      expect(
+        paused.frames.any((f) => !f.active && f.relativePitch == null),
+        isTrue,
+      );
+      expect(
+        summary.segments.any(
+          (s) => practiceFeedback(original, paused, comparison, s).available,
+        ),
+        isTrue,
+      );
+      expect(
+        boundaries(summary),
+        boundaries(
+          buildPracticeSummary(
+            original,
+            original,
+            compareAnalyses(original, original),
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'a genuinely short real clip falls back to whole without lowering evidence requirements',
+    () {
+      final reference = cropReferenceAnalysis(
+        realGuide('sunglasses'),
+        start: .65,
+        end: .85,
+      );
+      final comparison = compareAnalyses(reference, reference);
+      final summary = buildPracticeSummary(reference, reference, comparison);
+      expect(summary.segments, hasLength(1));
+      expect(summary.segments.single.label, '전체 흐름');
+      expect(
+        practiceFeedback(
+          reference,
+          reference,
+          comparison,
+          summary.segments.single,
+        ).available,
+        isTrue,
+      );
+      final selected = buildPracticeSummary(
+        reference,
+        reference,
+        comparison,
+        whole: true,
+      );
+      expect(selected.segments.single.label, '선택 구간 전체');
+      expect(selected.segmentationNote, contains('선택한 구간'));
+    },
+  );
+
+  test(
+    'noise and silence cannot change guide partitions or receive invented feedback',
+    () {
+      final reference = realGuide('hello');
+      final self = buildPracticeSummary(
+        reference,
+        reference,
+        compareAnalyses(reference, reference),
+      );
+      final random = math.Random(17);
+      final noise = Float64List.fromList(
+        List.generate(16000, (_) => (random.nextDouble() * 2 - 1) * .06),
+      );
+      for (final samples in [Float64List(16000), noise]) {
+        final user = trimAnalysis(analyzeSamples(samples, 16000));
+        final comparison = compareAnalyses(reference, user);
+        final summary = buildPracticeSummary(reference, user, comparison);
+        expect(user.voicedFrames, 0);
+        expect(boundaries(summary), boundaries(self));
+        for (final segment in summary.segments) {
+          final feedback = practiceFeedback(
+            reference,
+            user,
+            comparison,
+            segment,
+          );
+          expect(feedback.available, isFalse);
+          expect(feedback.userDelta, isNull);
+          expect(feedback.observation, isNot(matches(RegExp('잘못|실패|정상|비정상'))));
+          expect(feedback.action, isNot(contains('마이크 위치')));
+        }
+      }
+    },
+  );
+
+  test(
+    'separated sparse observations never count as continuous endpoint windows',
+    () {
+      final reference = curve((t) => t * 6);
+      final sparse = AudioAnalysis(
+        duration: reference.duration,
+        frames: reference.frames
+            .asMap()
+            .entries
+            .map(
+              (entry) => entry.key % 5 == 0
+                  ? entry.value
+                  : entry.value.copyWith(
+                      active: false,
+                      pitchHz: null,
+                      relativePitch: null,
+                      relativeDb: null,
+                    ),
+            )
+            .toList(),
+      );
+      final feedback = practiceFeedback(reference, sparse, direct(), segment);
+      expect(feedback.available, isFalse);
+      expect(feedback.userDelta, isNull);
     },
   );
 }

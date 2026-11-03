@@ -16,6 +16,7 @@ enum PracticePhase {
   recording,
   processing,
   generating,
+  cancelling,
 }
 
 class ReferenceClip {
@@ -101,13 +102,17 @@ class PracticeSession extends ChangeNotifier {
   }
 
   Future<void> initialize() async {
+    if (_closed || busy) return;
+    final ticket = ++_generation;
     phase = PracticePhase.loading;
     notifyListeners();
     try {
       for (var i = 0; i < presetFiles.length; i++) {
+        if (_presets.containsKey(i)) continue;
         final data = await rootBundle.load(
           'assets/prosody/guides/${presetFiles[i]}.wav',
         );
+        if (_closed || ticket != _generation) return;
         final bytes = data.buffer.asUint8List(
           data.offsetInBytes,
           data.lengthInBytes,
@@ -117,7 +122,9 @@ class PracticeSession extends ChangeNotifier {
           wav.samples.toList(),
           wav.sampleRate,
         ));
+        if (_closed || ticket != _generation) return;
         final path = await audio.storeAudio(bytes, name: presetFiles[i]);
+        if (_closed || ticket != _generation) return;
         _presets[i] = ReferenceClip(
           presetTexts[i],
           path,
@@ -125,12 +132,14 @@ class PracticeSession extends ChangeNotifier {
           '준비된 한국어 예시',
         );
       }
-      if (_closed) return;
-      reference = _presets[0];
+      if (_closed || ticket != _generation) return;
+      if (!usingScript && reference == null) reference = _presets[index];
     } catch (e) {
-      status = '예시를 준비하지 못했어요. ${_message(e)}';
+      if (!_closed && ticket == _generation) {
+        status = '예시를 준비하지 못했어요. ${_message(e)}';
+      }
     }
-    if (!_closed) {
+    if (!_closed && ticket == _generation) {
       phase = PracticePhase.idle;
       notifyListeners();
     }
@@ -390,7 +399,7 @@ class PracticeSession extends ChangeNotifier {
       recorded,
       user,
       comparison,
-      summarizeComparison(
+      buildPracticeSummary(
         reference!.analysis,
         user,
         comparison,
@@ -517,6 +526,9 @@ class PracticeSession extends ChangeNotifier {
     final ticket = ++_generation;
     _timer?.cancel();
     _clock.stop();
+    phase = PracticePhase.cancelling;
+    status = '음성 작업을 멈추고 있어요.';
+    if (!_closed) notifyListeners();
     await audio.cancelGuide();
     if (_closed || ticket != _generation) return;
     await audio.cancel();

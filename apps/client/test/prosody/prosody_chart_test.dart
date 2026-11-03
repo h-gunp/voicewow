@@ -114,4 +114,45 @@ void main() {
       semantics.dispose();
     },
   );
+  testWidgets('adaptive comparison regions name only the displayed intervals', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    const regions = [
+      Segment(
+        label: '앞부분',
+        start: 0,
+        end: .4,
+        userStart: 0,
+        userEnd: .4,
+        pairs: 15,
+      ),
+      Segment(
+        label: '뒷부분',
+        start: .4,
+        end: .8,
+        userStart: .4,
+        userEnd: .8,
+        pairs: 15,
+      ),
+    ];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ProsodyChart(
+            reference: AudioAnalysis(
+              duration: .8,
+              frames: [point(0, 1), point(.8, 2)],
+            ),
+            regions: regions,
+            selected: regions[1],
+          ),
+        ),
+      ),
+    );
+    expect(find.bySemanticsLabel(RegExp('비교 구간: 앞부분, 뒷부분')), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('비교 구간:.*중간')), findsNothing);
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
 }

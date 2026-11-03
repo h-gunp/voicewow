@@ -173,10 +173,20 @@ class ComparisonSummary {
     required this.segments,
     required this.duration,
     required this.pitchReliable,
+    this.segmentationNote = '',
   });
   final List<Segment> segments;
   final DurationComparison duration;
   final bool pitchReliable;
+  final String segmentationNote;
+}
+
+/// Explicit time ranges chosen before inspecting the user's comparison.
+/// They do not identify words or syllables.
+class ComparisonRange {
+  const ComparisonRange(this.label, this.start, this.end);
+  final String label;
+  final double start, end;
 }
 
 class _Reduced {
@@ -541,22 +551,26 @@ ComparisonSummary summarizeComparison(
   AudioAnalysis user,
   Comparison comparison, {
   bool whole = false,
+  List<ComparisonRange>? ranges,
+  String segmentationNote = '',
 }) {
   final rCount = comparison.path.map((p) => p.$1).toSet().length;
   final uCount = comparison.path.map((p) => p.$2).toSet().length;
   final reliable = comparison.voicedPairs >= 8 && rCount >= 8 && uCount >= 8;
-  final ranges = whole
-      ? [(label: '선택 구간 전체', start: 0.0, end: reference.duration)]
-      : [
-          for (var i = 0; i < 3; i++)
-            (
-              label: ['앞부분', '중간', '끝부분'][i],
-              start: reference.duration * i / 3,
-              end: reference.duration * (i + 1) / 3,
-            ),
-        ];
+  final selectedRanges =
+      ranges ??
+      (whole
+          ? [ComparisonRange('선택 구간 전체', 0, reference.duration)]
+          : [
+              for (var i = 0; i < 3; i++)
+                ComparisonRange(
+                  ['앞부분', '중간', '끝부분'][i],
+                  reference.duration * i / 3,
+                  reference.duration * (i + 1) / 3,
+                ),
+            ]);
   final segments = <Segment>[];
-  for (final range in ranges) {
+  for (final range in selectedRanges) {
     final matches = comparison.path
         .where(
           (p) =>
@@ -610,6 +624,7 @@ ComparisonSummary summarizeComparison(
   return ComparisonSummary(
     segments: segments,
     pitchReliable: reliable,
+    segmentationNote: segmentationNote,
     duration: DurationComparison(
       reference.voicedDuration,
       user.voicedDuration,

@@ -132,7 +132,10 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
         absorbing: changingSection,
         child: SafeArea(
           child: section == 2
-              ? ProsodyScreen(session: prosody!)
+              ? ProsodyScreen(
+                  session: prosody!,
+                  onExit: () => _selectSection(0),
+                )
               : section == 1
               ? PronunciationScreen(
                   learning: pronunciationLearning ??= LearningController(
