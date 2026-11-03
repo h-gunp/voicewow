@@ -11,8 +11,6 @@ void main() {
 
   Future<void> startMeter(WidgetTester tester, FakeAudioPort port) async {
     await tester.pumpWidget(VoiceMateApp(audioPort: port));
-    await tester.ensureVisible(find.byKey(const Key('enrollment-skip')));
-    await tester.tap(find.byKey(const Key('enrollment-skip')));
     await tester.pump();
     await tester.tap(find.byKey(const Key('scenario-quiet')));
     await tester.pump();

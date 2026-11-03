@@ -1,6 +1,6 @@
 # 제3자 참고 및 라이선스
 
-화자 모델의 제작자, 출처, 해시, CC BY 4.0 고지와 원본 Hugging Face 메타데이터는 [MODEL-NOTICE](apps/client/web/audio/vendor/speaker/MODEL-NOTICE.txt)에 보존한다. ONNX Runtime 1.22.0의 [MIT 라이선스](apps/client/web/audio/vendor/speaker/LICENSE-ONNXRUNTIME)와 [제3자 고지](apps/client/web/audio/vendor/speaker/ONNXRUNTIME-THIRD-PARTY-NOTICES.txt)는 별도다.
+이전 버전에 포함된 화자 모델의 제작자, 출처, 해시, CC BY 4.0 고지와 원본 Hugging Face 메타데이터는 [MODEL-NOTICE](apps/client/web/audio/vendor/speaker/MODEL-NOTICE.txt)에 보존한다. ONNX Runtime 1.22.0의 [MIT 라이선스](apps/client/web/audio/vendor/speaker/LICENSE-ONNXRUNTIME)와 [제3자 고지](apps/client/web/audio/vendor/speaker/ONNXRUNTIME-THIRD-PARTY-NOTICES.txt)는 별도다.
 
 실험적 VAD에는 `@ozymandiasthegreat/vad@2.0.7`의 `libfvad.wasm`을 사용한다. WebRTC/libfvad 엔진의 BSD-3-Clause LICENSE, PATENTS, AUTHORS는 별도 보존하며 버전·해시는 [자산 기록](apps/client/web/audio/vendor/libfvad/README.md)에 있다. npm 패키지 메타데이터는 MIT를 명시한다. 앱은 upstream JavaScript wrapper나 base64 decoder를 포함하지 않고 자체 wrapper로 WASM API를 직접 호출한다.
 
