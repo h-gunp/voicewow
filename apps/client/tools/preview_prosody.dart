@@ -128,7 +128,7 @@ void main() {
     await tester.pumpAndSettle();
     await scrollTo(find.byType(ProsodyChart));
     await capture('02-native-result-graph');
-    await scrollTo(find.text('2. 한 부분씩 이어가 봐요'));
+    await scrollTo(find.text('2. 내 목소리를 함께 살펴봐요'));
     await capture('03-native-feedback');
 
     session.phase = PracticePhase.recording;
@@ -167,7 +167,7 @@ void main() {
     await capture('05-320-large-text-top');
     await scrollTo(find.byType(ProsodyChart));
     await capture('06-320-large-text-graph');
-    await scrollTo(find.text('2. 한 부분씩 이어가 봐요'));
+    await scrollTo(find.text('2. 내 목소리를 함께 살펴봐요'));
     await capture('07-320-large-text-feedback');
     await tester.pumpWidget(const SizedBox());
     session.dispose();

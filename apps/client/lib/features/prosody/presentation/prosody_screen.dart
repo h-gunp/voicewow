@@ -146,7 +146,7 @@ class _ProsodyScreenState extends State<ProsodyScreen>
                     ),
                     SizedBox(height: 12),
                     Text(
-                      '선을 똑같이 맞추지 않아도 괜찮아요.\n큰 변화부터 한 부분씩 연습해요.',
+                      '편한 목소리로 시작해 보세요.\n한 번에 똑같이 따라 하지 않아도 괜찮아요.',
                       style: TextStyle(fontSize: 16, height: 1.7),
                     ),
                     SizedBox(height: 18),
@@ -377,7 +377,7 @@ class _ProsodyScreenState extends State<ProsodyScreen>
               ]),
               if (result != null && reference != null)
                 _card([
-                  _heading('2. 한 부분씩 이어가 봐요'),
+                  _heading('2. 내 목소리를 함께 살펴봐요'),
                   if (result.demo)
                     const Padding(
                       padding: EdgeInsets.only(bottom: 10),

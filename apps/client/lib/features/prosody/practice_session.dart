@@ -379,12 +379,12 @@ class PracticeSession extends ChangeNotifier {
     if (_closed || ticket != _generation) return;
     if (user.voicedFrames < 8 || user.pitchMedian == null) {
       throw const FormatException(
-        '이번 녹음에서 높낮이가 충분히 잡히지 않았어요. 마이크 연결을 확인하고 짧게 다시 읽어 보세요.',
+        '앱이 목소리를 충분히 잡지 못했어요. 마이크 위치를 확인하고, 준비되면 편하게 다시 읽어 주세요.',
       );
     }
     final comparison = compareAnalyses(reference!.analysis, user);
     if (comparison.path.isEmpty) {
-      throw const FormatException('두 흐름을 비교할 목소리가 부족해요. 다시 녹음해 보세요.');
+      throw const FormatException('앱이 비교할 목소리를 충분히 잡지 못했어요. 준비되면 다시 읽어 주세요.');
     }
     final next = PracticeResult(
       recorded,
@@ -403,7 +403,7 @@ class PracticeSession extends ChangeNotifier {
     selected = 0;
     status = demo
         ? '합성 시험 신호로 동작을 보여드려요. 실제 사람의 녹음은 아니에요.'
-        : '녹음을 마쳤어요. 같은 방향으로 만든 변화부터 확인해 보세요.';
+        : '녹음이 끝났어요. 내 목소리의 움직임을 함께 살펴봐요.';
   }
 
   Future<void> demo() async {

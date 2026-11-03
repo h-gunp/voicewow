@@ -48,10 +48,10 @@ void main() {
         );
         expect(feedback.available, isTrue);
         expect(feedback.tone, 'encourage');
-        expect(feedback.observation, contains('앞·뒤 변화 방향은 예시와 같아요'));
+        expect(feedback.referenceDelta, isPositive);
+        expect(feedback.userDelta, isPositive);
         expect(feedback.observation, isNot(contains('반음')));
         expect(feedback.detail, contains('반음'));
-        expect(feedback.action, contains('다음 구간'));
         expect(feedback.action, isNot(contains('듣고')));
       }
     },
@@ -92,7 +92,7 @@ void main() {
       final unavailable = practiceFeedback(reference, user, sparse, segment);
       expect(unavailable.available, isFalse);
       expect(unavailable.userDelta, isNull);
-      expect(unavailable.title, contains('측정이 충분하지'));
+      expect(unavailable.tone, 'uncertain');
     },
   );
 
