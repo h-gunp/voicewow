@@ -1,5 +1,8 @@
 # VoiceMate
 
+목소리 높낮이 연습(영수 담당)의 구현 범위·원리·실행 방법은
+[높낮이 연습 문서](docs/prosody-training.md)를 참고한다.
+
 발음 훈련 기능의 분류·퀴즈·내 문장 가이드·복습 및 Android 실행 방법은
 [발음 훈련 문서](docs/pronunciation-training.md)를 참고한다.
 
