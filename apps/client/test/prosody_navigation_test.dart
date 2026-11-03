@@ -13,7 +13,7 @@ import 'package:voicemate/features/prosody/audio/wav.dart';
 import 'package:voicemate/features/prosody/practice_session.dart';
 import 'package:voicemate/features/prosody/practice_feedback.dart';
 import 'package:voicemate/features/prosody/services/device_audio.dart';
-import 'package:voicemate/screens/enrollment_screen.dart';
+import 'package:voicemate/screens/scenario_screen.dart';
 
 import 'fake_audio_port.dart';
 
@@ -33,7 +33,7 @@ void main() {
       expect(find.text('연습 준비'), findsOneWidget);
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      expect(find.byType(EnrollmentScreen), findsOneWidget);
+      expect(find.byType(ScenarioScreen), findsOneWidget);
       expect(
         tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
         0,
@@ -58,7 +58,7 @@ void main() {
       await tester.pumpWidget(
         VoiceMateApp(audioPort: port, prosodySession: practice),
       );
-      expect(find.byType(EnrollmentScreen), findsOneWidget);
+      expect(find.byType(ScenarioScreen), findsOneWidget);
       expect(find.byType(ProsodyScreen), findsNothing);
       expect(port.starts, 0);
       expect(audio.recordingStarts, 0);
@@ -82,7 +82,7 @@ void main() {
       expect(audio.recordingCancels, 1);
       expect(audio.capturing, isTrue);
       expect(find.byType(ProsodyScreen), findsOneWidget);
-      expect(find.byType(EnrollmentScreen), findsNothing);
+      expect(find.byType(ScenarioScreen), findsNothing);
       expect(port.starts, 0);
 
       audio.cancelGate!.complete();
@@ -90,7 +90,7 @@ void main() {
       expect(audio.capturing, isFalse);
       expect(practice.recording, isFalse);
       expect(find.byType(ProsodyScreen), findsNothing);
-      expect(find.byType(EnrollmentScreen), findsOneWidget);
+      expect(find.byType(ScenarioScreen), findsOneWidget);
       expect(port.starts, 0);
 
       await tester.tap(find.byKey(const Key('open-prosody')));
@@ -124,8 +124,6 @@ void main() {
         pronunciationLearning: learning,
       ),
     );
-    await tester.ensureVisible(find.byKey(const Key('enrollment-skip')));
-    await tester.tap(find.byKey(const Key('enrollment-skip')));
     await tester.pump();
     await tester.tap(find.byKey(const Key('scenario-quiet')));
     await tester.pump();

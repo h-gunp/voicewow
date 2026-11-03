@@ -14,11 +14,7 @@ class SessionController extends ChangeNotifier {
   String? reason;
   Map<String, Object?> settings = {};
   Map<String, Object?> analysis = {};
-  Map<String, Object?> speaker = {'state': 'unregistered'};
-  bool speakerRegistered = false;
-  bool enrollmentComplete = false;
   bool noiseReductionEnabled = true;
-  bool _enrolling = false;
   int frameCount = 0, _epoch = 0;
   bool _acceptEvents = false, _disposed = false;
   SessionController(this._audio) {
@@ -71,31 +67,6 @@ class SessionController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> beginSpeakerEnrollment() async {
-    if (state != CaptureState.running ||
-        settings['speakerAvailable'] != true ||
-        settings['noiseReductionState'] != 'active' ||
-        settings['vadStatus'] != 'ready' ||
-        _enrolling ||
-        _disposed)
-      return;
-    _enrolling = true;
-    enrollmentComplete = false;
-    speaker = {'state': 'registering', 'samples': 0};
-    notifyListeners();
-    await _audio.beginSpeakerEnrollment();
-  }
-
-  Future<void> deleteSpeaker() async {
-    if (_disposed) return;
-    await _audio.deleteSpeaker();
-    _enrolling = false;
-    enrollmentComplete = false;
-    speakerRegistered = false;
-    speaker = {'state': 'unregistered'};
-    notifyListeners();
-  }
-
   Future<void> setNoiseReductionEnabled(bool value) async {
     if (_disposed ||
         state == CaptureState.requesting ||
@@ -112,12 +83,8 @@ class SessionController extends ChangeNotifier {
     }
   }
 
-  Future<void> start({bool enrollment = false}) async {
-    if ((!enrollment && scenario == null) || active || _disposed) return;
-    if (enrollment) {
-      enrollmentComplete = false;
-      noiseReductionEnabled = true;
-    }
+  Future<void> start() async {
+    if (scenario == null || active || _disposed) return;
     final epoch = ++_epoch;
     _acceptEvents = true;
     state = CaptureState.requesting;
@@ -125,7 +92,6 @@ class SessionController extends ChangeNotifier {
     reason = null;
     settings = {};
     analysis = {};
-    speaker = {'state': speakerRegistered ? 'confirming' : 'unregistered'};
     frameCount = 0;
     notifyListeners();
     try {
@@ -144,13 +110,11 @@ class SessionController extends ChangeNotifier {
   Future<void> stop() async {
     if (_disposed) return;
     ++_epoch;
-    _enrolling = false;
     _acceptEvents = false;
     state = CaptureState.idle;
     level = null;
     reason = null;
     analysis = {};
-    speaker = {'state': speakerRegistered ? 'confirming' : 'unregistered'};
     notifyListeners();
     await _audio.stop();
   }
@@ -164,12 +128,8 @@ class SessionController extends ChangeNotifier {
         if (state != CaptureState.running) {
           level = null;
           analysis = {};
-          speaker = {
-            'state': speakerRegistered ? 'confirming' : 'unregistered',
-          };
         }
         if (state == CaptureState.idle || state == CaptureState.error) {
-          _enrolling = false;
           _acceptEvents = false;
         }
       case 'level':
@@ -182,21 +142,6 @@ class SessionController extends ChangeNotifier {
       case 'analysis':
         if (state != CaptureState.running) return;
         analysis = event.analysis!;
-      case 'speaker':
-        speaker = event.analysis!;
-        if (speaker['state'] == 'unregistered') enrollmentComplete = false;
-        if (speaker['state'] == 'registered' && _enrolling)
-          enrollmentComplete = true;
-        if ([
-          'registered',
-          'unavailable',
-          'unregistered',
-        ].contains(speaker['state']))
-          _enrolling = false;
-        if (speaker['state'] == 'registered') speakerRegistered = true;
-        if (speaker['state'] == 'unregistered' ||
-            speaker['state'] == 'registering')
-          speakerRegistered = false;
     }
     notifyListeners();
   }
