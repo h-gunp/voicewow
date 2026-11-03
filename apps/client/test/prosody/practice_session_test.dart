@@ -87,8 +87,65 @@ class DeferredPresetAudio extends FakeAudio {
   }
 }
 
+class DeferredPlaybackAudio extends FakeAudio {
+  final playbackStopped = Completer<void>();
+  int starts = 0, guides = 0;
+  @override
+  Future<void> stopPlayback() => playbackStopped.future;
+  @override
+  Future<void> start({
+    required void Function(List<double>) onSamples,
+    void Function()? onLimitReached,
+    void Function(String)? onError,
+  }) async {
+    starts++;
+  }
+
+  @override
+  Future<GeneratedGuide> generateGuide(String text) async {
+    guides++;
+    return super.generateGuide(text);
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'cancelling while playback stops prevents a late recording start',
+    () async {
+      final audio = DeferredPlaybackAudio();
+      final session = PracticeSession(audio: audio);
+      session.reference = ReferenceClip(
+        'test',
+        'guide.wav',
+        trimAnalysis(analyzeSamples(audio.samples, 16000)),
+        'test',
+      );
+      final starting = session.startRecording();
+      await session.cancelCurrent();
+      audio.playbackStopped.complete();
+      await starting;
+      expect(audio.starts, 0);
+      expect(session.phase, PracticePhase.idle);
+      session.dispose();
+    },
+  );
+
+  test(
+    'cancelling while playback stops prevents late guide generation',
+    () async {
+      final audio = DeferredPlaybackAudio();
+      final session = PracticeSession(audio: audio);
+      final generating = session.generateGuide();
+      await session.cancelCurrent();
+      audio.playbackStopped.complete();
+      await generating;
+      expect(audio.guides, 0);
+      expect(session.phase, PracticePhase.idle);
+      session.dispose();
+    },
+  );
+
   test(
     'Dart script preparation preserves phrases and handles decimals and limits',
     () {

@@ -100,6 +100,21 @@ void main() {
     },
   );
 
+  test('aligned user trace preserves a pause absent from the guide', () {
+    final guide = trimAnalysis(analyzeSamples(voice(), rate));
+    final user = trimAnalysis(analyzeSamples(voice(internalPause: true), rate));
+    final compared = compareAnalyses(guide, user);
+    expect(compared.path, isNotEmpty);
+    expect(user.frames.any((f) => !f.active), isTrue);
+    final trace = alignedTrace(guide, user, compared.path);
+    final first = trace.indexWhere((f) => f.relativePitch != null);
+    final last = trace.lastIndexWhere((f) => f.relativePitch != null);
+    expect(
+      trace.sublist(first + 1, last).any((f) => f.relativePitch == null),
+      isTrue,
+    );
+  });
+
   test(
     'repeated DTW matches cannot create enough independent segment evidence',
     () {

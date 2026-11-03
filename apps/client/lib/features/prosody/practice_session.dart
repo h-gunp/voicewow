@@ -207,6 +207,7 @@ class PracticeSession extends ChangeNotifier {
     notifyListeners();
     try {
       await audio.stopPlayback();
+      if (_closed || ticket != _generation) return;
       final generated = await audio.generateGuide(phrase);
       final wav = decodeWav(generated.bytes);
       if (wav.samples.length / wav.sampleRate > 20) {
@@ -264,6 +265,7 @@ class PracticeSession extends ChangeNotifier {
     levelBound = _bound(reference!.analysis.frames, true, 10);
     try {
       await audio.stopPlayback();
+      if (_closed || ticket != _generation) return;
       await audio.start(
         onSamples: (samples) {
           if (!_closed && ticket == _generation) _onSamples(samples);

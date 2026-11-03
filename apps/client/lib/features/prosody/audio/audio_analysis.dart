@@ -642,18 +642,34 @@ List<AudioFrame> alignedTrace(
   List<FramePair> path,
 ) {
   final buckets = List.generate(reference.frames.length, (_) => <AudioFrame>[]);
-  for (final (ri, ui) in path) {
+  final obscured = <int>{};
+  FramePair? previous;
+  for (final pair in path) {
+    final (ri, ui) = pair;
+    if (previous != null && ui > previous.$2 + 1) {
+      // A single reference frame cannot represent both sides of a user gap.
+      obscured.add(ri);
+    }
     buckets[ri].add(user.frames[ui]);
+    previous = pair;
   }
   return [
     for (var i = 0; i < reference.frames.length; i++)
       AudioFrame(
         time: reference.frames[i].time,
-        pitchHz: median(buckets[i].map((f) => f.pitchHz)),
-        rmsDb: median(buckets[i].map((f) => f.rmsDb)) ?? -140,
-        active: buckets[i].isNotEmpty,
-        relativePitch: median(buckets[i].map((f) => f.relativePitch)),
-        relativeDb: median(buckets[i].map((f) => f.relativeDb)),
+        pitchHz: obscured.contains(i)
+            ? null
+            : median(buckets[i].map((f) => f.pitchHz)),
+        rmsDb: obscured.contains(i)
+            ? -140
+            : median(buckets[i].map((f) => f.rmsDb)) ?? -140,
+        active: buckets[i].isNotEmpty && !obscured.contains(i),
+        relativePitch: obscured.contains(i)
+            ? null
+            : median(buckets[i].map((f) => f.relativePitch)),
+        relativeDb: obscured.contains(i)
+            ? null
+            : median(buckets[i].map((f) => f.relativeDb)),
       ),
   ];
 }
