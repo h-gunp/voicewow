@@ -201,7 +201,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
           child: Align(
             alignment: Alignment.topCenter,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 960),
+              constraints: const BoxConstraints(maxWidth: 800),
               child: _session != null
                   ? _summary
                         ? _buildSummary(context)
@@ -282,7 +282,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
         const SizedBox(height: 16),
         Text(
           catalogReadingNote,
-          style: const TextStyle(color: muted, fontSize: 12, height: 1.6),
+          style: const TextStyle(color: muted, fontSize: 14, height: 1.6),
         ),
       ],
     );
@@ -345,7 +345,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
                 children: [
                   Text(
                     '$completed / ${items.length}문제 연습',
-                    style: const TextStyle(color: ink, fontSize: 12),
+                    style: const TextStyle(color: ink, fontSize: 14),
                   ),
                   const Icon(Icons.arrow_forward_rounded, size: 18, color: ink),
                 ],
@@ -463,7 +463,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
                   '($practice)',
                   style: const TextStyle(
                     color: muted,
-                    fontSize: 13,
+                    fontSize: 14,
                     height: 1.5,
                   ),
                 ),
@@ -476,7 +476,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
                 children: [
                   Text(
                     '${items.length}문제 · $completed문제 연습',
-                    style: const TextStyle(color: muted, fontSize: 12),
+                    style: const TextStyle(color: muted, fontSize: 14),
                   ),
                   const Icon(
                     Icons.arrow_forward_rounded,
@@ -652,7 +652,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
                   const SizedBox(height: 8),
                   const Text(
                     '눌러서 발음 가이드 다시 보기',
-                    style: TextStyle(color: muted, fontSize: 12, height: 1.5),
+                    style: TextStyle(color: muted, fontSize: 14, height: 1.5),
                   ),
                 ],
               ),
@@ -724,7 +724,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
                       showCategory
                           ? '${item.category.label} · ${groupTitle(item.group)}'
                           : groupTitle(item.group),
-                      style: const TextStyle(color: muted, fontSize: 12),
+                      style: const TextStyle(color: muted, fontSize: 14),
                     ),
                     const SizedBox(height: 7),
                     Text(
@@ -746,7 +746,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
                         color: answered == true
                             ? const Color(0xff267153)
                             : muted,
-                        fontSize: 12,
+                        fontSize: 14,
                       ),
                     ),
                   ],
@@ -826,7 +826,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
             children: [
               const Text(
                 '연습할 표현',
-                style: TextStyle(color: muted, fontSize: 12),
+                style: TextStyle(color: muted, fontSize: 14),
               ),
               const SizedBox(height: 12),
               Text(
@@ -879,7 +879,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
           const SizedBox(height: 12),
           const Text(
             '괄호 안은 읽는 소리예요. 답을 고르면 발음 설명을 볼 수 있어요.',
-            style: TextStyle(color: muted, fontSize: 12, height: 1.6),
+            style: TextStyle(color: muted, fontSize: 14, height: 1.6),
           ),
         ] else ...[
           Semantics(
@@ -931,7 +931,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
                   if (!correct)
                     const Text(
                       '이 문제는 복습 목록에 담았어요.',
-                      style: TextStyle(color: muted, fontSize: 12, height: 1.5),
+                      style: TextStyle(color: muted, fontSize: 14, height: 1.5),
                     ),
                   const SizedBox(height: 12),
                   if (widget.playback != null)
@@ -978,7 +978,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
                     message: item.sourceUrl,
                     child: const Text(
                       '국립국어원 발음 자료를 참고했어요.',
-                      style: TextStyle(color: muted, fontSize: 11, height: 1.5),
+                      style: TextStyle(color: muted, fontSize: 14, height: 1.5),
                     ),
                   ),
                 ],
@@ -1224,7 +1224,7 @@ class _TypeTag extends StatelessWidget {
           label,
           style: const TextStyle(
             color: blue,
-            fontSize: 11,
+            fontSize: 14,
             fontWeight: FontWeight.w700,
             height: 1.4,
           ),
@@ -1243,7 +1243,7 @@ class _Eyebrow extends StatelessWidget {
     text,
     style: const TextStyle(
       color: blue,
-      fontSize: 13,
+      fontSize: 14,
       fontWeight: FontWeight.w700,
       height: 1.5,
     ),
@@ -1278,7 +1278,7 @@ class _Stat extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     mainAxisSize: MainAxisSize.min,
     children: [
-      Text(label, style: const TextStyle(color: muted, fontSize: 12)),
+      Text(label, style: const TextStyle(color: muted, fontSize: 14)),
       const SizedBox(height: 5),
       Text(
         value,
@@ -1302,7 +1302,7 @@ class _Hint extends StatelessWidget {
       Expanded(
         child: Text(
           text,
-          style: const TextStyle(color: muted, height: 1.65, fontSize: 13),
+          style: const TextStyle(color: muted, height: 1.65, fontSize: 14),
         ),
       ),
     ],

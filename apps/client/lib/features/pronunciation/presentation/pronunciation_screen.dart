@@ -96,7 +96,7 @@ class _PronunciationScreenState extends State<PronunciationScreen>
   @override
   Widget build(BuildContext context) => Center(
     child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 1040),
+      constraints: const BoxConstraints(maxWidth: 800),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Column(
@@ -334,7 +334,7 @@ class _PersonalGuideViewState extends State<_PersonalGuideView>
           const SizedBox(height: 8),
           const Text(
             '예시 문장 · 눌러서 체험해 보세요',
-            style: TextStyle(color: muted, fontSize: 13),
+            style: TextStyle(color: muted, fontSize: 14),
           ),
           const SizedBox(height: 6),
           Wrap(
@@ -452,7 +452,7 @@ class _PersonalGuideViewState extends State<_PersonalGuideView>
               padding: EdgeInsets.only(top: 10),
               child: Text(
                 '예시 음성은 기기의 한국어 음성으로 재생돼요.',
-                style: TextStyle(color: muted, fontSize: 13),
+                style: TextStyle(color: muted, fontSize: 14),
               ),
             ),
           ],

@@ -3,7 +3,8 @@ const db = p => 10 * Math.log10(p);
 const median = a => { const s = [...a].sort((x,y)=>x-y); return s[Math.floor(s.length/2)]; };
 
 export class EnvironmentEstimator {
-  constructor() {
+  constructor({relative=false} = {}) {
+    this.relative = relative;
     this.seq = -1; this.pending = []; this.noise = []; this.lastEvidence = -Infinity;
     this.initial = null; this.smooth = null; this.offset = 0; this.candidate = null;
     this.post = 0; this.voice = null; this.state = 'collecting';
@@ -11,6 +12,7 @@ export class EnvironmentEstimator {
     this.transition = false;
   }
   hold() {
+    if (this.relative) { this.initial = null; this.offset = 0; }
     this.pending = []; this.noise = []; this.smooth = null; this.candidate = null;
     this.evidenceSinceStats = 0; this.post = 50; this.voice = null; this.state = 'held'; this.transition = false;
   }
@@ -23,6 +25,7 @@ export class EnvironmentEstimator {
     if (!Number.isSafeInteger(seq) || seq <= this.seq) return;
     if (!Number.isFinite(power) || power < 0 || !['speech','nonSpeech','uncertain'].includes(speech)) throw new RangeError('invalid analysis frame');
     if (this.seq >= 0 && seq !== this.seq + 1) {
+      if (this.relative) { this.initial = null; this.offset = 0; }
       this.pending = []; this.noise = []; this.smooth = null; this.candidate = null;
       this.state = 'held'; this.post = 50; this.transition = false;
     }
@@ -37,10 +40,11 @@ export class EnvironmentEstimator {
       if (this.pending.length > 20) this.accept(this.pending.shift());
     }
     if (seq - this.lastEvidence > 500 && this.initial !== null) {
+      if (this.relative) { this.initial = null; this.offset = 0; }
       this.state = 'held'; this.noise = []; this.smooth = null; this.candidate = null; this.transition = false;
     }
     this.voice = null;
-    if (speech === 'speech' && !clipped && this.state === 'ready' && this.smooth > 0) {
+    if (!this.relative && speech === 'speech' && !clipped && this.state === 'ready' && this.smooth > 0) {
       const voice = power - this.smooth;
       if (voice > 0 && voice / this.smooth >= 2) this.voice = db(voice);
     }

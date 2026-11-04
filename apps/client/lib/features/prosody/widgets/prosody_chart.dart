@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../audio/audio_analysis.dart';
 
-const _guide = Color(0xff1765f5);
-const _voice = Color(0xffde5d43);
+const _guide = Color(0xff2f62d6);
+const _voice = Color(0xff34455e);
 
 /// Feature contours, not raw waveform or a normative score. During recording
 /// the horizontal axis is elapsed time; final traces may be DTW-aligned.
@@ -35,7 +35,7 @@ class ProsodyChart extends StatelessWidget {
   Widget build(BuildContext context) => Semantics(
     image: true,
     label:
-        '${volume ? '상대적인 소리 크기' : '상대적인 음높이'} 그래프. 파란 점선은 가이드, 주황 선과 점은 내 목소리. '
+        '${volume ? '상대적인 소리 크기' : '상대적인 음높이'} 그래프. 파란 점선은 가이드, 짙은 회색 선과 점은 내 목소리. '
         '${live ? '가로축은 녹음 경과 시간입니다.' : '가로축은 시간이며, 표시한 구간은 단어나 음절 경계가 아닙니다.'}'
         '${!live && regions.isNotEmpty ? ' 비교 구간: ${regions.map((region) => region.label).join(', ')}.' : ''}'
         '${selected == null ? '' : ' 선택한 구간: ${selected!.label}.'} 확인할 수 없는 소리는 선을 비워 둡니다.',
@@ -55,7 +55,7 @@ class ProsodyChart extends StatelessWidget {
           ),
         ),
         SizedBox(
-          height: height,
+          height: height * (MediaQuery.textScalerOf(context).scale(12) / 12),
           width: double.infinity,
           child: CustomPaint(
             painter: _ProsodyPainter(
@@ -68,6 +68,7 @@ class ProsodyChart extends StatelessWidget {
               regions: regions,
               domainSeconds: domainSeconds,
               scaleBound: scaleBound,
+              textScale: MediaQuery.textScalerOf(context).scale(12) / 12,
             ),
           ),
         ),
@@ -97,7 +98,7 @@ class _Legend extends StatelessWidget {
       const SizedBox(width: 4),
       Text(
         label,
-        style: const TextStyle(fontSize: 12, color: Color(0xff536987)),
+        style: const TextStyle(fontSize: 14, color: Color(0xff465a74)),
       ),
     ],
   );
@@ -114,11 +115,13 @@ class _ProsodyPainter extends CustomPainter {
     required this.regions,
     required this.domainSeconds,
     required this.scaleBound,
+    required this.textScale,
   });
   final AudioAnalysis? reference;
   final List<AudioFrame> trace;
   final bool volume, live;
   final double? progress, domainSeconds, scaleBound;
+  final double textScale;
   final Segment? selected;
   final List<Segment> regions;
   double? value(AudioFrame f) => volume ? f.relativeDb : f.relativePitch;
@@ -128,7 +131,12 @@ class _ProsodyPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (size.width < 80 || size.height < 100) return;
-    final plot = Rect.fromLTRB(43, 35, size.width - 12, size.height - 43);
+    final plot = Rect.fromLTRB(
+      43 * textScale,
+      35 * textScale,
+      size.width - 12,
+      size.height - 43 * textScale,
+    );
     final ref = reference?.frames ?? const <AudioFrame>[];
     final all = [...ref, ...trace];
     var bound = volume ? 10.0 : 5.0;
@@ -174,11 +182,11 @@ class _ProsodyPainter extends CustomPainter {
         x(selected!.end),
         plot.bottom,
       );
-      canvas.drawRect(area, Paint()..color = const Color(0xfffff1e6));
+      canvas.drawRect(area, Paint()..color = const Color(0xffeaf1fe));
       canvas.drawRect(
         area.deflate(1),
         Paint()
-          ..color = const Color(0xffe8a269)
+          ..color = const Color(0xff7c9fe0)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.5,
       );
@@ -216,7 +224,8 @@ class _ProsodyPainter extends CustomPainter {
       live ? '녹음 중 기준 갱신' : '각 목소리의 중간값 기준',
       Offset(plot.right, 6),
       align: TextAlign.right,
-      font: 10,
+      font: 12,
+      maxWidth: plot.width * .65,
     );
     _text(
       canvas,
@@ -228,9 +237,9 @@ class _ProsodyPainter extends CustomPainter {
     _text(
       canvas,
       '기준',
-      Offset(plot.left - 8, y(0) - 7),
+      Offset(plot.left - 8, y(0) - 7 * textScale),
       align: TextAlign.right,
-      font: 10,
+      font: 12,
     );
     _text(
       canvas,
@@ -293,7 +302,7 @@ class _ProsodyPainter extends CustomPainter {
         gap: 5,
       );
       if (plot.right - endX > 57) {
-        _text(canvas, '가이드 끝', Offset(endX + 4, plot.top + 24), font: 10);
+        _text(canvas, '가이드 끝', Offset(endX + 4, plot.top + 24), font: 12);
       }
     }
     for (var i = 0; i < (showTime ? 3 : displayRegions.length); i++) {
@@ -325,7 +334,10 @@ class _ProsodyPainter extends CustomPainter {
         Offset(xx, plot.bottom),
         stroke(color, 1.7),
       );
-      final tagWidth = label.length > 5 ? 80.0 : 64.0;
+      final tagWidth = math.min(
+        (label.length > 5 ? 80.0 : 64.0) * textScale,
+        plot.width,
+      );
       final halfTag = math.min(tagWidth / 2, plot.width / 2);
       final tagX = xx
           .clamp(plot.left + halfTag, plot.right - halfTag)
@@ -335,7 +347,7 @@ class _ProsodyPainter extends CustomPainter {
           Rect.fromCenter(
             center: Offset(tagX, plot.top + 5),
             width: tagWidth,
-            height: 22,
+            height: 22 * textScale,
           ),
           const Radius.circular(5),
         ),
@@ -347,7 +359,7 @@ class _ProsodyPainter extends CustomPainter {
         Offset(tagX, plot.top - 3),
         align: TextAlign.center,
         color: Colors.white,
-        font: 10,
+        font: 12,
         bold: true,
       );
     }
@@ -384,22 +396,24 @@ class _ProsodyPainter extends CustomPainter {
     String text,
     Offset offset, {
     TextAlign align = TextAlign.left,
-    Color color = const Color(0xff536987),
-    double font = 11,
+    Color color = const Color(0xff465a74),
+    double font = 12,
+    double maxWidth = double.infinity,
     bool bold = false,
   }) {
     final painter = TextPainter(
       text: TextSpan(
         text: text,
         style: TextStyle(
-          fontFamily: 'Roboto',
-          fontSize: font,
+          fontFamily: 'Pretendard',
+          fontSize: font * textScale,
           color: color,
           fontWeight: bold ? FontWeight.w600 : FontWeight.w400,
         ),
       ),
       textDirection: TextDirection.ltr,
-    )..layout();
+      textAlign: align,
+    )..layout(maxWidth: maxWidth);
     final dx = align == TextAlign.center
         ? painter.width / 2
         : align == TextAlign.right

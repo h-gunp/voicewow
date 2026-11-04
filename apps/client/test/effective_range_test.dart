@@ -55,6 +55,7 @@ void main() {
       );
       ready();
       await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
       expect(find.text('하한 55.5'), findsOneWidget);
       expect(find.textContaining('참고 범위 비교 범위 안'), findsOneWidget);
       port.send(
@@ -76,6 +77,7 @@ void main() {
       );
       ready();
       await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
       expect(find.text('하한 70.5'), findsOneWidget);
       expect(find.text('상한 80.5'), findsOneWidget);
       expect(find.textContaining('참고 범위 비교 범위 안'), findsOneWidget);

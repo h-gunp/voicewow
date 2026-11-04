@@ -16,10 +16,42 @@ ThemeData buildAppTheme() => ThemeData(
     brightness: Brightness.light,
   ),
   scaffoldBackgroundColor: canvas,
-  textTheme: ThemeData.light().textTheme.apply(
-    bodyColor: ink,
-    displayColor: ink,
+  fontFamily: 'Pretendard',
+  navigationBarTheme: NavigationBarThemeData(
+    backgroundColor: Colors.white,
+    indicatorColor: wash,
+    labelTextStyle: WidgetStateProperty.all(
+      const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ink),
+    ),
   ),
+  inputDecorationTheme: InputDecorationTheme(
+    filled: true,
+    fillColor: Colors.white,
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: const BorderSide(color: line),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: const BorderSide(color: line),
+    ),
+  ),
+  textTheme: ThemeData.light().textTheme
+      .apply(fontFamily: 'Pretendard', bodyColor: ink, displayColor: ink)
+      .copyWith(
+        bodyLarge: const TextStyle(
+          fontFamily: 'Pretendard',
+          fontSize: 16,
+          height: 1.6,
+          color: ink,
+        ),
+        bodyMedium: const TextStyle(
+          fontFamily: 'Pretendard',
+          fontSize: 14,
+          height: 1.6,
+          color: ink,
+        ),
+      ),
   filledButtonTheme: FilledButtonThemeData(
     style: FilledButton.styleFrom(
       backgroundColor: blue,

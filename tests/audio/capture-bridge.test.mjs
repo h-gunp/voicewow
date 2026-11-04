@@ -70,7 +70,7 @@ test('input gap invalidates meter and accepts a fresh sample-clock epoch', async
   for(let i=0;i<3;i++){send(i,origin);await h.tick(10);}
   const a=h.events.findLast(e=>e.type==='analysis').analysis;
   assert.equal(a.meterState,'speech');
-  assert.equal(a.reason,'processing_settings');
+  assert.equal(a.provenance,'relative_input');
   await h.capture.stop();
 });
 
@@ -90,7 +90,6 @@ test('input gap keeps the session noise baseline but requires new evidence', asy
 });
 
 for (const trackSettings of [
-  {echoCancellation:false},
   {autoGainControl:true,noiseSuppression:false,echoCancellation:false},
   {autoGainControl:false,noiseSuppression:true,echoCancellation:false},
   {autoGainControl:false,noiseSuppression:false,echoCancellation:true},
@@ -137,7 +136,7 @@ test('processing setting changes reset relative speech onset evidence', async ()
   const next=addNoiseReduction(h); await h.capture.start();
   next.node.port.onmessage({data:{type:'analysis',seq:0,sampleStart:0,sampleEnd:480,sampleTime:h.ctx.currentTime+.01,power:.01,clipped:false,speech:'speech',meterRms:.2}});
   const restarted=h.events.findLast(e=>e.type==='analysis').analysis;
-  assert.equal(restarted.meterState,'confirming'); assert.equal(restarted.state,'unavailable');
+  assert.equal(restarted.meterState,'confirming'); assert.equal(restarted.state,'collecting'); assert.equal(restarted.provenance,'relative_input');
   await h.capture.stop();
 });
 
@@ -793,4 +792,38 @@ for(const rejectPreferredRate of [false,true]) test(`browser_context_requests_48
   assert.deepEqual(attempts,rejectPreferredRate?[{sampleRate:48000},undefined]:[{sampleRate:48000}]);
   assert.deepEqual(events.at(-1),{type:'state',state:'error',reason:'permission_denied'});
   assert.equal(h.ctx.closed,1);
+});
+
+
+test('unknown settings collect relative input and reset it on gap and settings changes', async () => {
+  const h=harness(), {node}=addNoiseReduction(h); let settings={echoCancellation:false};
+  h.track.getSettings=()=>settings; await h.capture.start();
+  const send=async(seq,origin,power=.01,speech='nonSpeech')=>{node.port.onmessage({data:{type:'analysis',seq,sampleStart:seq*480,sampleEnd:(seq+1)*480,sampleTime:origin+(seq+1)/100,power,clipped:false,speech,meterRms:.1}});if(seq%10===0)h.frame({},node);await h.tick(10);};
+  for(let i=0;i<1000;i++) await send(i,0);
+  for(let i=1000;i<6000;i++) await send(i,0,.03);
+  let a=h.events.findLast(e=>e.type==='analysis').analysis;
+  assert.equal(a.provenance,'relative_input'); assert.ok(a.offset>0); assert.equal(a.voiceDbfs,null);
+  node.port.onmessage({data:{type:'analysis_reset'}}); const origin=h.ctx.currentTime;
+  for(let i=0;i<400;i++) await send(i,origin,.03);
+  a=h.events.findLast(e=>e.type==='analysis').analysis;
+  assert.equal(a.state,'ready'); assert.equal(a.offset,0);
+  settings={echoCancellation:'all'}; await send(400,origin,.03);
+  a=h.events.findLast(e=>e.type==='analysis').analysis;
+  assert.equal(a.state,'unavailable'); assert.equal(a.offset,null);
+  settings={echoCancellation:false}; await send(401,origin,.03);
+  a=h.events.findLast(e=>e.type==='analysis').analysis;
+  assert.equal(a.provenance,'relative_input'); assert.equal(a.state,'collecting'); assert.equal(a.offset,null);
+  await h.capture.stop();
+});
+
+test('analysis provenance uses the same settings snapshot published to Dart', async () => {
+  const h=harness(), {node}=addNoiseReduction(h);
+  const verified={autoGainControl:false,noiseSuppression:false,echoCancellation:false};
+  h.track.getSettings=()=>verified; await h.capture.start();
+  let calls=0;
+  h.track.getSettings=()=>++calls===1 ? {echoCancellation:false} : verified;
+  node.port.onmessage({data:{type:'analysis',seq:0,sampleStart:0,sampleEnd:480,sampleTime:.01,power:.01,clipped:false,speech:'nonSpeech',meterRms:.1}});
+  assert.deepEqual(h.events.findLast(e=>e.type==='settings').settings.echoCancellation,false);
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.provenance,'relative_input');
+  await h.capture.stop();
 });

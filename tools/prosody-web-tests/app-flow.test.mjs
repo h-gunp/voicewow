@@ -511,8 +511,8 @@ test('repeated DTW matches at a single user timestamp cannot enable excerpt play
 
 test('recording shows measured voice live and keeps the completed comparison on the practice graph',async()=>{
   const ui=await setup({microphone:true}),{el,button,inputAudio}=ui;
-  const voiceStrokes=()=>el('practice-chart').strokes.filter(stroke=>stroke.color==='#de5d43'&&stroke.points>0).length;
-  const voiceMarks=()=>el('practice-chart').marks.filter(mark=>mark.color==='#de5d43').length;
+  const voiceStrokes=()=>el('practice-chart').strokes.filter(stroke=>stroke.color==='#34455e'&&stroke.points>0).length;
+  const voiceMarks=()=>el('practice-chart').marks.filter(mark=>mark.color==='#34455e').length;
   try{
     await ui.prepareScript();
     await inputAudio('reference-file');await settle(()=>el('reference-status').textContent.includes('연결한 파일'));
@@ -522,7 +522,7 @@ test('recording shows measured voice live and keeps the completed comparison on 
     assert.equal(el('practice-graph-card').dataset.phase,'recording');
     assert.match(el('live-status').textContent,/내 목소리/);
     const voiceStatus=el('live-status').textContent;
-    assert.ok(voiceStrokes()+voiceMarks()>before,'detected microphone voice must produce visible orange measurements');
+    assert.ok(voiceStrokes()+voiceMarks()>before,'detected microphone voice must produce visible voice measurements');
     assert.match(el('practice-view-label').textContent,/실시간|녹음 중|시간/);
 
     ui.setLiveVoice(false);

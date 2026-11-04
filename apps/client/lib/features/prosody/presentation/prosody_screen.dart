@@ -272,7 +272,7 @@ class _ProsodyScreenState extends State<ProsodyScreen>
       const SizedBox(height: 10),
       _copy(
         s.reference?.source ?? '이 문구의 한국어 가이드를 먼저 만들어 주세요.',
-        size: 13,
+        size: 14,
         color: const Color(0xff63748d),
       ),
       if (!s.usingScript && s.reference == null && !s.busy)
@@ -292,7 +292,7 @@ class _ProsodyScreenState extends State<ProsodyScreen>
           ),
         ),
         const SizedBox(height: 8),
-        _copy('기기에 설치된 오프라인 한국어 음성으로 이 문구의 가이드와 그래프를 만들어요.', size: 13),
+        _copy('기기에 설치된 오프라인 한국어 음성으로 이 문구의 가이드와 그래프를 만들어요.', size: 14),
       ],
       const SizedBox(height: 12),
       OutlinedButton.icon(
@@ -311,7 +311,7 @@ class _ProsodyScreenState extends State<ProsodyScreen>
       _status(),
       _copy(
         '가이드는 한 가지 읽기 예시예요. 말하기 실력이나 자연스러움을 채점하지 않아요.',
-        size: 13,
+        size: 14,
         color: const Color(0xff63748d),
       ),
     ],
@@ -372,10 +372,10 @@ class _ProsodyScreenState extends State<ProsodyScreen>
       final hint = _stopping
           ? '잠시 멈추고 있어요. 이전 결과는 보관해 둘게요.'
           : !s.recording
-          ? '파란 선은 이 문구의 읽기 예시예요. 녹음하면 내 목소리를 주황 선으로 보여드려요.'
+          ? '파란 선은 이 문구의 읽기 예시예요. 녹음하면 내 목소리를 짙은 회색 선으로 보여드려요.'
           : s.currentVoice
-          ? '지금 목소리를 주황 선과 점으로 보여드려요.'
-          : '잠시 쉬어도 괜찮아요. 목소리가 잡히면 주황 점이 나타나요.';
+          ? '지금 목소리를 짙은 회색 선과 점으로 보여드려요.'
+          : '잠시 쉬어도 괜찮아요. 목소리가 잡히면 짙은 회색 점이 나타나요.';
       return SingleChildScrollView(
         key: const PageStorageKey('prosody-record-scroll'),
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
@@ -420,7 +420,7 @@ class _ProsodyScreenState extends State<ProsodyScreen>
             ),
             Semantics(
               liveRegion: true,
-              child: _copy(hint, size: 13, color: const Color(0xff536987)),
+              child: _copy(hint, size: 14, color: const Color(0xff536987)),
             ),
             if (s.phase == PracticePhase.processing) ...[
               const SizedBox(height: 8),
@@ -449,7 +449,7 @@ class _ProsodyScreenState extends State<ProsodyScreen>
           ? '녹음을 확인하고 있어요'
           : '최대 20초',
       textAlign: TextAlign.center,
-      style: const TextStyle(fontSize: 13, height: 1.4),
+      style: const TextStyle(fontSize: 14, height: 1.4),
     ),
     const SizedBox(height: 6),
     FilledButton.icon(
@@ -519,7 +519,7 @@ class _ProsodyScreenState extends State<ProsodyScreen>
         if (result.demo)
           _copy(
             '합성 시험 신호예요. 실제 사람의 녹음은 아니에요.',
-            size: 13,
+            size: 14,
             color: const Color(0xff94662d),
           ),
         const SizedBox(height: 8),
@@ -535,11 +535,11 @@ class _ProsodyScreenState extends State<ProsodyScreen>
         const SizedBox(height: 8),
         _copy(
           [
-            '파란 점선은 예시, 주황 선은 내 목소리예요. 녹음 뒤에는 읽는 속도를 대략 맞춰 겹쳐 보여줘요.',
+            '파란 점선은 예시, 짙은 회색 선은 내 목소리예요. 녹음 뒤에는 읽는 속도를 대략 맞춰 겹쳐 보여줘요.',
             if (result.summary.segmentationNote.isNotEmpty)
               result.summary.segmentationNote,
           ].join('\n\n'),
-          size: 13,
+          size: 14,
           color: const Color(0xff536987),
         ),
         const SizedBox(height: 16),
@@ -571,12 +571,12 @@ class _ProsodyScreenState extends State<ProsodyScreen>
                   padding: const EdgeInsets.only(top: 8),
                   child: _copy(
                     '${part.label} 평균 차이 · 높낮이 ${part.pitchError?.toStringAsFixed(1) ?? '미측정'}반음 / 강약 ${part.levelError?.toStringAsFixed(1) ?? '미측정'}dB',
-                    size: 13,
+                    size: 14,
                   ),
                 ),
               _copy(
                 '시간 구간을 비교한 것이며 단어나 음절을 자동으로 찾은 결과는 아니에요. 소리 크기는 각 녹음 안의 상대값이에요.',
-                size: 13,
+                size: 14,
               ),
             ],
           ),
@@ -594,7 +594,7 @@ class _ProsodyScreenState extends State<ProsodyScreen>
         _status(),
         _copy(
           '음성과 대본은 이 기기 안에서 처리해요. 재생에 필요한 앱 임시 파일을 사용해요.',
-          size: 13,
+          size: 14,
           color: const Color(0xff63748d),
         ),
       ],
@@ -707,7 +707,7 @@ class _ProsodyScreenState extends State<ProsodyScreen>
                 child: Center(
                   child: Text(
                     '${_step.index + 1} / 3',
-                    style: const TextStyle(fontSize: 13),
+                    style: const TextStyle(fontSize: 14),
                   ),
                 ),
               ),

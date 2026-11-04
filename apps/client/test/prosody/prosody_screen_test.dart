@@ -305,6 +305,12 @@ void main() {
       expect(s.busy, isFalse);
       expect((s.audio as _ScreenAudio).guideCancellations, 1);
       expect(find.text('연습 준비'), findsOneWidget);
+      expect(s.usingScript, isTrue);
+      await tester.drag(
+        find.byKey(const PageStorageKey('prosody-prepare-scroll')),
+        const Offset(0, 1200),
+      );
+      await tester.pumpAndSettle();
       expect(find.byKey(const Key('prosody-script-input')), findsOneWidget);
       expect(tester.takeException(), isNull);
       await _finish(tester, s);
