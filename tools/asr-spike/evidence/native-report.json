@@ -1,0 +1,488 @@
+{
+  "kind": "native-only public-fixture spike",
+  "runtime": "2.0.1",
+  "runtimeCommit": "af2d8d81",
+  "node": "v24.16.0",
+  "platform": "win32",
+  "arch": "x64",
+  "cpu": "13th Gen Intel(R) Core(TM) i5-13400F",
+  "initMs": 1406.6982,
+  "sampledPeakRssBytes": 276881408,
+  "processMaxRssKiB": 271528,
+  "results": [
+    {
+      "sample": 0,
+      "seconds": 3.5265,
+      "computeMs": 209.54379999999992,
+      "realTimeFactor": 0.05941976463916062,
+      "firstEvidenceInputSeconds": 0.8,
+      "p95ChunkComputeMs": 17.184499999999844,
+      "maxChunkComputeMs": 21.424600000000055,
+      "final": {
+        "text": "걔는괜찮은척하려구애쓰는거같았다",
+        "tokens": [
+          " 걔는",
+          " 괜찮은",
+          " 척",
+          "하",
+          "려",
+          "구",
+          " 애",
+          " 쓰는",
+          " 거",
+          " 같",
+          "았",
+          "다"
+        ],
+        "timestamps": [
+          0.52,
+          0.96,
+          1.28,
+          1.44,
+          1.52,
+          1.84,
+          2.28,
+          2.48,
+          2.88,
+          3.04,
+          3.2,
+          3.44
+        ],
+        "ys_probs": [
+          -1.740222,
+          -0.223537,
+          -0.616931,
+          -1.771856,
+          -1.881704,
+          -0.799532,
+          -0.985347,
+          -1.632469,
+          -0.564184,
+          -0.399426,
+          -0.850309,
+          -0.226027
+        ],
+        "lm_probs": [],
+        "context_scores": [],
+        "segment": 0,
+        "words": [],
+        "num_trailing_blanks": 9,
+        "start_time": 0,
+        "is_final": false,
+        "is_eof": false
+      },
+      "reference": "그는 괜찮은 척하려고 애쓰는 것 같았다.",
+      "alignment": {
+        "status": "uncertain",
+        "range": null
+      },
+      "changes": [
+        {
+          "inputSeconds": 0.8,
+          "text": "걔는"
+        },
+        {
+          "inputSeconds": 1.44,
+          "text": "걔는괜찮은"
+        },
+        {
+          "inputSeconds": 1.76,
+          "text": "걔는괜찮은척하려"
+        },
+        {
+          "inputSeconds": 2.08,
+          "text": "걔는괜찮은척하려구"
+        },
+        {
+          "inputSeconds": 2.72,
+          "text": "걔는괜찮은척하려구애쓰는"
+        },
+        {
+          "inputSeconds": 3.36,
+          "text": "걔는괜찮은척하려구애쓰는거같"
+        }
+      ]
+    },
+    {
+      "sample": 1,
+      "seconds": 3.404625,
+      "computeMs": 188.45409999999993,
+      "realTimeFactor": 0.05535238095238093,
+      "firstEvidenceInputSeconds": 1.12,
+      "p95ChunkComputeMs": 17.522699999999986,
+      "maxChunkComputeMs": 17.528299999999945,
+      "final": {
+        "text": "지하철에서다리를벌리고하진마라.",
+        "tokens": [
+          " 지하철",
+          "에서",
+          " 다리",
+          "를",
+          " 벌",
+          "리고",
+          " ",
+          "하진",
+          " 마",
+          "라",
+          "."
+        ],
+        "timestamps": [
+          0.72,
+          1.2,
+          1.92,
+          2.16,
+          2.36,
+          2.52,
+          2.88,
+          2.92,
+          3.2,
+          3.36,
+          3.48
+        ],
+        "ys_probs": [
+          -0.573256,
+          -0.11884,
+          -0.238894,
+          -0.037436,
+          -0.437199,
+          -0.705141,
+          -0.284362,
+          -2.702946,
+          -0.453812,
+          -0.427282,
+          -0.508188
+        ],
+        "lm_probs": [],
+        "context_scores": [],
+        "segment": 0,
+        "words": [],
+        "num_trailing_blanks": 0,
+        "start_time": 0,
+        "is_final": false,
+        "is_eof": false
+      },
+      "reference": "지하철에서 다리를 벌리고 앉지 마라.",
+      "alignment": {
+        "status": "uncertain",
+        "range": null
+      },
+      "changes": [
+        {
+          "inputSeconds": 1.12,
+          "text": "지하철"
+        },
+        {
+          "inputSeconds": 1.44,
+          "text": "지하철에서"
+        },
+        {
+          "inputSeconds": 2.4,
+          "text": "지하철에서다리를"
+        },
+        {
+          "inputSeconds": 2.72,
+          "text": "지하철에서다리를벌리고"
+        },
+        {
+          "inputSeconds": 3.36,
+          "text": "지하철에서다리를벌리고하진"
+        }
+      ]
+    },
+    {
+      "sample": 2,
+      "seconds": 6.6280625,
+      "computeMs": 373.0161999999998,
+      "realTimeFactor": 0.056278316627219466,
+      "firstEvidenceInputSeconds": 0.8,
+      "p95ChunkComputeMs": 17.063700000000154,
+      "maxChunkComputeMs": 17.399400000000014,
+      "final": {
+        "text": "부모가저질른큰실수중하나는자기아이를다른집안과비교하는것이다.",
+        "tokens": [
+          " 부",
+          "모",
+          "가",
+          " 저",
+          "질",
+          "른",
+          " 큰",
+          " 실",
+          "수",
+          " 중",
+          " 하나",
+          "는",
+          " 자기",
+          " 아이",
+          "를",
+          " 다른",
+          " 집",
+          "안",
+          "과",
+          " 비",
+          "교",
+          "하는",
+          " 것",
+          "이다",
+          "."
+        ],
+        "timestamps": [
+          0.48,
+          0.68,
+          0.8,
+          0.96,
+          1.12,
+          1.36,
+          1.68,
+          1.92,
+          2.04,
+          2.24,
+          2.56,
+          2.8,
+          3.52,
+          3.84,
+          4.24,
+          4.56,
+          4.92,
+          5.12,
+          5.32,
+          5.52,
+          5.64,
+          5.8,
+          6.08,
+          6.24,
+          6.68
+        ],
+        "ys_probs": [
+          -0.386141,
+          -0.030838,
+          -0.129114,
+          -0.789959,
+          -1.114464,
+          -1.919807,
+          -0.450844,
+          -0.083023,
+          -0.80468,
+          -0.324646,
+          -0.076401,
+          -0.597955,
+          -0.572762,
+          -0.618883,
+          -0.141675,
+          -0.449739,
+          -0.877555,
+          -1.170275,
+          -0.556836,
+          -0.2679,
+          -0.383636,
+          -0.356904,
+          -0.122186,
+          -0.532921,
+          -0.552437
+        ],
+        "lm_probs": [],
+        "context_scores": [],
+        "segment": 0,
+        "words": [],
+        "num_trailing_blanks": 8,
+        "start_time": 0,
+        "is_final": false,
+        "is_eof": false
+      },
+      "reference": "부모가 저지르는 큰 실수 중 하나는 자기 아이를 다른 집 아이와 비교하는 것이다.",
+      "alignment": {
+        "status": "matched",
+        "range": {
+          "start": 36,
+          "end": 44
+        },
+        "text": "비교하는 것이다",
+        "before": "부모가 저지르는 큰 실수 중 하나는 자기 아이를 다른 집 아이와 ",
+        "after": ".",
+        "matchedCharacters": 7,
+        "scope": [
+          0,
+          45
+        ]
+      },
+      "changes": [
+        {
+          "inputSeconds": 0.8,
+          "text": "부"
+        },
+        {
+          "inputSeconds": 1.12,
+          "text": "부모가"
+        },
+        {
+          "inputSeconds": 1.44,
+          "text": "부모가저질"
+        },
+        {
+          "inputSeconds": 1.76,
+          "text": "부모가저질른"
+        },
+        {
+          "inputSeconds": 2.08,
+          "text": "부모가저질른큰"
+        },
+        {
+          "inputSeconds": 2.4,
+          "text": "부모가저질른큰실수"
+        },
+        {
+          "inputSeconds": 2.72,
+          "text": "부모가저질른큰실수중"
+        },
+        {
+          "inputSeconds": 3.04,
+          "text": "부모가저질른큰실수중하나는"
+        },
+        {
+          "inputSeconds": 4,
+          "text": "부모가저질른큰실수중하나는자기"
+        },
+        {
+          "inputSeconds": 4.32,
+          "text": "부모가저질른큰실수중하나는자기아이"
+        },
+        {
+          "inputSeconds": 4.64,
+          "text": "부모가저질른큰실수중하나는자기아이를"
+        },
+        {
+          "inputSeconds": 4.96,
+          "text": "부모가저질른큰실수중하나는자기아이를다른"
+        },
+        {
+          "inputSeconds": 5.28,
+          "text": "부모가저질른큰실수중하나는자기아이를다른집"
+        },
+        {
+          "inputSeconds": 5.6,
+          "text": "부모가저질른큰실수중하나는자기아이를다른집안과"
+        },
+        {
+          "inputSeconds": 5.92,
+          "text": "부모가저질른큰실수중하나는자기아이를다른집안과비교"
+        },
+        {
+          "inputSeconds": 6.24,
+          "text": "부모가저질른큰실수중하나는자기아이를다른집안과비교하는"
+        },
+        {
+          "inputSeconds": 6.56,
+          "text": "부모가저질른큰실수중하나는자기아이를다른집안과비교하는것이다"
+        }
+      ]
+    },
+    {
+      "sample": 3,
+      "seconds": 2.6809375,
+      "computeMs": 156.02249999999958,
+      "realTimeFactor": 0.05819699265648661,
+      "firstEvidenceInputSeconds": 0.8,
+      "p95ChunkComputeMs": 17.916999999999916,
+      "maxChunkComputeMs": 17.916999999999916,
+      "final": {
+        "text": "주민등록증을보여주시겠어요?",
+        "tokens": [
+          " 주",
+          "민",
+          "등",
+          "록",
+          "증",
+          "을",
+          " 보여",
+          " 주",
+          "시",
+          "겠어",
+          "요",
+          "?"
+        ],
+        "timestamps": [
+          0.48,
+          0.68,
+          0.84,
+          1.04,
+          1.2,
+          1.44,
+          1.68,
+          1.84,
+          2,
+          2.16,
+          2.44,
+          2.52
+        ],
+        "ys_probs": [
+          -0.616237,
+          -0.037055,
+          -0.384439,
+          -0.01552,
+          -0.457848,
+          -0.123421,
+          -1.45462,
+          -0.321028,
+          -0.165851,
+          -0.2634,
+          -0.460959,
+          -0.464649
+        ],
+        "lm_probs": [],
+        "context_scores": [],
+        "segment": 0,
+        "words": [],
+        "num_trailing_blanks": 8,
+        "start_time": 0,
+        "is_final": false,
+        "is_eof": false
+      },
+      "reference": "주민등록증을 보여 주시겠어요?",
+      "alignment": {
+        "status": "matched",
+        "range": {
+          "start": 0,
+          "end": 15
+        },
+        "text": "주민등록증을 보여 주시겠어요",
+        "before": "",
+        "after": "?",
+        "matchedCharacters": 13,
+        "scope": [
+          0,
+          16
+        ]
+      },
+      "changes": [
+        {
+          "inputSeconds": 0.8,
+          "text": "주"
+        },
+        {
+          "inputSeconds": 1.12,
+          "text": "주민등"
+        },
+        {
+          "inputSeconds": 1.44,
+          "text": "주민등록증"
+        },
+        {
+          "inputSeconds": 1.76,
+          "text": "주민등록증을"
+        },
+        {
+          "inputSeconds": 2.08,
+          "text": "주민등록증을보여주"
+        },
+        {
+          "inputSeconds": 2.4,
+          "text": "주민등록증을보여주시겠어"
+        },
+        {
+          "inputSeconds": 2.6809375,
+          "text": "주민등록증을보여주시겠어요?"
+        }
+      ]
+    }
+  ]
+}
