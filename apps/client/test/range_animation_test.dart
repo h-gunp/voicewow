@@ -58,4 +58,88 @@ void main() {
       },
     );
   }
+
+  testWidgets(
+    'comparison is hidden during a transition and resumes at the actual range',
+    (tester) async {
+      final session = SessionController(FakeAudioPort())
+        ..selectScenario(Scenario.values.first);
+      session.state = CaptureState.running;
+      session.settings = {
+        'autoGainControl': false,
+        'noiseSuppression': false,
+        'echoCancellation': false,
+      };
+      session.analysis = {
+        'state': 'ready',
+        'offset': 0.0,
+        'speech': 'speech',
+        'meterState': 'speech',
+        'meterDbfs': -60.2,
+      };
+      Widget screen() => MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: MeterScreen(session: session, onBack: () {}),
+          ),
+        ),
+      );
+      await tester.pumpWidget(screen());
+      expect(find.textContaining('참고 범위 비교 범위 안'), findsOneWidget);
+      session.analysis = {...session.analysis, 'offset': 2.0};
+      await tester.pumpWidget(screen());
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(session.effectiveRange.lower, 55);
+      expect(find.textContaining('참고 범위 비교'), findsNothing);
+      session.analysis = {...session.analysis, 'offset': 3.0};
+      await tester.pumpWidget(screen());
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.textContaining('참고 범위 비교'), findsNothing);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.textContaining('참고 범위 비교 하한 미만'), findsOneWidget);
+      session.dispose();
+    },
+  );
+
+  testWidgets(
+    'reduced motion and held input compare immediately against the current range',
+    (tester) async {
+      final session = SessionController(FakeAudioPort())
+        ..selectScenario(Scenario.values.first);
+      session.state = CaptureState.running;
+      session.settings = {
+        'autoGainControl': false,
+        'noiseSuppression': false,
+        'echoCancellation': false,
+      };
+      session.analysis = {
+        'state': 'ready',
+        'offset': 0.0,
+        'speech': 'speech',
+        'meterState': 'speech',
+        'meterDbfs': -60.2,
+      };
+      Widget screen() => MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(disableAnimations: true),
+          child: Scaffold(
+            body: SingleChildScrollView(
+              child: MeterScreen(session: session, onBack: () {}),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpWidget(screen());
+      session.analysis = {...session.analysis, 'offset': 2.0};
+      await tester.pumpWidget(screen());
+      await tester.pump();
+      expect(find.textContaining('참고 범위 비교 하한 미만'), findsOneWidget);
+      session.analysis = {...session.analysis, 'state': 'held'};
+      await tester.pumpWidget(screen());
+      await tester.pump();
+      expect(session.effectiveRange.lower, 53);
+      expect(find.textContaining('참고 범위 비교 범위 안'), findsOneWidget);
+      session.dispose();
+    },
+  );
 }

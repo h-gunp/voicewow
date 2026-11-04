@@ -71,4 +71,35 @@ void main() {
       session.dispose();
     },
   );
+
+  testWidgets('relative input limitation is explained in diagnostics', (
+    tester,
+  ) async {
+    final session = SessionController(FakeAudioPort())
+      ..selectScenario(Scenario.values.first);
+    session.state = CaptureState.running;
+    session.settings = {
+      'echoCancellation': false,
+      'noiseReductionState': 'active',
+    };
+    session.analysis = {
+      'state': 'ready',
+      'offset': 0.0,
+      'provenance': 'relative_input',
+    };
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: MeterScreen(session: session, onBack: () {}),
+          ),
+        ),
+      ),
+    );
+    await tester.ensureVisible(find.text('앱 정보 · 진단'));
+    await tester.tap(find.text('앱 정보 · 진단'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('자동 이득 변화와 실제 소음 변화를 구분할 수 없다'), findsOneWidget);
+    session.dispose();
+  });
 }

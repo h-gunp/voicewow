@@ -262,12 +262,13 @@ class MeterScreen extends StatelessWidget {
                         ],
                         '${a['provenance'] == 'relative_input' ? '상대 입력 참고범위' : '환경 적응 참고범위'} ${visualLower.toStringAsFixed(1)}–${visualUpper.toStringAsFixed(1)}',
                       ],
-                      if (session.displayLevel case final level?)
-                        '참고 범위 비교 ${double.parse(level.toStringAsFixed(1)) < range.lower
-                            ? '하한 미만'
-                            : double.parse(level.toStringAsFixed(1)) > range.upper
-                            ? '상한 초과'
-                            : '범위 안'} · 척도 정합성 미검증',
+                      if (value == range.lower - s.referenceLower)
+                        if (session.displayLevel case final level?)
+                          '참고 범위 비교 ${double.parse(level.toStringAsFixed(1)) < range.lower
+                              ? '하한 미만'
+                              : double.parse(level.toStringAsFixed(1)) > range.upper
+                              ? '상한 초과'
+                              : '범위 안'} · 척도 정합성 미검증',
                     ].join('\n'),
                     textAlign: TextAlign.center,
                     style: const TextStyle(
@@ -414,6 +415,11 @@ class MeterScreen extends StatelessWidget {
             style: const TextStyle(color: muted, fontSize: 12, height: 1.7),
           ),
         ),
+        if (a['provenance'] == 'relative_input')
+          const Text(
+            '상대 입력 추정은 브라우저 자동 이득 변화와 실제 소음 변화를 구분할 수 없다.',
+            style: TextStyle(fontSize: 12, color: muted, height: 1.8),
+          ),
         Align(
           alignment: Alignment.centerLeft,
           child: Text(
