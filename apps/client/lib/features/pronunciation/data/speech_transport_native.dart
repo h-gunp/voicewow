@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'speech_transport.dart';
+import '../../../shared/native_tts_coordinator.dart';
 
 SpeechTransport createSpeechTransport() => NativeSpeechTransport();
 
@@ -9,8 +9,8 @@ SpeechTransport createSpeechTransport() => NativeSpeechTransport();
 /// utterance until its terminal event drains before issuing a newer one.
 class NativeSpeechTransport implements SpeechTransport {
   final Duration cancellationTimeout;
-  final FlutterTts _tts = FlutterTts();
-  static const _channel = MethodChannel('flutter_tts');
+  FlutterTts? _tts;
+  NativeTtsLease? _lease;
   SpeechTransportListener? _listener;
   _NativeUtterance? _issued;
   _NativeAttempt? _attempt;
@@ -19,25 +19,16 @@ class NativeSpeechTransport implements SpeechTransport {
 
   NativeSpeechTransport({
     this.cancellationTimeout = const Duration(seconds: 1),
-  }) {
-    _tts.setStartHandler(_onStart);
-    _tts.setContinueHandler(_onStart);
-    _tts.setCompletionHandler(
-      () => _terminal(SpeechTransportEventType.completed),
-    );
-    _tts.setCancelHandler(() => _terminal(SpeechTransportEventType.cancelled));
-    _tts.setErrorHandler((_) => _terminal(SpeechTransportEventType.error));
-  }
+  });
 
   @override
   set onEvent(SpeechTransportListener? listener) => _listener = listener;
 
-  void _claimCallbacks() {
-    // Another feature's FlutterTts constructor replaces this global handler.
-    // Reclaim for each playback and ignore file-synthesis lifecycle events.
-    _channel.setMethodCallHandler((call) async {
-      if (call.method.startsWith('speak.'))
-        await _tts.platformCallHandler(call);
+  void _installCallbacks(NativeTtsLease lease, FlutterTts tts) {
+    NativeTtsCoordinator.shared.installHandler(lease, (call) async {
+      if (call.method.startsWith('speak.')) {
+        await tts.platformCallHandler(call);
+      }
     });
   }
 
@@ -49,53 +40,72 @@ class NativeSpeechTransport implements SpeechTransport {
     _attempt = attempt;
     final result = Completer<bool>();
     _operations = _operations.then((_) async {
+      NativeTtsLease? lease;
       try {
-        _claimCallbacks();
-        final issued = _issued;
-        if (issued != null) {
-          await Future.any([issued.terminal.future, attempt.cancelled.future]);
-        }
-        if (!_current(attempt)) {
+        lease = await NativeTtsCoordinator.shared.acquire(
+          NativeTtsKind.speech,
+          timeout: cancellationTimeout,
+          cancelled: attempt.cancelled.future,
+        );
+        if (lease == null || !_current(attempt)) {
           result.complete(false);
           return;
         }
-        _claimCallbacks();
-        final available = await _tts.isLanguageAvailable('ko-KR');
+        _lease = lease;
+        final tts = _tts = FlutterTts();
+        tts.setStartHandler(_onStart);
+        tts.setContinueHandler(_onStart);
+        tts.setCompletionHandler(
+          () => _terminal(SpeechTransportEventType.completed),
+        );
+        tts.setCancelHandler(
+          () => _terminal(SpeechTransportEventType.cancelled),
+        );
+        tts.setErrorHandler((_) => _terminal(SpeechTransportEventType.error));
+        _installCallbacks(lease, tts);
+        final available = await tts.isLanguageAvailable('ko-KR');
         if (!_current(attempt) || available != true) {
           result.complete(false);
           return;
         }
-        final language = await _tts.setLanguage('ko-KR');
+        final language = await tts.setLanguage('ko-KR');
         if (!_current(attempt) || language == 0) {
           result.complete(false);
           return;
         }
-        await _tts.setSpeechRate(slow ? 0.3 : 0.48);
+        await tts.setSpeechRate(slow ? 0.3 : 0.48);
         if (!_current(attempt)) {
           result.complete(false);
           return;
         }
-        await _tts.setPitch(1);
+        await tts.setPitch(1);
         if (!_current(attempt)) {
           result.complete(false);
           return;
         }
-        _claimCallbacks();
         final utterance = _NativeUtterance(requestId);
         _issued = utterance;
-        final acknowledged = await _tts.speak(text);
+        lease.issued = true;
+        final acknowledged = await tts.speak(text);
         if (acknowledged != null && acknowledged != 1) {
-          if (identical(_issued, utterance))
-            _terminal(SpeechTransportEventType.error);
+          lease.rejectIssue();
+          if (identical(_issued, utterance)) {
+            _issued = null;
+            utterance.terminal.complete();
+          }
           result.complete(false);
         } else {
           result.complete(true);
         }
       } catch (_) {
-        if (_current(attempt) && _issued?.id == requestId) {
-          _terminal(SpeechTransportEventType.error);
+        if (_issued?.id == requestId) {
+          _issued!.retired = true;
+          _issued!.silent = true;
+          unawaited(_cancelEngine());
         }
         if (!result.isCompleted) result.complete(false);
+      } finally {
+        lease?.releaseUnissued();
       }
     });
     return result.future;
@@ -123,7 +133,7 @@ class NativeSpeechTransport implements SpeechTransport {
     if (utterance == null) return;
     _issued = null;
     if (!utterance.terminal.isCompleted) utterance.terminal.complete();
-    if (!_disposed) {
+    if (!_disposed && !utterance.silent) {
       _listener?.call(
         SpeechTransportEvent(
           utterance.id,
@@ -135,8 +145,11 @@ class NativeSpeechTransport implements SpeechTransport {
 
   Future<void> _cancelEngine() async {
     try {
-      _claimCallbacks();
-      await _tts.stop();
+      final lease = _lease;
+      final tts = _tts;
+      if (lease != null && lease.isCurrent && lease.issued && tts != null) {
+        await tts.stop();
+      }
     } catch (_) {
       // Keep a retired request quarantined until its terminal event arrives.
     }
@@ -183,5 +196,6 @@ class _NativeUtterance {
   final int id;
   final terminal = Completer<void>();
   bool retired = false;
+  bool silent = false;
   _NativeUtterance(this.id);
 }

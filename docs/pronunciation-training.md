@@ -118,3 +118,9 @@ CMake의 ninja 실행 경로에 잘못 기록되는 Windows 환경이 있다.
 디버그 APK는 테스트 설치용이며 스토어 배포용 서명·패키지 이름은 팀에서
 정해야 한다. 기존 웹의 음량 측정을 Android 네이티브로 옮기는 작업은
 이 발음 기능의 APK 빌드와 분리된 후속 작업이다.
+
+## Native TTS handoff safety
+
+The Android flutter_tts 4.2.5 plugin reports file-synthesis cancellation as an ID-less speak.onCancel. Pronunciation playback and prosody synthesis therefore share a process-wide lease before constructing or configuring FlutterTts. An issued lease is released only when its terminal callback drains; stop acknowledgement is not sufficient. If termination is missing, a new request fails unavailable instead of assigning the old callback to new speech. Pre-issuance cancellation releases the lease; definite queue rejection allows retry, while uncertain failures remain quarantined. Engine stop is guarded by lease ownership.
+
+Regression tests inject actual MethodChannel event names for synthesis-to-speech and speech-to-synthesis transitions, delayed cancellation, missing terminal events, and definitive rejection/retry. These host tests do not replace Android device verification.

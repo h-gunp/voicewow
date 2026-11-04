@@ -63,8 +63,8 @@ class DeviceSpeechPlayer implements SpeechPlayer, SpeechPlaybackSource {
     // Error watchdog only: actual platform callbacks alone enter playing.
     request.watchdog = Timer(preparationTimeout, () {
       if (identical(_active, request)) {
-        _finish(request, SpeechResult.unavailable);
         unawaited(_stopTransport());
+        _finish(request, SpeechResult.unavailable);
       }
     });
     unawaited(_begin(request, text, slow));
@@ -79,13 +79,13 @@ class DeviceSpeechPlayer implements SpeechPlayer, SpeechPlaybackSource {
         slow: slow,
       );
       if (!_disposed && identical(_active, request) && !accepted) {
-        _finish(request, SpeechResult.unavailable);
         unawaited(_stopTransport());
+        _finish(request, SpeechResult.unavailable);
       }
     } catch (_) {
       if (!_disposed && identical(_active, request)) {
-        _finish(request, SpeechResult.unavailable);
         unawaited(_stopTransport());
+        _finish(request, SpeechResult.unavailable);
       }
     }
   }

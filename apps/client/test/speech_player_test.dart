@@ -6,6 +6,7 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:voicemate/features/pronunciation/data/speech_player.dart';
 import 'package:voicemate/features/pronunciation/data/speech_transport.dart';
 import 'package:voicemate/features/pronunciation/data/speech_transport_native.dart';
+import 'package:voicemate/shared/native_tts_coordinator.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -68,8 +69,65 @@ void main() {
   });
 
   tearDown(() async {
+    await event('speak.onCancel');
     await player.dispose();
     messenger.setMockMethodCallHandler(channel, null);
+  });
+
+  test('file cancellation drains before playback claims the channel', () async {
+    final coordinator = NativeTtsCoordinator.shared;
+    final synth = (await coordinator.acquire(NativeTtsKind.synthesis))!;
+    final tts = FlutterTts();
+    coordinator.installHandler(synth, tts.platformCallHandler);
+    synth.issued = true;
+    final outcome = player.speak('연습');
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    expect(count('speak'), 0);
+    await event('speak.onCancel');
+    await reached('speak');
+    await event('speak.onStart');
+    expect(await outcome, SpeechResult.started);
+    expect(player.playback.value.phase, SpeechPhase.playing);
+    await player.stop();
+    expect(count('stop'), 1);
+  });
+
+  test('rejected speech permits a later retry', () async {
+    platform = (call) async =>
+        call.method == 'speak' ? 0 : await normalPlatform(call);
+    expect(await player.speak('첫 문장'), SpeechResult.unavailable);
+    platform = normalPlatform;
+    final next = player.speak('다음 문장');
+    await reached('speak', occurrence: 2);
+    await event('speak.onStart');
+    expect(await next, SpeechResult.started);
+    await event('speak.onComplete');
+  });
+
+  test('retired speech blocks synthesis until the late cancel event', () async {
+    platform = (call) async =>
+        call.method == 'stop' ? 1 : await normalPlatform(call);
+    final next = player.speak('연습');
+    await reached('speak');
+    await event('speak.onStart');
+    expect(await next, SpeechResult.started);
+    final stop = player.stop();
+    await reached('stop');
+    expect(
+      await NativeTtsCoordinator.shared.acquire(
+        NativeTtsKind.synthesis,
+        timeout: Duration.zero,
+      ),
+      isNull,
+    );
+    await event('speak.onCancel');
+    await stop;
+    final lease = await NativeTtsCoordinator.shared.acquire(
+      NativeTtsKind.synthesis,
+      timeout: Duration.zero,
+    );
+    expect(lease, isNotNull);
+    lease!.releaseUnissued();
   });
 
   for (final acknowledgement in <Object?>[1, null]) {
