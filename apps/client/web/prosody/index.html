@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#f3f6fc">
+<title>VoiceMate · 눈으로 따라 하는 목소리 연습</title>
+<link rel="stylesheet" href="styles.css"><script type="module" src="app.js"></script>
+</head>
+<body>
+<header class="topbar shell"><a class="brand" href="./"><span class="brand-icon" aria-hidden="true">▂▆█▆▂</span>VoiceMate</a><span class="badge">독립 테스트</span></header>
+<main class="shell">
+<section class="intro"><div><p class="eyebrow">목소리 흐름 연습</p><h1>어떻게 읽을지 보고,<br class="mobile"> 한 문장씩 연습해요.</h1><p>같은 문장의 AI 예시를 보고, 내 목소리와 함께 살펴보세요.</p></div><button id="demo" class="button secondary" type="button">녹음 없이 데모 보기 <span aria-hidden="true">↗</span></button></section>
+<div class="mode-tabs tabs" role="group" aria-label="연습 방법"><button data-mode="guide" type="button" aria-pressed="true">준비된 문구</button><button data-mode="script" type="button" aria-pressed="false">내 대본으로 연습</button></div>
+<ol class="practice-steps" aria-label="연습 순서"><li><button data-flow-step="0" type="button"><span>1</span>가이드 준비</button></li><li><button data-flow-step="1" type="button"><span>2</span>녹음</button></li><li><button data-flow-step="2" type="button"><span>3</span>결과 확인</button></li></ol>
+<div id="flow-deck" class="flow-deck" aria-label="가로로 넘기는 연습 단계">
+<section id="flow-prepare" class="flow-page" aria-label="1단계 가이드 준비">
+<section id="script-editor" class="script-editor" hidden aria-labelledby="script-heading">
+<div><p class="eyebrow">내가 할 말로 연습하기</p><h2 id="script-heading">한 문장씩, 차근차근 연습해요</h2><p>대본을 넣으면 문장별로 나눠 드려요. 긴 문장은 짧은 조각으로 나누고, 선택한 문장만 녹음해요. 원하는 곳에서 나누려면 줄을 바꿔 주세요.</p></div>
+<label class="sr-only" for="script-input">연습할 대본</label><textarea id="script-input" maxlength="2000" rows="4" placeholder="예: 안녕하세요. 오늘은 저희 프로젝트를 소개하겠습니다."></textarea>
+<div class="script-actions"><span id="script-count">0 / 2,000자</span><button id="apply-script" class="button primary" type="button">대본으로 연습 준비</button></div>
+<p id="script-status" class="script-status" role="status">대본을 입력하고 연습 준비를 눌러 주세요.</p>
+<p id="script-draft-warning" class="draft-warning" role="status" hidden>대본을 수정했어요. ‘대본으로 연습 준비’를 눌러 새 문장 목록을 만들어 주세요.</p>
+<div id="script-session" hidden><div id="guide-batch-panel" class="ai-guide-box"><div><strong>대본 전체의 AI 가이드</strong><p>한 번 누르면 모든 문장의 음성과 그래프를 준비해요. 다음 문장으로 넘어가도 다시 만들 필요 없어요.</p></div><button id="generate-guide" class="button primary" type="button">전체 가이드 만들기</button><button id="cancel-guide" class="button secondary" type="button" hidden>생성 취소</button><div class="guide-batch-progress"><span id="guide-ready-count"></span><progress id="guide-progress" max="1" value="0" aria-label="전체 문장 가이드 준비" hidden></progress></div><p id="generation-status" role="status" aria-live="polite"></p><p class="download-note">첫 사용에 음성 모델 약 400MB를 내려받아요. 준비 시간은 대본 길이와 기기에 따라 달라요.</p><details class="guide-extra-options"><summary>가이드 수정 옵션</summary><button id="regenerate-guide" class="button secondary" type="button" hidden>선택한 문장만 다시 만들기</button><p>준비된 문장의 가이드만 따로 바꿀 때 사용해요.</p></details></div>
+<div id="sentence-current-card" class="sentence-current"><span id="sentence-position">지금 읽을 문장</span><strong id="sentence-current-text"></strong><p>가이드는 한 번에 준비하고, 녹음은 선택한 문장 한 개씩 진행해요.</p></div><details class="sentence-queue" open><summary>연습할 문장 목록</summary><div id="sentence-list" class="sentence-list" role="group" aria-label="한 문장씩 선택"></div></details><div class="sentence-navigation"><button id="sentence-prev" class="button secondary" type="button" aria-label="이전 문장">←</button><label for="script-sentence-select" class="sr-only">연습할 문장</label><select id="script-sentence-select"></select><button id="sentence-next" class="button secondary" type="button" aria-label="다음 문장">→</button></div>
+<div id="script-guide-tools">
+<details class="reference-options"><summary>내가 준비한 음성을 가이드로 쓰기</summary><div class="reference-upload"><div><strong>같은 문장을 읽은 음성</strong><p id="reference-status">전체 가이드를 만들거나, 이 문장의 참고 음성 파일을 연결해 주세요.</p></div><label class="button secondary" for="reference-file">참고 음성 넣기</label><input id="reference-file" class="file-input" type="file" accept="audio/*"><button id="remove-reference" class="button quiet" type="button" hidden>참고 음성 제거</button></div></details>
+</div><p class="script-privacy">대본과 녹음은 이 기기 안에서 처리해요. AI 가이드 생성 시 공개 모델 파일만 외부에서 내려받아요. 대본과 음성은 새로고침하면 사라져요.</p></div>
+</section>
+<section class="panel guide-panel" aria-labelledby="guide-heading">
+<div class="panel-head"><span class="step">01</span><div><p class="eyebrow">예시와 함께 연습</p><h2 id="guide-heading">가이드를 보고 읽어요</h2></div><span id="guide-source" class="source-tag">예시 준비 중</span></div>
+<div class="phrase-card"><label for="guide-select">연습할 말</label><select id="guide-select" aria-label="연습할 단어 또는 구절"></select><p id="phrase-text">예시를 불러오고 있어요.</p><div class="phrase-actions"><button id="guide-preview" type="button">↗ 선 움직임 보기</button><button id="guide-play" type="button">▷ 예시 듣기</button></div></div>
+<div class="graph-heading"><h3>이렇게 움직이는 예시예요</h3><span>가이드 미리보기</span></div><div class="legend"><span><i class="guide-line"></i>연습용 예시</span></div><div class="chart-wrap"><canvas id="guide-chart" width="1000" height="400" role="img" aria-label="선택한 문장 가이드의 높낮이 그래프"></canvas></div><p class="chart-help">위쪽은 높은 음, 아래쪽은 낮은 음이에요. 다음 화면에서 내 목소리와 함께 볼 수 있어요.</p>
+<div id="guide-region-key" class="region-key" aria-label="가이드의 시간 구간"></div><p id="guide-boundary-note" class="boundary-note">앞·중간·끝은 소리의 시간 구간이에요. 글자를 자동으로 나눈 결과는 아니에요.</p>
+</section></section>
+<section id="flow-record" class="flow-page" hidden aria-label="2단계 녹음"><section class="panel practice" aria-labelledby="practice-heading">
+<div class="record-scroll"><div class="panel-head"><span class="step">02</span><div><p class="eyebrow">녹음하고 비교</p><h2 id="practice-heading">같은 문구를 읽어 봐요</h2></div></div><p id="recording-phrase-text" class="recording-phrase"></p>
+<div id="region-practice" class="region-practice" hidden><strong>선택한 구간만 연습 중</strong><p id="region-practice-text"></p><button id="leave-region" class="button secondary" type="button">전체 문장으로 돌아가기</button></div>
+<div id="practice-graph-card" class="practice-graph-card" data-phase="guide"><div class="graph-heading"><h3>가이드와 내 목소리</h3><span id="practice-view-label">가이드 미리보기</span></div>
+<div class="tabs" role="group" aria-label="연습 그래프 선택"><button type="button" data-practice-tab="pitch" aria-pressed="true">높낮이</button><button type="button" data-practice-tab="volume" aria-pressed="false">소리 크기</button></div>
+
+<div class="legend"><span><i class="guide-line"></i>연습용 예시</span><span><i class="voice-line"></i>내 목소리</span></div>
+<div class="chart-wrap"><canvas id="practice-chart" width="1000" height="400" role="img" aria-label="참고 음성의 흐름과 녹음 중 내 목소리 그래프"></canvas></div>
+<p id="practice-chart-help" class="chart-help">위쪽은 각 목소리의 중간값보다 높은 음, 아래쪽은 낮은 음이에요.<br>목소리 크기와는 달라요.</p><p id="live-status" class="live-status" role="status" aria-live="polite">녹음을 시작하면 주황 선으로 내 목소리가 나타나요.</p></div>
+<div class="instruction"><span aria-hidden="true">↗</span><p id="practice-status" role="status" aria-live="polite">녹음을 시작하고 선택한 문구를 말해 보세요.</p></div>
+<div class="secondary-actions"><label class="button quiet" for="user-file">음성 파일 불러오기</label><input id="user-file" class="file-input" type="file" accept="audio/*"><button id="user-play" class="button quiet" type="button" disabled>내 녹음 듣기</button><button id="reset" class="button quiet" type="button">초기화</button></div>
+<p class="small-note">최대 20초 · 녹음은 이 기기 안에서만 처리돼요.</p>
+</div><div class="recorder-controls"><div class="record-status"><span id="record-indicator">마이크 대기</span><span id="timer">00:00</span></div>
+<button id="record" type="button" class="button primary full">● 녹음 시작</button>
+</div></section>
+</section>
+<section id="flow-results" class="flow-page" hidden aria-label="3단계 결과 확인">
+<section id="results" class="panel results" aria-labelledby="result-heading">
+<div class="panel-head"><span class="step">03</span><div><p class="eyebrow">녹음 후 확인</p><h2 id="result-heading">내 목소리를 살펴봐요</h2></div><span id="result-badge" class="source-tag">녹음 대기</span></div>
+<p id="result-status" class="result-status" role="status" aria-live="polite">녹음을 마치면 두 흐름을 비교해 드려요.</p>
+<div id="result-phrase" class="result-phrase" hidden><span>이번에 연습한 말</span><strong id="result-phrase-text"></strong></div>
+<div class="observation-note"><strong id="exercise-note-title">내 속도로, 편하게 연습해요</strong><p id="exercise-note-text">한 번에 똑같이 따라 하지 않아도 괜찮아요. 마음에 드는 부분은 이어가고, 더 연습하고 싶은 부분만 골라 보세요.</p></div>
+<div class="tabs" role="group" aria-label="결과 비교 항목"><button type="button" data-result-tab="pitch" aria-pressed="true">높낮이</button><button type="button" data-result-tab="volume" aria-pressed="false">소리 크기</button><button type="button" data-result-tab="duration" aria-pressed="false">길이</button></div>
+<div id="graph-details" class="graph-details"><div class="graph-heading"><h3 id="graph-title">높낮이 비교</h3><span id="graph-selected-label">앞 · 중간 · 끝</span></div><p id="result-graph-help" class="chart-help">파란 점선은 예시, 주황 실선은 내 목소리예요. 각 목소리의 중간값을 기준으로 두 흐름을 겹쳐 보여줘요.</p>
+<div class="legend"><span><i class="guide-line"></i>연습용 예시</span><span><i class="voice-line"></i>내 목소리</span></div>
+<div id="result-chart-wrap" class="chart-wrap"><canvas id="result-chart" width="1000" height="520" role="img" aria-label="선택한 시간 구간에서 예시와 내 목소리를 비교하는 그래프"></canvas></div><p class="graph-footnote">비교하는 그래프는 말하는 속도를 대략 맞춘 모습이에요. 선이 빈 곳은 비교에서 제외했어요.</p>
+</div>
+<p id="feedback-help" class="chart-help" hidden>궁금한 부분을 눌러 보세요. 그 부분의 목소리와 연습 팁을 함께 볼 수 있어요.</p>
+<div id="feedback-list" class="feedback-list" aria-live="polite"><div class="empty-state"><span aria-hidden="true">⌁</span><strong>내 목소리의 흐름을 만나 보세요</strong><p>녹음하거나 데모를 눌러 결과를 확인할 수 있어요.</p></div></div>
+<p id="region-boundary-note" class="boundary-note" hidden></p>
+<div id="practice-coaching" class="practice-coaching" hidden aria-live="polite"><p class="eyebrow">다음에는 이렇게 해 볼까요?</p><h3 id="coaching-title"></h3><p id="coaching-observation"></p><div id="coaching-action"></div></div>
+<div id="duration-panel" class="duration-panel" hidden><h3>비교에 사용한 목소리</h3><p>높낮이를 확인한 구간의 시간만 합쳤어요. 자음과 불분명한 소리도 빠질 수 있어 실제 말한 시간이나 말속도와는 달라요.</p><div class="duration-row"><span>연습용 예시</span><strong id="reference-duration">—</strong></div><div class="duration-track"><i id="reference-duration-bar"></i></div><div class="duration-row"><span>내 목소리</span><strong id="user-duration">—</strong></div><div class="duration-track coral"><i id="user-duration-bar"></i></div><p id="duration-delta"></p></div>
+<button id="segment-play" class="button secondary full" type="button" disabled>선택한 구간 듣기</button>
+<button id="reference-segment-play" class="button secondary full" type="button" hidden>같은 구간의 가이드 듣기</button>
+<p id="playback-range-info" class="boundary-note" hidden></p>
+<p id="listening-status" class="listening-status" role="status" aria-live="polite" hidden></p>
+<button id="repeat-region" class="button primary full" type="button" hidden>이 문장 다시 연습하기</button>
+<button id="next-sentence-result" class="button secondary full" type="button" hidden>다음 문장 연습하기 →</button>
+<div id="voice-coverage" class="voice-coverage" hidden><span class="coverage-label">목소리가 확인된 구간만 비교했어요</span><p id="coverage-text"></p><div class="coverage-track" aria-hidden="true"><i id="coverage-fill"></i></div><small>대기 시간·쉼·목소리가 불분명한 구간은 제외해요.</small></div>
+<p class="guide-context">예시와 내 녹음을 살펴보는 도구예요. 말하기 실력이나 자연스러움을 채점하지 않아요.</p>
+<details id="measurement-details" class="measurement-details"><summary>측정값과 비교 방법 자세히 보기</summary><div id="measurement-values"></div><div id="feedback-summary" class="feedback-summary" hidden aria-live="polite"><p class="eyebrow" id="summary-label">선택한 구간의 관찰값</p><h3 id="summary-title"></h3><p id="summary-observation"></p><p id="summary-detail" class="summary-detail"></p></div><p id="coaching-note" class="coaching-note"></p><p id="result-detail">목소리를 녹음하면 비교 내용을 확인할 수 있어요.</p></details>
+<button id="retry" class="button primary full" type="button">다시 연습하기</button>
+</section>
+</section></div>
+<nav id="flow-navigation" class="flow-navigation" aria-label="연습 단계 이동"><button id="flow-previous" class="button secondary" type="button">← 이전</button><span id="flow-position" aria-live="polite">1 / 3 · 가이드 준비</span><button id="flow-next" class="button primary" type="button">녹음하기 →</button></nav><p id="flow-navigation-note" class="flow-navigation-note">좌우로 넘기거나 이전·다음 버튼을 눌러 주세요.</p>
+<details class="method-note"><summary>가이드와 피드백은 어떻게 만들까요?</summary><div class="method-grid"><p><strong>실제 음성으로 만든 그래프</strong><br>준비된 문구는 맥의 한국어 음성, 내 대본은 Supertonic 3의 한국어 합성 음성을 분석해요. 글자 수에 맞춰 임의의 곡선을 그리지 않아요. 생성된 음성도 읽기 실수가 있을 수 있어요.</p><p><strong>가이드 따라 하기</strong><br>각 녹음의 중간 높이·크기를 맞추고, 확인된 목소리끼리 속도를 대략 맞춰 비교해요. 연습 안내는 선택한 구간의 시작과 끝에서 측정한 변화에 기반해요. 예시와 다르다고 말하기가 틀린 것은 아니에요.</p><p><strong>문장과 시간 구간</strong><br>긴 대본은 문장별로, 긴 문장은 짧은 조각으로 나눠 연습해요. 앞·중간·끝은 가이드의 측정 가능한 시간을 기준으로 정해요. 해당 글자를 인식한 결과는 아니에요. 짧은 말은 전체를 듣고, 긴 구간은 앞뒤 소리를 조금 함께 들려드려요.</p><p><strong>녹음과 측정</strong><br>높낮이는 65–500Hz 범위에서 추정해요. 자음이나 불분명한 소리는 빠질 수 있고, 다른 사람의 목소리는 구별하지 못해요. 시작·끝의 비교가 어려우면 연습 방향을 자동으로 정하지 않아요.</p></div><p><a href="https://sunahjun.humspace.ucla.edu/ktobi/K-tobi.html" target="_blank" rel="noopener">한국어 억양 참고: K-ToBI</a> · <a href="https://github.com/supertone-oss-archive/supertonic" target="_blank" rel="noopener">가이드 음성: Supertonic</a> · <a href="./THIRD-PARTY-NOTICES.md" target="_blank" rel="noopener">공개 코드·모델 이용 조건</a></p></details>
+<footer><span>VoiceMate · 목소리 흐름 실험</span><span>내 대본 가이드 · 한 문장씩 연습 · 기기 안에서 분석</span></footer>
+</main>
+</body></html>

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../practice_feedback.dart';
 import '../practice_session.dart';
 import '../widgets/prosody_chart.dart';
+import 'prosody_web_frame.dart';
 
 enum ProsodyStep { prepare, record, result }
 
@@ -653,26 +654,7 @@ class _ProsodyScreenState extends State<ProsodyScreen>
   @override
   Widget build(BuildContext context) {
     if (kIsWeb) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('높낮이 연습')),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _heading('안드로이드 앱에서 연습해요'),
-              const SizedBox(height: 12),
-              _copy(
-                '이 기능의 녹음과 대본 가이드 생성은 안드로이드 앱에서 사용할 수 있어요. 웹에서는 아래 목소리 흐름 테스트 주소로 연습할 수 있어요.',
-              ),
-              const SizedBox(height: 16),
-              const SelectableText(
-                'https://voicemate-prosody-lab.choosu105832719.chatgpt.site/',
-              ),
-            ],
-          ),
-        ),
-      );
+      return ProsodyWebFrame(onExit: widget.onExit);
     }
     final title = switch (_step) {
       ProsodyStep.prepare => '연습 준비',
