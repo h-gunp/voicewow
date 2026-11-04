@@ -106,7 +106,7 @@ class _PronunciationScreenState extends State<PronunciationScreen>
             const Text(
               '내 속도로, 함께',
               style: TextStyle(
-                color: Color(0xff355757),
+                color: Color(0xff146b70),
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
               ),

@@ -20,7 +20,7 @@ class ScenarioScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(7),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [blue, Color(0xff588c8c)]),
+              gradient: const LinearGradient(colors: [blue, Color(0xff7c8fee)]),
               borderRadius: BorderRadius.circular(14),
             ),
             child: const Icon(Icons.graphic_eq, color: Colors.white, size: 23),
@@ -121,7 +121,7 @@ class ScenarioScreen extends StatelessWidget {
       excludeSemantics: true,
       onTap: () => session.selectScenario(s),
       child: Material(
-        color: selected ? const Color(0xffe1f3f1) : const Color(0xf5ffffff),
+        color: selected ? const Color(0xffe7efff) : const Color(0xf5ffffff),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(22),
           side: BorderSide(
@@ -144,7 +144,7 @@ class ScenarioScreen extends StatelessWidget {
                     children: [
                       Icon(
                         icon,
-                        color: selected ? blue : const Color(0xff8c7326),
+                        color: selected ? blue : muted,
                         size: 30,
                       ),
                       const Spacer(),

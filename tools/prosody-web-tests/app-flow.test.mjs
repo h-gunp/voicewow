@@ -215,7 +215,7 @@ test('reference practice keeps per-sentence guides and chosen segments without g
     }
     assert.match(el('summary-observation').textContent,/0.0반음 차이/);
     assert.equal(el('practice-coaching').hidden,false);
-    assert.match(el('coaching-title').textContent+' '+el('coaching-observation').textContent,/짙은 청록색 예시도 같은 쪽/,
+    assert.match(el('coaching-title').textContent+' '+el('coaching-observation').textContent,/파란 예시도 같은 쪽/,
       'identical recordings should acknowledge the matching endpoint direction');
     assert.doesNotMatch(el('coaching-observation').textContent,/\d+(?:\.\d+)?\s*(?:반음|dB)|전체.*(?:성공|잘|정확)|자연스럽|정상/,
       'endpoint agreement is not a judgement about whole-utterance quality');
@@ -567,8 +567,8 @@ test('repeated DTW matches at a single user timestamp cannot enable excerpt play
 
 test('recording shows measured voice live and keeps the completed comparison on the practice graph',async()=>{
   const ui=await setup({microphone:true}),{el,button,inputAudio}=ui;
-  const voiceStrokes=()=>el('practice-chart').strokes.filter(stroke=>stroke.color==='#590219'&&stroke.points>0).length;
-  const voiceMarks=()=>el('practice-chart').marks.filter(mark=>mark.color==='#590219').length;
+  const voiceStrokes=()=>el('practice-chart').strokes.filter(stroke=>stroke.color==='#34455e'&&stroke.points>0).length;
+  const voiceMarks=()=>el('practice-chart').marks.filter(mark=>mark.color==='#34455e').length;
   try{
     await ui.prepareScript();
     await inputAudio('reference-file');await settle(()=>el('reference-status').textContent.includes('연결한 파일'));

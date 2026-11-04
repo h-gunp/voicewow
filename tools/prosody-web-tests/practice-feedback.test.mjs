@@ -55,7 +55,7 @@ test('static relative offsets and absolute errors never become movement directio
   assert.doesNotMatch(result.action, /낮춰|줄여/);
   const opposite = describeSegmentPractice(reference, analysis(t => -t * 6 + 8), directPath, range);
   assert.equal(opposite.userDirection, 'fall');
-  assert.match(opposite.action, /짙은 청록색 선.*높여서/);
+  assert.match(opposite.action, /파란 선.*높여서/);
 });
 
 test('DTW repeated matches do not increase evidence or distort chronological endpoint medians', () => {
@@ -181,14 +181,14 @@ test('practice feedback recognises matching endpoint direction without a magnitu
     const measured=describeSegmentPractice(analysis(),analysis(t=>t*slope),directPath,range);
     assert.equal(measured.tone,'encourage');
     assert.match(measured.title,/끝을 올려 읽었네요/);
-    assert.match(measured.observation,/짙은 청록색 예시도 같은 쪽/);
+    assert.match(measured.observation,/파란 예시도 같은 쪽/);
     assert.doesNotMatch(measured.observation,/반음|dB|정상|전체.*성공/);
     assert.match(measured.action,/다음 부분/);
     assert.match(measured.detail,/반음/);
   }
   const opposed=describeSegmentPractice(analysis(),analysis(t=>-t*6),directPath,range);
   assert.equal(opposed.tone,'practice');
-  assert.match(opposed.action,/짙은 청록색 선.*조금 높여서/);
+  assert.match(opposed.action,/파란 선.*조금 높여서/);
   assert.doesNotMatch(opposed.action,/듣고|들어야|틀렸|불합격/);
   const missing=describeSegmentPractice(null,null,null,null);
   assert.equal(missing.available,false);
