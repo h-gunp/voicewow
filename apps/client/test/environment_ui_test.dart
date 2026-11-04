@@ -501,6 +501,7 @@ void main() {
       }),
     );
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
     expect(find.textContaining('환경 적응 참고범위 54.0–76.0'), findsOneWidget);
     port.send(const AudioEvent.analysis({'state': 'held'}));
     await tester.pump();

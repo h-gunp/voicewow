@@ -26,13 +26,18 @@ class SessionController extends ChangeNotifier {
   ({double lower, double upper, bool adjusted}) get effectiveRange {
     final s = scenario!;
     final value = analysis['offset'];
+    const keys = ['autoGainControl', 'noiseSuppression', 'echoCancellation'];
+    final verified = keys.every((key) => settings[key] == false);
+    final relative =
+        keys.every(
+          (key) => !settings.containsKey(key) || settings[key] == false,
+        ) &&
+        keys.any((key) => !settings.containsKey(key));
+    final provenance = analysis['provenance'];
     final valid =
         analysis['state'] == 'ready' &&
-        [
-          'autoGainControl',
-          'noiseSuppression',
-          'echoCancellation',
-        ].every((key) => settings[key] == false) &&
+        ((verified && (provenance == 'verified' || provenance == null)) ||
+            (relative && provenance == 'relative_input')) &&
         value is num &&
         value.isFinite &&
         value >= 0 &&
