@@ -77,6 +77,12 @@ do not assume recognizer.free or unlink immediately returns memory to the OS.
 - Mocked UI/worker/Web Audio tests cover opt-in, cancellation, late callbacks,
   hidden-page cleanup, bounded queue, sequence gaps, interrupted contexts and
   decode failure. A hidden-page resource leak was reproduced then fixed.
+- Astra found and reproduced two further lifecycle defects. The recording
+  generation now guards a delayed old bridge rejection so it cannot terminate a
+  newly prepared recognizer. First PCM and later delivery gaps have a three-second
+  deadline even when AudioContext reports running; failure clears tracking only.
+  The delayed-close regression and four liveness regressions failed before the
+  fixes. The complete audio/prosody Node suite now passes 313 tests.
 
 Reproduce (after `download-model.py` from the spike document):
 

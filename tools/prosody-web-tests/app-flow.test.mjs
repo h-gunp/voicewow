@@ -160,6 +160,30 @@ test('prepared ASR is terminated on hidden page and late ready cannot revive it'
   }finally{ui.cleanup();}
 });
 
+test('late old PCM failure cannot terminate freshly prepared ASR',async()=>{
+  const ui=await setup({microphone:true}),{el}=ui;
+  const oldContext=globalThis.AudioContext,oldNode=globalThis.AudioWorkletNode;
+  let releaseClose,closing=false;
+  const closeGate=new Promise(resolve=>{releaseClose=resolve;});
+  globalThis.AudioWorkletNode=class{};
+  globalThis.AudioContext=class{
+    constructor(){this.sampleRate=48000;this.audioWorklet={addModule:async()=>{throw Error('old bridge failure');}};}
+    close(){closing=true;return closeGate;}
+  };
+  try{
+    await ui.prepareScript();await ui.inputAudio('reference-file');await settle(()=>!el('record').disabled);
+    el('asr-enabled').checked=true;await el('asr-enabled').fire('change');
+    const first=el('prepare-asr').fire('click');await settle(()=>ui.workers.length===1);ui.workers[0].emit({type:'ready'});await first;
+    const recording=el('record').fire('click');await settle(()=>closing);
+    ui.hostCleanup();
+    const second=el('prepare-asr').fire('click');await settle(()=>ui.workers.length===2);
+    const fresh=ui.workers[1];fresh.emit({type:'ready'});await second;
+    assert.equal(fresh.terminated,false);
+    releaseClose();await recording;
+    assert.equal(fresh.terminated,false,'old capture rejection must not kill the newer recognizer');
+  }finally{releaseClose();ui.cleanup();if(oldContext===undefined)delete globalThis.AudioContext;else globalThis.AudioContext=oldContext;if(oldNode===undefined)delete globalThis.AudioWorkletNode;else globalThis.AudioWorkletNode=oldNode;}
+});
+
 test('reference practice keeps per-sentence guides and chosen segments without grades',async()=>{
   const ui=await setup(),{el,button,inputAudio}=ui;
   try{

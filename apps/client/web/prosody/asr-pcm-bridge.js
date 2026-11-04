@@ -1,6 +1,8 @@
 // Local PCM transport only. Receives an existing stream; never requests a mic,
 // uploads audio, or changes ownership of its tracks. The caller owns the ASR.
 const INITIALIZATION_TIMEOUT_MS = 15000;
+// A running graph is not proof that its worklet is actually delivering audio.
+const PCM_DELIVERY_TIMEOUT_MS = 3000;
 const CHUNK_SECONDS = 0.1;
 const MAX_IN_FLIGHT = 4;
 
@@ -21,6 +23,7 @@ export async function startAsrPcmBridge({ stream, onChunk, onError = () => {}, s
   if (typeof Context !== 'function' || typeof globalThis.AudioWorkletNode !== 'function') throw new Error('AudioWorklet unavailable');
   let context, source, node, mute, stopped = false, ready = false, busy = false;
   let closePromise = Promise.resolve(), expectedSequence = 1, expectedFrame = 0;
+  let initializationTimer = null, deliveryTimer = null;
   const queue = [];
   let cancelInitialization;
   const cancelled = new Promise((_, reject) => { cancelInitialization = reject; });
@@ -29,6 +32,8 @@ export async function startAsrPcmBridge({ stream, onChunk, onError = () => {}, s
   const stop = () => {
     if (stopped) return closePromise;
     stopped = true; queue.length = 0;
+    clearTimeout(initializationTimer); clearTimeout(deliveryTimer);
+    initializationTimer = null; deliveryTimer = null;
     signal?.removeEventListener('abort', onAbort);
     for (const track of tracks) track.removeEventListener?.('ended', onEnded);
     cancelInitialization(abortError());
@@ -52,6 +57,12 @@ export async function startAsrPcmBridge({ stream, onChunk, onError = () => {}, s
   };
   const onAbort = () => { stop(); };
   const onEnded = () => fail(new Error('Audio stream ended'));
+  const renewDeliveryDeadline = () => {
+    clearTimeout(deliveryTimer);
+    if (stopped || !ready) return;
+    deliveryTimer = setTimeout(() => fail(new Error(expectedSequence === 1
+      ? 'No first PCM chunk received' : 'PCM delivery stalled')), PCM_DELIVERY_TIMEOUT_MS);
+  };
   const drain = async () => {
     if (busy || stopped || !ready) return;
     busy = true;
@@ -65,7 +76,7 @@ export async function startAsrPcmBridge({ stream, onChunk, onError = () => {}, s
     finally { busy = false; }
   };
   signal?.addEventListener('abort', onAbort, { once: true });
-  const timer = setTimeout(() => cancelInitialization(new Error('PCM initialization timed out')), INITIALIZATION_TIMEOUT_MS);
+  initializationTimer = setTimeout(() => cancelInitialization(new Error('PCM initialization timed out')), INITIALIZATION_TIMEOUT_MS);
   try {
     context = new Context();
     if (!context.audioWorklet || !Number.isFinite(context.sampleRate) || context.sampleRate < 8000 || context.sampleRate > 192000) {
@@ -90,6 +101,7 @@ export async function startAsrPcmBridge({ stream, onChunk, onError = () => {}, s
         fail(new Error('Invalid or discontinuous PCM chunk')); return;
       }
       expectedSequence++; expectedFrame += chunkFrames;
+      renewDeliveryDeadline();
       queue.push({ samples: message.samples, sampleRate: message.sampleRate,
         sequence: message.sequence, startFrame: message.startFrame });
       void drain();
@@ -104,11 +116,12 @@ export async function startAsrPcmBridge({ stream, onChunk, onError = () => {}, s
     if (tracks.some(track => track.readyState === 'ended')) throw new Error('Audio stream ended during startup');
     if (context.state !== 'running') throw new Error('PCM context did not start');
     ready = true;
+    renewDeliveryDeadline();
     void drain();
     context.onstatechange = () => {
       if (!stopped && context.state !== 'running') fail(new Error('PCM context interrupted'));
     };
     return { stop, sampleRate: context.sampleRate, chunkFrames };
   } catch (error) { await stop(); throw error; }
-  finally { clearTimeout(timer); }
+  finally { clearTimeout(initializationTimer); initializationTimer = null; }
 }

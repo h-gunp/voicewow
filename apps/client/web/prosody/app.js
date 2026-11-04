@@ -306,7 +306,7 @@ async function processClip(blob,{demo=false,decoded=null}={}){
 }
 function releaseSession(s){
   if(s.released)return;s.released=true;
-  scriptTracking.stop();
+  if(session===s)scriptTracking.stop();
   clearInterval(s.liveTimer);clearTimeout(s.timeout);s.stream?.getTracks().forEach(t=>t.stop());
   try{s.source?.disconnect();s.analyser?.disconnect();}catch{}
   if(s.context&&s.context.state!=='closed')s.context.close().catch(()=>{});
@@ -331,7 +331,7 @@ async function record(){
     const analyser=context.createAnalyser();s.analyser=analyser;analyser.fftSize=4096;source.connect(analyser);
     if(practiceMode==='script'&&$('asr-enabled').checked){
       try{await scriptTracking.attach(stream,appliedScript,scriptLines,scriptIndex);}
-      catch{scriptTracking.stop();setText('asr-status','이 기기에서 음성 위치 표시를 시작하지 못했어요. 녹음은 계속해요.');}
+      catch{if(ticket===generation&&session===s){scriptTracking.stop();setText('asr-status','이 기기에서 음성 위치 표시를 시작하지 못했어요. 녹음은 계속해요.');}}
       if(ticket!==generation||document.hidden){releaseSession(s);return;}
     }
     const recorder=new MediaRecorder(stream),chunks=[];Object.assign(s,{recorder,failed:false,cancelled:false,frames:[],firstVoice:null,view:createLiveView(guide.analysis)});

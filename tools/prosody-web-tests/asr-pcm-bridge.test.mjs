@@ -7,7 +7,11 @@ import { startAsrPcmBridge } from '../../apps/client/web/prosody/asr-pcm-bridge.
 const tick = () => new Promise(resolve => setImmediate(resolve));
 function deferred() { let resolve, reject; const promise = new Promise((a,b) => { resolve = a; reject = b; }); return {promise,resolve,reject}; }
 function fixture({ loading = Promise.resolve(), resume = Promise.resolve() } = {}) {
-  const previous = { AudioContext: globalThis.AudioContext, AudioWorkletNode: globalThis.AudioWorkletNode };
+  const previous = { AudioContext: globalThis.AudioContext, AudioWorkletNode: globalThis.AudioWorkletNode,
+    setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout };
+  const timers = new Map(); let now = 0, nextTimer = 0;
+  globalThis.setTimeout = (fn, delay) => { const id = ++nextTimer; timers.set(id, { fn, at: now + delay }); return id; };
+  globalThis.clearTimeout = id => timers.delete(id);
   const contexts = [], nodes = [], errors = [], chunks = [];
   const track = new EventTarget(); track.readyState = 'live'; track.stops = 0; track.stop = () => track.stops++;
   const stream = { getAudioTracks: () => [track] };
@@ -40,7 +44,16 @@ function fixture({ loading = Promise.resolve(), resume = Promise.resolve() } = {
     }
   }
   globalThis.AudioContext = Context; globalThis.AudioWorkletNode = Worklet;
-  return { contexts, nodes, track, stream, errors, chunks,
+  return { contexts, nodes, track, stream, errors, chunks, timers,
+    advance(ms) {
+      const until = now + ms;
+      for (;;) {
+        const due = [...timers].filter(([, timer]) => timer.at <= until).sort((a,b) => a[1].at - b[1].at)[0];
+        if (!due) break;
+        now = due[1].at; timers.delete(due[0]); due[1].fn();
+      }
+      now = until;
+    },
     start: options => startAsrPcmBridge({ stream, onChunk:chunk=>chunks.push(chunk), onError:error=>errors.push(error), ...options }),
     restore() { for (const [key,value] of Object.entries(previous)) {
       if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
@@ -62,6 +75,50 @@ test('bridge loads only bundled worklet, uses actual rate and never owns shared 
     assert.equal(node.portClosed, true); assert.equal(f.track.stops, 0);
     node.send(node.chunk(2)); assert.equal(f.chunks.length, 1);
   } finally { await bridge?.stop(); f.restore(); }
+});
+
+test('running context without its first PCM chunk fails after three seconds', async () => {
+  const f=fixture();let bridge;
+  try {
+    bridge=await f.start();assert.equal(f.contexts[0].state,'running');
+    f.advance(2999);assert.equal(f.errors.length,0);
+    f.advance(1);assert.equal(f.errors.length,1);assert.match(f.errors[0].message,/first PCM chunk/);
+    assert.equal(f.contexts[0].closes,1);assert.equal(f.track.stops,0);assert.equal(f.timers.size,0);
+    f.advance(60000);assert.equal(f.errors.length,1);
+  } finally {await bridge?.stop();f.restore();}
+});
+
+test('each PCM arrival renews deadline, but a running graph with stalled delivery fails', async () => {
+  const f=fixture();let bridge;
+  try {
+    bridge=await f.start();const node=f.nodes[0];
+    f.advance(2500);node.send(node.chunk(1));await tick();
+    f.advance(2500);assert.equal(f.errors.length,0);node.send(node.chunk(2));await tick();
+    f.advance(2999);assert.equal(f.errors.length,0);assert.equal(f.contexts[0].state,'running');
+    f.advance(1);assert.equal(f.errors.length,1);assert.match(f.errors[0].message,/PCM delivery stalled/);
+    assert.equal(f.track.stops,0);assert.equal(f.timers.size,0);
+  } finally {await bridge?.stop();f.restore();}
+});
+
+test('stalled PCM fails while a consumer waits; late completion cannot acknowledge', async () => {
+  const f=fixture(),held=deferred();let bridge;
+  try {
+    bridge=await f.start({onChunk:()=>held.promise});const node=f.nodes[0];node.send(node.chunk());
+    f.advance(3000);assert.equal(f.errors.length,1);assert.equal(f.contexts[0].closes,1);
+    held.resolve();await tick();assert.deepEqual(node.messages,[{type:'stop'}]);
+    assert.equal(f.track.stops,0);assert.equal(f.timers.size,0);
+  } finally {await bridge?.stop();f.restore();}
+});
+
+test('abort and explicit stop clear delivery deadlines without reporting failure', async () => {
+  for(const how of ['abort','stop']) {
+    const f=fixture(),controller=new AbortController();let bridge;
+    try {
+      bridge=await f.start({signal:controller.signal});assert.equal(f.timers.size,1);
+      if(how==='abort')controller.abort();else await bridge.stop();
+      assert.equal(f.timers.size,0);f.advance(60000);assert.equal(f.errors.length,0);assert.equal(f.track.stops,0);
+    } finally {await bridge?.stop();f.restore();}
+  }
 });
 
 test('consumer promises serialize delivery and delay acknowledgments', async () => {
