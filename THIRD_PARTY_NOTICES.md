@@ -39,3 +39,7 @@ SOFTWARE.
 사용한 비동기 WASM은 RNNoise 0.1 기본 모델이다. Jitsi 0.1.0과 0.2.1 패키지의 비동기 JavaScript·WASM이 바이트 단위로 같음을 확인했고, Jitsi 0.1.0의 RNNoise 서브모듈은 커밋 `1cbdbcf1283499bbb2230a6b0f126eb9b236defd`로 고정되어 있다. 해당 소스 트리는 기본 모델 `src/rnn_data.c`를 직접 포함한다. RNNoise의 BSD 3-Clause 원문은 [LICENSE-RNNOISE](apps/client/web/audio/vendor/rnnoise/LICENSE-RNNOISE)에, 개별 소스의 저작권 고지는 [NOTICE-RNNOISE](apps/client/web/audio/vendor/rnnoise/NOTICE-RNNOISE)에 보존한다.
 
 별도로 다운로드하는 RNNoise 0.2 모델과 Jitsi의 동기 로더는 포함하지 않는다. 정확한 패키지 출처·무결성 값·파일 해시는 [source.json](apps/client/web/audio/vendor/rnnoise/source.json)에, 모델 추적 근거와 검증 범위는 [vendor README](apps/client/web/audio/vendor/rnnoise/README.md)에 기록한다.
+
+## Pretendard 1.3.9
+
+Pretendard Variable by Kil Hyung-jin and contributors is bundled under the SIL Open Font License 1.1. The complete copyright and license text is included at `apps/client/assets/fonts/OFL.txt`. Source: https://github.com/orioncactus/pretendard/tree/v1.3.9.

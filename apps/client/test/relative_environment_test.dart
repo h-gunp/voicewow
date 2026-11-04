@@ -100,6 +100,9 @@ void main() {
     await tester.tap(find.text('앱 정보 · 진단'));
     await tester.pumpAndSettle();
     expect(find.textContaining('자동 이득 변화와 실제 소음 변화를 구분할 수 없다'), findsOneWidget);
+    await tester.tap(find.text('오픈소스 · 모델 이용 조건'));
+    await tester.pumpAndSettle();
+    expect(find.byType(LicensePage), findsOneWidget);
     session.dispose();
   });
 }

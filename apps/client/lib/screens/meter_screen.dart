@@ -161,7 +161,7 @@ class MeterScreen extends StatelessWidget {
         Text(
           description,
           textAlign: TextAlign.center,
-          style: const TextStyle(color: muted, fontSize: 13, height: 1.7),
+          style: const TextStyle(color: muted, fontSize: 14, height: 1.7),
         ),
         const SizedBox(height: 8),
         SwitchListTile(
@@ -173,7 +173,7 @@ class MeterScreen extends StatelessWidget {
           ),
           subtitle: Text(
             session.noiseReductionEnabled ? '켜짐' : '꺼짐',
-            style: const TextStyle(color: muted, fontSize: 12),
+            style: const TextStyle(color: muted, fontSize: 14),
           ),
           value: session.noiseReductionEnabled,
           onChanged: session.state == CaptureState.requesting
@@ -183,13 +183,13 @@ class MeterScreen extends StatelessWidget {
         Text(
           analysisStatus,
           textAlign: TextAlign.center,
-          style: const TextStyle(color: muted, fontSize: 12),
+          style: const TextStyle(color: muted, fontSize: 14),
         ),
         if (a['provenance'] == 'relative_input')
           const Text(
             '실험적 상대 입력 기준 · 실제 음압 아님',
             textAlign: TextAlign.center,
-            style: TextStyle(color: muted, fontSize: 12),
+            style: TextStyle(color: muted, fontSize: 14),
           ),
         TweenAnimationBuilder<double>(
           tween: Tween(end: range.lower - s.referenceLower),
@@ -231,7 +231,7 @@ class MeterScreen extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       color: muted,
-                      fontSize: 12,
+                      fontSize: 14,
                       height: 1.7,
                     ),
                   ),
@@ -241,7 +241,7 @@ class MeterScreen extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       color: muted,
-                      fontSize: 12,
+                      fontSize: 14,
                       height: 1.7,
                     ),
                   ),
@@ -273,7 +273,7 @@ class MeterScreen extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       color: muted,
-                      fontSize: 12,
+                      fontSize: 14,
                       height: 1.7,
                     ),
                   ),
@@ -412,19 +412,25 @@ class MeterScreen extends StatelessWidget {
           child: Text(
             '$frameStatus\n오디오 엔진 $contextLabel · 처리 주파수 ${settings['contextSampleRate'] ?? '확인 불가'} Hz\n$analysisStatus\n발화 판별기 $vadLabel\n자동 이득 ${flag('autoGainControl')} · 잡음 억제 ${flag('noiseSuppression')} · 반향 제거 ${flag('echoCancellation')}',
             textAlign: TextAlign.center,
-            style: const TextStyle(color: muted, fontSize: 12, height: 1.7),
+            style: const TextStyle(color: muted, fontSize: 14, height: 1.7),
           ),
         ),
         if (a['provenance'] == 'relative_input')
           const Text(
             '상대 입력 추정은 브라우저 자동 이득 변화와 실제 소음 변화를 구분할 수 없다.',
-            style: TextStyle(fontSize: 12, color: muted, height: 1.8),
+            style: TextStyle(fontSize: 14, color: muted, height: 1.8),
           ),
+        TextButton.icon(
+          onPressed: () =>
+              showLicensePage(context: context, applicationName: 'VoiceMate'),
+          icon: const Icon(Icons.description_outlined),
+          label: const Text('오픈소스 · 모델 이용 조건'),
+        ),
         Align(
           alignment: Alignment.centerLeft,
           child: Text(
             '$inputLabel ${session.level?.dbfs?.toStringAsFixed(1) ?? '—'} dBFS\n수신 프레임 ${session.frameCount}\n입력 상태 ${session.state.name}\n${_settingsText()}',
-            style: const TextStyle(fontSize: 12, color: muted, height: 1.8),
+            style: const TextStyle(fontSize: 14, color: muted, height: 1.8),
           ),
         ),
       ],
