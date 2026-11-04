@@ -417,6 +417,9 @@ function switchMode(mode){
   setText('selected-mode-label',mode==='script'?'내 대본으로 연습':'준비된 예시');
   if(mode===practiceMode){
     refresh();
+    // The workflow was hidden; clientWidth now reflects the displayed layout.
+    // Redraw without replacing the selected guide, recording, or comparison.
+    paintPractice();renderResult();
     $('flow-deck').scrollIntoView({block:'start'});
     document.querySelectorAll('[data-flow-step]')[pager?.index||0]?.focus({preventScroll:true});
     return;

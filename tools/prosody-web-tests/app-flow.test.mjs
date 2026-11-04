@@ -41,9 +41,15 @@ async function settle(predicate){
   assert.fail('UI operation did not settle');
 }
 
-async function setup({microphone=false, holdResume=false, holdPermission=false, rejectResume=false}={}){
+async function setup({microphone=false, holdResume=false, holdPermission=false, rejectResume=false, layoutWidth=null}={}){
   const html=await readFile(new URL('../../apps/client/web/prosody/index.html',import.meta.url),'utf8');
   const elements=new Map([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new Element(m[1])]));
+  if(layoutWidth!==null){
+    elements.get('practice-workflow').hidden=true;
+    for(const [id,page] of [['guide-chart','flow-prepare'],['practice-chart','flow-record'],['result-chart','flow-results']]){
+      Object.defineProperty(elements.get(id),'clientWidth',{get:()=>elements.get('practice-workflow').hidden||elements.get(page).hidden?0:layoutWidth});
+    }
+  }
   const groups={};
   for(const name of ['mode','practice-tab','result-tab','flow-step']){
     const key=name.replace(/-([a-z])/g,(_,c)=>c.toUpperCase());
@@ -653,6 +659,27 @@ test('content choice opens focused preparation screens and removes obsolete entr
   }finally{ui.cleanup();}
 });
 
+test('first mobile choice redraws hidden charts at visible width and restores result chart after reopening',async()=>{
+  const ui=await setup({layoutWidth:253}),{el,button}=ui;
+  try{
+    assert.equal(el('guide-chart').clientWidth,0);
+    assert.equal(el('guide-chart').width,1000,'hidden initialization uses the 500px fallback');
+    await button('mode','guide').fire('click');
+    assert.equal(el('guide-chart').clientWidth,253);
+    assert.equal(el('guide-chart').width,506,'first visible chart uses the actual mobile width');
+    assert.equal(el('guide-chart').height,510,'mobile geometry must retain its 255px drawing height');
+    await ui.inputAudio('user-file');await settle(()=>el('flow-results').hidden===false);
+    await el('change-mode').fire('click');
+    ui.resize();
+    assert.equal(el('result-chart').clientWidth,0);
+    assert.equal(el('result-chart').width,1000);
+    await button('mode','guide').fire('click');
+    assert.equal(el('result-chart').width,506);
+    assert.equal(el('result-chart').height,510);
+    assert.equal(el('user-play').disabled,false,'redrawing must preserve the accepted recording');
+  }finally{ui.cleanup();}
+});
+
 test('recording context shows selected text and neighbors without claiming speech recognition',async()=>{
   const ui=await setup(),{el}=ui;
   try{
@@ -682,13 +709,14 @@ test('reopening the chosen mode retains accepted results, while another mode req
     assert.equal(el('flow-results').hidden,false);
     await el('user-play').fire('click');
     const acceptedUrl=ui.playedAudio.at(-1).url;
-    const feedback=el('feedback-list').children;
+    const feedback=()=>el('feedback-list').children.map(card=>({label:card.attributes['aria-label'],selected:card.attributes['aria-pressed'],text:card.children.map(child=>child.textContent)}));
+    const acceptedFeedback=feedback();
     await el('change-mode').fire('click');
     assert.equal(el('practice-workflow').hidden,true);
     await button('mode','guide').fire('click');
     assert.equal(el('flow-results').hidden,false,'choosing the same content resumes the current step');
     assert.equal(el('user-play').disabled,false);
-    assert.equal(el('feedback-list').children,feedback,'accepted feedback is not cleared');
+    assert.deepEqual(feedback(),acceptedFeedback,'redrawing preserves accepted feedback and selection');
     await el('user-play').fire('click');
     assert.equal(ui.playedAudio.at(-1).url,acceptedUrl);
     await el('change-mode').fire('click');

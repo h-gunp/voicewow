@@ -53,7 +53,8 @@ export async function createNoiseMeter(wasmBinary, sampleRate = 48000, analysis 
             for (const sample of output) processedEnergy += sample * sample;
             // libfvad hangover can outlive an impulse; require independent model support.
             // Keep both adjacent scores because RNNoise output is delayed one frame.
-            if (previous) analysis.onAnalysis({...previous, meterRms:Math.sqrt(processedEnergy/frameSize), speech: speech && score >= .5 && previous.score >= .5 ? 'speech' : (score < .2 && previous.score < .2 ? 'nonSpeech' : 'uncertain')});
+            // A rejected VAD positive is disagreement, not evidence of quiet background.
+            if (previous) analysis.onAnalysis({...previous, meterRms:Math.sqrt(processedEnergy/frameSize), speech: speech && score >= .5 && previous.score >= .5 ? 'speech' : (!speech && score < .2 && previous.score < .2 ? 'nonSpeech' : 'uncertain')});
           } catch {
             analysis.vad.dispose?.(); analysis.vad = null; analysis.onFailure?.();
           }

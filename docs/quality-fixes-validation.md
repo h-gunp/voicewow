@@ -19,6 +19,15 @@ Synthetic ambient tests cover four-second speech / two-second pause cycles, smal
 
 Widget/DOM tests cover preparation guards, same-mode result preservation, recording locks, and Stop availability. Source structure keeps Stop outside the recording content's scroll area. Actual web layout at 320×568, 200% text/zoom, real iPhone microphone behavior, and model download remain unverified.
 
+## Independent-review corrections
+
+The review of head `193cf1e` reproduced two defects that the original suites missed. Both have dedicated failing-before/passing-after regressions:
+
+- A positive libfvad result with low RNNoise scores incorrectly became `nonSpeech`. It now remains `uncertain`, so neither absolute nor relative ambient estimators may learn from this disagreement. The integration regression uses real RNNoise with seeded synthetic input and a controlled VAD decision; a negative-VAD control still calibrates agreed background. Stored speech fixtures additionally assert that rejected VAD positives never become background. The six retained-frame counts are unchanged: hello 85/101 and 84/99, phrase 132/167 and 136/161, sunglasses 70/100 and 65/82 (normal / -20 dB gain).
+- Selecting the initial prepared-example mode left charts drawn at the hidden 500px fallback width. Same-mode entry now redraws after revealing the workflow, preserving the selected guide, recording and comparison. The regression models `clientWidth` changing from 0 while hidden to 253 when visible and checks a 506×510 bitmap, including returning to a saved result after a hidden resize. This is a layout-aware DOM simulation, not a replacement for the reviewer's actual-browser recheck.
+
+The reviewer observed the original-head UI in a separate in-app browser at 320×568, including the original chart defect. That observation does not resolve the earlier Windows Chrome blank-frame symptom. Browser control was not resumed for these corrections.
+
 ## Open iframe investigation
 
 No iframe implementation change is included. The blank-frame symptom remains unresolved.
