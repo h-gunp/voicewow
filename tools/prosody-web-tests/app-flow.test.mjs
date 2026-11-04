@@ -41,7 +41,7 @@ async function settle(predicate){
   assert.fail('UI operation did not settle');
 }
 
-async function setup({microphone=false}={}){
+async function setup({microphone=false, holdResume=false, holdPermission=false, rejectResume=false}={}){
   const html=await readFile(new URL('../../apps/client/web/prosody/index.html',import.meta.url),'utf8');
   const elements=new Map([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new Element(m[1])]));
   const groups={};
@@ -57,12 +57,14 @@ async function setup({microphone=false}={}){
     addEventListener:(name,fn)=>{documentEvents[name]=fn;}};
   const original={location:globalThis.location,window:globalThis.window,document:globalThis.document,Worker:globalThis.Worker,Audio:globalThis.Audio,MediaRecorder:globalThis.MediaRecorder};
   const navigatorDescriptor=Object.getOwnPropertyDescriptor(globalThis,'navigator');
-  let microphoneRequests=0,liveVoice=true,trackStopped=false,liveReads=0,contextOpens=0;
+  let microphoneRequests=0,liveVoice=true,trackStopped=false,liveReads=0,contextOpens=0, resumeStarted=false, releaseResume;
+  const resumeGate=new Promise(resolve=>{releaseResume=resolve;});
+  let releasePermission;const permissionGate=new Promise(resolve=>{releasePermission=resolve;});
   const track={stop(){trackStopped=true;},addEventListener(){}};
   const stream={getTracks:()=>[track],getAudioTracks:()=>[track]};
   Object.defineProperty(globalThis,'navigator',{configurable:true,value:{mediaDevices:{async getUserMedia(){
     microphoneRequests++;
-    if(microphone)return stream;
+    if(microphone){if(holdPermission)await permissionGate;return stream;}
     const error=new Error('Test microphone permission denied');error.name='NotAllowedError';throw error;
   }}}});
   globalThis.document=document;
@@ -96,7 +98,7 @@ async function setup({microphone=false}={}){
   globalThis.MediaRecorder=FakeRecorder;
   globalThis.window={innerWidth:1000,MediaRecorder:FakeRecorder,AudioContext:class {
     constructor(){contextOpens++;this.sampleRate=48000;this.state='suspended';}
-    async resume(){this.state='running';}
+    async resume(){resumeStarted=true;if(holdResume)await resumeGate;if(rejectResume)throw new Error('resume failed');if(this.state!=='closed')this.state='running';}
     createMediaStreamSource(){return {connect(){},disconnect(){}};}
     createAnalyser(){return {fftSize:4096,disconnect(){},getFloatTimeDomainData(array){
       liveReads++;
@@ -116,6 +118,7 @@ async function setup({microphone=false}={}){
     liveReads:()=>liveReads,
     setLiveVoice(value){liveVoice=Boolean(value);},
     trackStopped:()=>trackStopped,
+    resumeStarted:()=>resumeStarted, releaseResume, releasePermission,
     resize(){windowEvents.resize?.();},
     message(event){windowEvents.message?.(event);},
     hostCleanup(){window.voiceMateProsodyCleanup();},
@@ -571,4 +574,49 @@ test('step pages gate unfinished results, lock during recording and open an acce
     assert.equal(el('flow-prepare').hidden,false);
     assert.equal(el('flow-next').disabled,true,'a script requires its own guide before entering recording');
   }finally{ui.cleanup();}
+});
+
+for(const action of ['hostCleanup','hide']) test(`${action} immediately releases an acquired microphone while AudioContext resume is pending`,async()=>{
+  const ui=await setup({microphone:true,holdResume:true}),{el}=ui;
+  let start;
+  try {
+    start=el('record').fire('click');
+    await settle(()=>ui.resumeStarted());
+    ui[action]();
+    assert.equal(ui.trackStopped(),true,'cleanup must stop the microphone without waiting for resume');
+    ui.releaseResume(); await start;
+    assert.equal(ui.liveReads(),0,'a cancelled startup must not begin recording');
+  } finally { ui.releaseResume(); if(start)await start; ui.cleanup(); }
+});
+
+test('hiding a standalone page pauses guide playback even while idle',async()=>{
+  const ui=await setup(),{el}=ui;
+  try {
+    await el('guide-play').fire('click');
+    assert.ok(ui.playedAudio.length);
+    const audio=ui.playedAudio.at(-1);
+    assert.equal(audio.paused,false);
+    ui.hide();
+    assert.equal(audio.paused,true,'backgrounding must stop guide playback');
+  } finally {ui.cleanup();}
+});
+
+test('a microphone permission result arriving after cancellation is stopped',async()=>{
+  const ui=await setup({microphone:true,holdPermission:true});
+  const start=ui.el('record').fire('click');
+  try {
+    await settle(()=>ui.microphoneRequests()===1);
+    ui.hostCleanup();ui.releasePermission();await start;
+    assert.equal(ui.trackStopped(),true);
+    assert.equal(ui.resumeStarted(),false);
+  } finally {ui.releasePermission();await start;ui.cleanup();}
+});
+
+test('a failed AudioContext resume releases the microphone and allows retry',async()=>{
+  const ui=await setup({microphone:true,rejectResume:true});
+  try {
+    await ui.el('record').fire('click');
+    assert.equal(ui.trackStopped(),true);
+    assert.equal(ui.el('record').disabled,false);
+  } finally {ui.cleanup();}
 });

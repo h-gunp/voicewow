@@ -121,7 +121,7 @@ export function drawGraph(canvas, { reference, trace = [], field = 'relativePitc
     for (const frame of frames) {
       const value = frame[field];
       if (!measured(frame)) { drawing = false; continue; }
-      if (drawing) ctx.lineTo(x(frame.time), y(value));
+      if (drawing && !frame.breakBefore) ctx.lineTo(x(frame.time), y(value));
       else ctx.moveTo(x(frame.time), y(value));
       drawing = true;
     }
@@ -138,7 +138,8 @@ export function drawGraph(canvas, { reference, trace = [], field = 'relativePitc
   trace.forEach((frame, index) => {
     if (!measured(frame)) return;
     const current = live && index === trace.length - 1;
-    const isolated = !measured(trace[index - 1]) && !measured(trace[index + 1]);
+    const isolated = (!measured(trace[index - 1]) || frame.breakBefore) &&
+      (!measured(trace[index + 1]) || trace[index + 1].breakBefore);
     if (!current && !isolated) return;
     const radius = current ? 6 : 3.5;
     ctx.beginPath(); ctx.fillStyle = '#ffffff'; ctx.arc(x(frame.time), y(frame[field]), radius + 2, 0, Math.PI * 2); ctx.fill();

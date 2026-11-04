@@ -289,6 +289,7 @@ async function processClip(blob,{demo=false,decoded=null}={}){
   }finally{if(ticket===generation){state='idle';renderResult();refresh();if(accepted)pager?.goTo(2);}}
 }
 function releaseSession(s){
+  if(s.released)return;s.released=true;
   clearInterval(s.liveTimer);clearTimeout(s.timeout);s.stream?.getTracks().forEach(t=>t.stop());
   try{s.source?.disconnect();s.analyser?.disconnect();}catch{}
   if(s.context&&s.context.state!=='closed')s.context.close().catch(()=>{});
@@ -301,14 +302,16 @@ async function record(){
   if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){setText('practice-status','이 브라우저에서 마이크를 사용할 수 없어요. Safari·Chrome의 보안 연결 또는 로컬 주소에서 열어 주세요. 파일 비교와 데모도 사용할 수 있어요.');return;}
   const ticket=++generation;state='requesting';stopPlayback();stopPreview();setText('timer','00:00');refresh();
   setText('practice-status','마이크 접근을 허용하면 녹음이 시작돼요.');
-  let stream,context;
+  let stream,context,s;
   try{
     stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},video:false});
     if(ticket!==generation){stream.getTracks().forEach(t=>t.stop());return;}
-    const AC=window.AudioContext||window.webkitAudioContext;context=new AC();await context.resume();
-    if(ticket!==generation||document.hidden){stream.getTracks().forEach(t=>t.stop());await context.close();return;}
-    const source=context.createMediaStreamSource(stream),analyser=context.createAnalyser();analyser.fftSize=4096;source.connect(analyser);
-    const recorder=new MediaRecorder(stream),chunks=[],s={recorder,stream,context,source,analyser,failed:false,cancelled:false,frames:[],firstVoice:null,view:createLiveView(guide.analysis)};session=s;
+    s={stream};session=s;
+    const AC=window.AudioContext||window.webkitAudioContext;context=new AC();s.context=context;await context.resume();
+    if(ticket!==generation||document.hidden){if(session===s)cancelRecording();else releaseSession(s);return;}
+    const source=context.createMediaStreamSource(stream);s.source=source;
+    const analyser=context.createAnalyser();s.analyser=analyser;analyser.fftSize=4096;source.connect(analyser);
+    const recorder=new MediaRecorder(stream),chunks=[];Object.assign(s,{recorder,failed:false,cancelled:false,frames:[],firstVoice:null,view:createLiveView(guide.analysis)});
     recorder.addEventListener('dataavailable',e=>{if(e.data.size)chunks.push(e.data);});
     recorder.addEventListener('error',()=>{s.failed=true;if(recorder.state!=='inactive')recorder.stop();else finish();},{once:true});
     let finished=false;
@@ -335,7 +338,7 @@ async function record(){
     },40);
     s.timeout=setTimeout(()=>{if(recorder.state!=='inactive')recorder.stop();},20000);
     stream.getAudioTracks()[0]?.addEventListener('ended',()=>{if(recorder.state!=='inactive')recorder.stop();},{once:true});
-  }catch(error){stream?.getTracks().forEach(t=>t.stop());if(context&&context.state!=='closed')context.close().catch(()=>{});if(ticket!==generation)return;session=null;state='idle';retryFailure(error.name==='NotAllowedError'?'마이크 접근이 허용되지 않았어요. 브라우저에서 권한을 바꾸거나 음성 파일로 시험해 보세요.':'마이크를 시작하지 못했어요. 연결을 확인하거나 음성 파일로 시험해 보세요.');}
+  }catch(error){if(s)releaseSession(s);else stream?.getTracks().forEach(t=>t.stop());if(ticket!==generation)return;if(session===s)session=null;state='idle';retryFailure(error.name==='NotAllowedError'?'마이크 접근이 허용되지 않았어요. 브라우저에서 권한을 바꾸거나 음성 파일로 시험해 보세요.':'마이크를 시작하지 못했어요. 연결을 확인하거나 음성 파일로 시험해 보세요.');}
 }
 async function playUrl(url,start=0,end=null,label=''){
   stopPlayback();const audio=new Audio(url);playback=audio;
@@ -529,7 +532,7 @@ $('sentence-prev').addEventListener('click',()=>chooseSentence(scriptIndex-1));$
 $('reference-file').addEventListener('change',event=>{const file=event.target.files[0];if(file)loadReference(file);event.target.value='';});
 $('remove-reference').addEventListener('click',()=>{const ref=scriptReferences.get(scriptIndex);if(!ref||isBusy()||draftPending())return;URL.revokeObjectURL(ref.audioUrl);scriptReferences.delete(scriptIndex);guideFailures.delete(scriptIndex);guideNotice='';selectGuide();updateScriptStatus();});
 window.speechSynthesis?.addEventListener('voiceschanged',refresh);
-function cancelRecording(){const run=guideBatch;guideBatch=null;generation++;run?.controller.abort();cancelGuide();if(session){const s=session;s.cancelled=true;session=null;if(s.recorder.state!=='inactive')s.recorder.stop();releaseSession(s);}state='idle';stopPreview();stopPlayback();if(run){guideNotice=`가이드 준비를 멈췄어요. 준비된 ${scriptReferences.size}개는 그대로 보관했어요.`;syncScriptReference();}paintStoredRecording();renderResult();refresh();}
+function cancelRecording(){const run=guideBatch;guideBatch=null;generation++;run?.controller.abort();cancelGuide();if(session){const s=session;s.cancelled=true;session=null;if(s.recorder&&s.recorder.state!=='inactive')s.recorder.stop();releaseSession(s);}state='idle';stopPreview();stopPlayback();if(run){guideNotice=`가이드 준비를 멈췄어요. 준비된 ${scriptReferences.size}개는 그대로 보관했어요.`;syncScriptReference();}paintStoredRecording();renderResult();refresh();}
 // The Flutter host calls this synchronously before removing the same-origin
 // frame. A queued postMessage alone can be lost during immediate disposal.
 window.voiceMateProsodyCleanup=cancelRecording;
@@ -537,7 +540,7 @@ window.addEventListener('message',event=>{if(event.origin===location.origin&&eve
 window.addEventListener('pagehide',()=>{cancelRecording();clearClip();for(const ref of scriptReferences.values())URL.revokeObjectURL(ref.audioUrl);scriptReferences.clear();});
 window.addEventListener('pageshow',event=>{if(event.persisted){selectGuide();updateScriptStatus();}});
 window.addEventListener('resize',()=>{paintPractice();renderResult();});
-document.addEventListener('visibilitychange',()=>{if(document.hidden&&isBusy()){const generating=state==='generating';cancelRecording();setText(generating?'generation-status':'practice-status',generating?'화면을 벗어나 가이드 생성을 중지했어요. 다시 시도해 주세요.':'화면을 벗어나 녹음을 중지했어요. 다시 시작해 주세요.');}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&!isBusy()){stopPreview();stopPlayback();paintStoredRecording();}if(document.hidden&&isBusy()){const generating=state==='generating';cancelRecording();setText(generating?'generation-status':'practice-status',generating?'화면을 벗어나 가이드 생성을 중지했어요. 다시 시도해 주세요.':'화면을 벗어나 녹음을 중지했어요. 다시 시작해 주세요.');}});
 if(new URLSearchParams(location.search).get('embedded')==='1'){
   document.body.classList.add('embedded');
   const exit=document.createElement('button');exit.type='button';exit.className='button secondary embedded-exit';exit.textContent='← 음량 측정으로';

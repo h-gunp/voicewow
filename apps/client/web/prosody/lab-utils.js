@@ -6,11 +6,20 @@ export function median(values) {
 }
 
 export function alignedTrace(reference, user, path) {
-  const buckets = reference.frames.map(() => []);
-  for (const [r,u] of path) buckets[r].push(user.frames[u]);
+  const buckets = reference.frames.map(() => []), breaks = new Set(), ambiguous = new Set();
+  let previous = null;
+  for (const [r,u] of path) {
+    if (previous && u > previous[1] + 1) {
+      if (r === previous[0]) ambiguous.add(r);
+      else breaks.add(r);
+    }
+    buckets[r].push(user.frames[u]);
+    previous = [r,u];
+  }
   return reference.frames.map((frame,i) => ({ time: frame.time,
-    relativePitch: median(buckets[i].map(f => f.relativePitch)),
-    relativeDb: median(buckets[i].map(f => f.relativeDb)) }));
+    relativePitch: ambiguous.has(i) ? null : median(buckets[i].map(f => f.relativePitch)),
+    relativeDb: ambiguous.has(i) ? null : median(buckets[i].map(f => f.relativeDb)),
+    breakBefore: breaks.has(i) }));
 }
 
 // Describe the measured absolute difference only. No pass bands, grades,

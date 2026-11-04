@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { drawGraph, graphSegmentAt } from '../../apps/client/web/prosody/charts.js';
+import { alignedTrace } from '../../apps/client/web/prosody/lab-utils.js';
 
 // Observe actual canvas drawing operations, without a browser or microphone.
 // A path containing only moveTo has no painted line; filled arcs do paint.
@@ -126,4 +127,16 @@ test('single whole regions do not acquire extra front middle end labels', () => 
   assert.ok(labels.includes('전체 흐름'));
   assert.ok(!labels.some(label => ['앞부분', '중간', '끝부분'].includes(label)));
   assert.equal(graphSegmentAt(c, reference, 300, 100, regions), 0);
+});
+
+test('aligned result never connects across skipped user silence, including within one reference bucket',()=>{
+  const ref={duration:3,frames:[frame(0,0),frame(1,1),frame(2,2),frame(3,3)]};
+  const user={frames:[frame(0,0),frame(1,null),frame(2,2),frame(3,3)]};
+  for(const [path,expected] of [[[[0,0],[1,2],[2,3]],['move','move','line']],[[[0,0],[0,2],[1,3]],['move']]]){
+    const trace=alignedTrace(ref,user,path), c=canvas();
+    drawGraph(c,{reference:ref,trace});
+    const operations=voicePath(c);
+    assert.deepEqual(operations.map(op=>op.type),expected,'stroke must not bridge the skipped user frame');
+    assert.ok(dots(c).length>0,'isolated measurements remain visible');
+  }
 });
