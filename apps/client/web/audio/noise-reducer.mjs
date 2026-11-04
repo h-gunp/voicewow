@@ -51,7 +51,9 @@ export async function createNoiseMeter(wasmBinary, sampleRate = 48000, analysis 
             const speech = analysis.vad.process(output);
             let processedEnergy = 0;
             for (const sample of output) processedEnergy += sample * sample;
-            if (previous) analysis.onAnalysis({...previous, meterRms:Math.sqrt(processedEnergy/frameSize), speech: speech ? 'speech' : (score < .2 && previous.score < .2 ? 'nonSpeech' : 'uncertain')});
+            // libfvad hangover can outlive an impulse; require independent model support.
+            // Keep both adjacent scores because RNNoise output is delayed one frame.
+            if (previous) analysis.onAnalysis({...previous, meterRms:Math.sqrt(processedEnergy/frameSize), speech: speech && score >= .5 && previous.score >= .5 ? 'speech' : (score < .2 && previous.score < .2 ? 'nonSpeech' : 'uncertain')});
           } catch {
             analysis.vad.dispose?.(); analysis.vad = null; analysis.onFailure?.();
           }
