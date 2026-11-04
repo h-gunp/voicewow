@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
 import '../audio/wav.dart';
+import '../../../shared/native_tts_coordinator.dart';
 
 /// A local device/permission failure, rather than a judgement of speaking skill.
 class DeviceAudioException implements Exception {
@@ -85,6 +86,7 @@ class DeviceAudioService {
 
   AudioRecorder? _recorder;
   FlutterTts? _tts;
+  NativeTtsLease? _guideLease;
   AudioPlayer? _player;
   Future<Directory>? _directory;
   final StreamController<String> _errors = StreamController<String>.broadcast();
@@ -161,6 +163,7 @@ class DeviceAudioService {
     final cancelled = Completer<void>();
     _guideCancelled = cancelled;
     String? path;
+    NativeTtsLease? lease;
     void checkGeneration() {
       if (_disposed || ticket != _guideGeneration) {
         throw const DeviceAudioException('가이드 만들기를 취소했어요.');
@@ -170,7 +173,20 @@ class DeviceAudioService {
     try {
       await stopPlayback();
       checkGeneration();
-      final tts = _tts ??= FlutterTts();
+      lease = await NativeTtsCoordinator.shared.acquire(
+        NativeTtsKind.synthesis,
+        cancelled: cancelled.future,
+      );
+      checkGeneration();
+      if (lease == null) {
+        throw const DeviceAudioException('음성 엔진을 사용할 수 없어요. 잠시 후 다시 시도해 주세요.');
+      }
+      _guideLease = lease;
+      final tts = _tts = FlutterTts();
+      NativeTtsCoordinator.shared.installHandler(
+        lease,
+        tts.platformCallHandler,
+      );
       final installed = await tts.isLanguageInstalled('ko-KR');
       checkGeneration();
       if (installed != true && installed != 1) {
@@ -230,6 +246,7 @@ class DeviceAudioService {
       checkGeneration();
       path = await _newPath('guide');
       checkGeneration();
+      lease.issued = true;
       final completed = tts.synthesizeToFile(sentence, path, true).then((
         dynamic result,
       ) {
@@ -265,16 +282,18 @@ class DeviceAudioService {
       }
       return GeneratedGuide(path: path, bytes: bytes);
     } on DeviceAudioException {
-      if (ticket == _guideGeneration) await _stopTts();
+      if (ticket == _guideGeneration) await _stopTts(lease);
       if (path != null) await _deleteFile(path);
       rethrow;
     } catch (_) {
-      if (ticket == _guideGeneration) await _stopTts();
+      if (ticket == _guideGeneration) await _stopTts(lease);
       if (path != null) await _deleteFile(path);
       throw const DeviceAudioException(
         '한국어 가이드 생성에 문제가 생겼어요. 음성 출력 설정을 확인하거나 준비된 예시를 사용해 주세요.',
       );
     } finally {
+      lease?.releaseUnissued();
+      if (identical(_guideLease, lease)) _guideLease = null;
       if (ticket == _guideGeneration) {
         _guideBusy = false;
         _guideCancelled = null;
@@ -290,12 +309,15 @@ class DeviceAudioService {
     if (cancellation != null && !cancellation.isCompleted) {
       cancellation.complete();
     }
-    await _stopTts();
+    await _stopTts(_guideLease);
   }
 
-  Future<void> _stopTts() async {
+  Future<void> _stopTts(NativeTtsLease? lease) async {
     try {
-      await _tts?.stop();
+      final tts = _tts;
+      if (lease != null && lease.isCurrent && lease.issued && tts != null) {
+        await tts.stop();
+      }
     } catch (_) {
       /* already stopped by the engine */
     }

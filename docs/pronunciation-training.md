@@ -10,9 +10,12 @@
 - **발음 퀴즈:** 단어 / 기초 문장 / 확장 문장 / 비즈니스 문장 → 하위 분류와
   표현 선택 → 두 보기 중 올바른 읽는 소리 선택 → 정답·설명 → 다음 문제·결과.
 - **내 문장:** 300자 이내 문장 입력 → 읽는 소리와 변화 설명 → 보통/느린
-  예시 음성 → 저장한 문장 다시 연습.
-- **복습:** 틀린 문제와 저장한 문제를 다시 푼다. 맞힌 오답은 오답 목록에서
-  빠지며 저장 표시는 유지된다.
+  예시 음성 → 복습에 문장 저장. 입력칸 아래 ‘예시 문장 · 눌러서 체험해 보세요’의
+  예시를 누르면 자동 입력·분석한다. 저장 목록은 ‘저장한 문장 보기’로 연다.
+- **복습:** 전체 / 틀린 문제 / 저장한 문제 / 저장한 내 문장을 구분한다.
+  전체에서는 틀리고 저장한 동일 퀴즈를 한 번만 표시하고 종류를 함께 표시한다.
+  맞힌 오답은 오답 목록에서 빠지며 저장 표시는 유지된다. 내 문장은 선택하면
+  내 문장 화면에서 현재 규칙으로 다시 분석하며, 복습에서 삭제할 수도 있다.
 
 보기 순서는 문제를 시작할 때 섞고, 화면이 갱신될 때는 바꾸지 않는다.
 정답 확인 전에는 예시 음성을 제공하지 않는다. 복습 기록과 문장 저장은
@@ -20,7 +23,19 @@
 
 ## 콘텐츠와 발음 변환 범위
 
-각 상위 분류에 8개씩, 총 32개의 직접 작성한 초기 문제가 있다.
+직접 작성한 문제는 단어 50개와 기초 문장·확장 문장·비즈니스 문장 각 25개,
+총 125개다. 단어는 아래 5개 묶음을 각각 10문제씩 연습한다.
+
+| 단어 분류 | 문제 수 |
+| --- | ---: |
+| 이어 읽기 (연음 연습) | 10 |
+| 된소리로 읽기 (된소리되기 연습) | 10 |
+| 받침을 ㅇ·ㄴ·ㅁ으로 읽기 (비음화 연습) | 10 |
+| ㅈ·ㅊ으로 바꿔 읽기 (구개음화 연습) | 10 |
+| ㅋ·ㅌ·ㅍ·ㅊ으로 바꿔 읽기 (거센소리되기 연습) | 10 |
+
+각 문장 분류는 5개 상황 묶음에서 한 번에 5문제씩 연습한다. 기존 32문제의
+ID와 원문·정답은 유지하여 저장한 문제와 오답 기록이 새 분류에서도 이어진다.
 domain/quiz_catalog.dart의 설명과 sourceUrl은 국립국어원 자료를 기준으로
 작성했다. 문장 보기는 어절별로 나누어 읽는 연습 기준이며 어절 사이의
 선택적인 이어 읽기나 소리의 길이를 정답 판정에 포함하지 않는다.
@@ -34,10 +49,17 @@ domain/pronunciation_guide.dart는 순수 Dart로 동작한다.
 발음을 단정하지 않고 추가 안내를 표시한다. 출력은 **규칙 기반 참고**이며
 사용자 목소리의 발음 자동 평가나 채점은 하지 않는다.
 
-변환 자체에는 API 키나 네트워크가 필요하지 않다. 예시 음성은 flutter_tts로
-브라우저/Android의 한국어 음성을 사용한다. 한국어 음성이 없거나 재생이
+변환 자체에는 API 키나 네트워크가 필요하지 않다. 예시 음성은 웹에서 브라우저의
+SpeechSynthesis, Android에서 flutter_tts로 기기의 한국어 음성을 사용한다.
+한국어 음성이 없거나 재생이
 실패하면 텍스트 안내를 유지한다. 기기 음성 엔진은 설정과 제공자에 따라
 네트워크를 사용할 수 있으므로 완전한 오프라인 음성 재생을 보장하지 않는다.
+
+듣기를 누르면 두 버튼을 회색으로 비활성화하고 누른 버튼에 ‘음성 준비 중…’을
+표시한다. 실제 시작 이벤트를 받은 뒤에만 ‘재생 중 · 정지’로 바꾸며, 이 버튼을
+누르면 재생을 멈춘다. 완료·정지·실패 뒤에는 듣기 버튼으로 돌아간다. 문장 변경,
+문제 이동, 탭·기능 이동 때도 재생과 준비 중인 요청을 취소한다. 재생 상태는
+타이머로 추정하지 않는다. 음성은 선택 자료이며 듣지 않아도 연습을 완료할 수 있다.
 
 ## 통합 지점
 
@@ -46,7 +68,13 @@ domain/pronunciation_guide.dart는 순수 Dart로 동작한다.
 - data/learning_store.dart: 버전이 있는 JSON 기록, 순서대로 저장하는 큐,
   저장 실패 시 메모리에서 연습 지속. 앱 범위의 controller를 유지하므로
   화면 재진입이 저장 중인 기록을 덮어쓰지 않는다.
-- data/speech_player.dart: 재생·취소·한국어 음성 미지원 구분.
+- data/speech_player.dart: 실제 시작·완료·취소·한국어 음성 미지원 구분.
+- data/speech_transport_web.dart: 요청마다 별도 음성 객체를 사용하여 준비 중
+  취소와 이전 음성의 늦은 이벤트를 구분한다.
+- data/speech_transport_native.dart: Android TTS 이벤트를 연결하고 취소 이벤트를
+  최대 1초 기다려 기능 전환 시 다른 TTS 사용과 겹치지 않게 한다. 이벤트를
+  누락하는 엔진의 이전 요청은 격리하며, 준비 시간 초과 시 안내를 표시한다.
+- presentation/speech_controls.dart: 퀴즈와 내 문장이 공유하는 준비·재생·정지 UI.
 - presentation/: 분류·퀴즈·결과·개인 문장·복습 화면.
 
 공용 앱 진입점과 패키지 의존성 외의 기존 음량 처리 코드는 변경하지 않는다.
@@ -90,3 +118,9 @@ CMake의 ninja 실행 경로에 잘못 기록되는 Windows 환경이 있다.
 디버그 APK는 테스트 설치용이며 스토어 배포용 서명·패키지 이름은 팀에서
 정해야 한다. 기존 웹의 음량 측정을 Android 네이티브로 옮기는 작업은
 이 발음 기능의 APK 빌드와 분리된 후속 작업이다.
+
+## Native TTS handoff safety
+
+The Android flutter_tts 4.2.5 plugin reports file-synthesis cancellation as an ID-less speak.onCancel. Pronunciation playback and prosody synthesis therefore share a process-wide lease before constructing or configuring FlutterTts. An issued lease is released only when its terminal callback drains; stop acknowledgement is not sufficient. If termination is missing, a new request fails unavailable instead of assigning the old callback to new speech. Pre-issuance cancellation releases the lease; definite queue rejection allows retry, while uncertain failures remain quarantined. Engine stop is guarded by lease ownership.
+
+Regression tests inject actual MethodChannel event names for synthesis-to-speech and speech-to-synthesis transitions, delayed cancellation, missing terminal events, and definitive rejection/retry. These host tests do not replace Android device verification.

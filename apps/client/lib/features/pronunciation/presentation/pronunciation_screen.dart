@@ -5,6 +5,7 @@ import '../data/learning_store.dart';
 import '../data/speech_player.dart';
 import '../domain/pronunciation_guide.dart';
 import 'quiz_training_view.dart';
+import 'speech_controls.dart';
 
 class PronunciationScreen extends StatefulWidget {
   final LearningController? learning;
@@ -15,11 +16,18 @@ class PronunciationScreen extends StatefulWidget {
   State<PronunciationScreen> createState() => _PronunciationScreenState();
 }
 
-class _PronunciationScreenState extends State<PronunciationScreen> {
+class _PronunciationScreenState extends State<PronunciationScreen>
+    with SingleTickerProviderStateMixin {
   late final LearningController learning;
   late final SpeechPlayer speech;
+  late final SpeechPlaybackController playback;
+  late final TabController tabs;
   int _speechEpoch = 0;
   int _tab = 0;
+  String? _requestedGuide;
+  int _guideRequest = 0;
+  int _reviewRequest = 0;
+  ReviewFilter _reviewInitialFilter = ReviewFilter.all;
 
   @override
   void initState() {
@@ -27,11 +35,39 @@ class _PronunciationScreenState extends State<PronunciationScreen> {
     learning =
         widget.learning ?? LearningController(PreferencesLearningStore());
     speech = widget.speech ?? DeviceSpeechPlayer();
+    playback = SpeechPlaybackController(speech);
+    tabs = TabController(length: 3, vsync: this)..addListener(_tabChanged);
     unawaited(learning.load());
+  }
+
+  void _tabChanged() {
+    if (tabs.index == _tab) return;
+    unawaited(_stopSpeech());
+    setState(() => _tab = tabs.index);
+  }
+
+  void _openGuide(String value) {
+    unawaited(_stopSpeech());
+    setState(() {
+      _requestedGuide = value;
+      _guideRequest++;
+    });
+    tabs.animateTo(1);
+  }
+
+  void _openSavedGuides() {
+    unawaited(_stopSpeech());
+    setState(() {
+      _reviewInitialFilter = ReviewFilter.guides;
+      _reviewRequest++;
+    });
+    tabs.animateTo(2);
   }
 
   @override
   void dispose() {
+    tabs.dispose();
+    playback.dispose();
     if (widget.learning == null) learning.dispose();
     unawaited(speech.stop());
     if (widget.speech == null) unawaited(speech.dispose());
@@ -54,117 +90,122 @@ class _PronunciationScreenState extends State<PronunciationScreen> {
 
   Future<void> _stopSpeech() async {
     ++_speechEpoch;
-    await speech.stop();
+    await playback.stop();
   }
 
   @override
-  Widget build(BuildContext context) => DefaultTabController(
-    length: 3,
-    child: Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 800),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 22),
-              const Text(
-                '내 속도로, 함께',
-                style: TextStyle(
-                  color: Color(0xff355757),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
+  Widget build(BuildContext context) => Center(
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 800),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 22),
+            const Text(
+              '내 속도로, 함께',
+              style: TextStyle(
+                color: Color(0xff355757),
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              '발음 훈련',
+              style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              '익숙한 말부터, 내 속도로 연습해요.',
+              style: TextStyle(color: muted, fontSize: 16),
+            ),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: .65),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.white),
+              ),
+              child: TabBar(
+                controller: tabs,
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                labelColor: ink,
+                unselectedLabelColor: muted,
+                indicatorSize: TabBarIndicatorSize.tab,
+                dividerColor: Colors.transparent,
+                indicator: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xffa9cecc)),
                 ),
+                tabs: const [
+                  Tab(text: '발음 퀴즈'),
+                  Tab(text: '내 문장'),
+                  Tab(text: '복습'),
+                ],
               ),
-              const SizedBox(height: 6),
-              const Text(
-                '발음 훈련',
-                style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                '익숙한 말부터, 내 속도로 연습해요.',
-                style: TextStyle(color: muted, fontSize: 16),
-              ),
-              const SizedBox(height: 18),
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: .65),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white),
-                ),
-                child: TabBar(
-                  onTap: (value) {
-                    unawaited(_stopSpeech());
-                    setState(() => _tab = value);
-                  },
-                  labelColor: ink,
-                  unselectedLabelColor: muted,
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  dividerColor: Colors.transparent,
-                  indicator: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xffa9cecc)),
-                  ),
-                  tabs: const [
-                    Tab(text: '발음 퀴즈'),
-                    Tab(text: '내 문장'),
-                    Tab(text: '복습'),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: ListenableBuilder(
-                  listenable: learning,
-                  builder: (context, _) {
-                    if (!learning.ready) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    return Column(
-                      children: [
-                        if (learning.storageUnavailable)
-                          const Padding(
-                            padding: EdgeInsets.only(top: 12),
-                            child: Text(
-                              '기록을 저장하지 못했어요. 이번 연습은 계속할 수 있어요.',
-                              style: TextStyle(color: red),
-                            ),
-                          ),
-                        Expanded(
-                          child: TabBarView(
-                            physics: const NeverScrollableScrollPhysics(),
-                            children: [
-                              QuizTrainingView(
-                                learning: learning,
-                                onSpeak: _speak,
-                                onStop: _stopSpeech,
-                                active: _tab == 0,
-                              ),
-                              _PersonalGuideView(
-                                learning: learning,
-                                onSpeak: _speak,
-                                onStop: _stopSpeech,
-                              ),
-                              QuizTrainingView(
-                                learning: learning,
-                                onSpeak: _speak,
-                                onStop: _stopSpeech,
-                                reviewOnly: true,
-                                active: _tab == 2,
-                              ),
-                            ],
+            ),
+            Expanded(
+              child: ListenableBuilder(
+                listenable: learning,
+                builder: (context, _) {
+                  if (!learning.ready) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  return Column(
+                    children: [
+                      if (learning.storageUnavailable)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 12),
+                          child: Text(
+                            '기록을 저장하지 못했어요. 이번 연습은 계속할 수 있어요.',
+                            style: TextStyle(color: red),
                           ),
                         ),
-                      ],
-                    );
-                  },
-                ),
+                      Expanded(
+                        child: TabBarView(
+                          controller: tabs,
+                          physics: const NeverScrollableScrollPhysics(),
+                          children: [
+                            QuizTrainingView(
+                              learning: learning,
+                              onSpeak: _speak,
+                              onStop: _stopSpeech,
+                              playback: playback,
+                              active: _tab == 0,
+                            ),
+                            _PersonalGuideView(
+                              learning: learning,
+                              playback: playback,
+                              onStop: _stopSpeech,
+                              onOpenSaved: _openSavedGuides,
+                              requestedGuide: _requestedGuide,
+                              guideRequest: _guideRequest,
+                            ),
+                            QuizTrainingView(
+                              learning: learning,
+                              onSpeak: _speak,
+                              onStop: _stopSpeech,
+                              playback: playback,
+                              reviewOnly: true,
+                              active: _tab == 2,
+                              onOpenGuide: _openGuide,
+                              reviewInitialFilter: _reviewInitialFilter,
+                              reviewFilterRequest: _reviewRequest,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     ),
@@ -173,12 +214,18 @@ class _PronunciationScreenState extends State<PronunciationScreen> {
 
 class _PersonalGuideView extends StatefulWidget {
   final LearningController learning;
-  final Future<void> Function(String, bool) onSpeak;
+  final SpeechPlaybackController playback;
   final Future<void> Function() onStop;
+  final VoidCallback onOpenSaved;
+  final String? requestedGuide;
+  final int guideRequest;
   const _PersonalGuideView({
     required this.learning,
-    required this.onSpeak,
+    required this.playback,
     required this.onStop,
+    required this.onOpenSaved,
+    required this.requestedGuide,
+    required this.guideRequest,
   });
 
   @override
@@ -192,13 +239,36 @@ class _PersonalGuideViewState extends State<_PersonalGuideView>
   final scroll = ScrollController();
   GuideResult? result;
   String? error;
-  bool slow = false;
+  final Object _speechOwner = Object();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRequestedGuide();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PersonalGuideView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.guideRequest != widget.guideRequest) {
+      _loadRequestedGuide();
+      _scrollToInput();
+    }
+  }
+
+  void _loadRequestedGuide() {
+    final value = widget.requestedGuide;
+    if (value == null) return;
+    text.text = value;
+    _updateAnalysis();
+  }
 
   @override
   bool get wantKeepAlive => true;
 
   @override
   void dispose() {
+    unawaited(widget.playback.stop(owner: _speechOwner));
     text.dispose();
     scroll.dispose();
     super.dispose();
@@ -207,28 +277,33 @@ class _PersonalGuideViewState extends State<_PersonalGuideView>
   void _analyze() {
     FocusScope.of(context).unfocus();
     unawaited(widget.onStop());
+    setState(_updateAnalysis);
+  }
+
+  void _updateAnalysis() {
     final input = text.text.trim();
     if (input.isEmpty) {
-      setState(() => error = '연습할 문장을 입력해 주세요.');
+      result = null;
+      error = '연습할 문장을 입력해 주세요.';
       return;
     }
     try {
       final next = engine.analyze(input);
-      setState(() {
-        error = next.hasHangul ? null : '한글이 포함된 문장을 입력해 주세요.';
-        result = next.hasHangul ? next : null;
-      });
+      error = next.hasHangul ? null : '한글이 포함된 문장을 입력해 주세요.';
+      result = next.hasHangul ? next : null;
     } on ArgumentError {
-      setState(() {
-        result = null;
-        error = '문장은 300자 이내로 입력해 주세요.';
-      });
+      result = null;
+      error = '문장은 300자 이내로 입력해 주세요.';
     }
   }
 
   void _fill(String value) {
     text.text = value;
     _analyze();
+    _scrollToInput();
+  }
+
+  void _scrollToInput() {
     if (scroll.hasClients) {
       if (MediaQuery.disableAnimationsOf(context)) {
         scroll.jumpTo(0);
@@ -284,6 +359,11 @@ class _PersonalGuideViewState extends State<_PersonalGuideView>
             },
           ),
           const SizedBox(height: 8),
+          const Text(
+            '예시 문장 · 눌러서 체험해 보세요',
+            style: TextStyle(color: muted, fontSize: 14),
+          ),
+          const SizedBox(height: 6),
           Wrap(
             spacing: 8,
             runSpacing: 4,
@@ -331,19 +411,13 @@ class _PersonalGuideViewState extends State<_PersonalGuideView>
                   const SizedBox(height: 8),
                   const Text('괄호 안은 소리 내어 읽을 때 참고하는 표기예요.'),
                   const SizedBox(height: 16),
-                  Material(
-                    color: Colors.transparent,
-                    child: SwitchListTile.adaptive(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('천천히 듣기'),
-                      value: slow,
-                      onChanged: (value) => setState(() => slow = value),
-                    ),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: () => widget.onSpeak(guide.original, slow),
-                    icon: const Icon(Icons.volume_up_outlined),
-                    label: const Text('예시 음성 듣기'),
+                  SpeechControls(
+                    playback: widget.playback,
+                    text: guide.original,
+                    owner: _speechOwner,
+                    normalKey: const Key('guide-speak'),
+                    slowKey: const Key('guide-speak-slow'),
+                    normalLabel: '예시 음성 듣기',
                   ),
                   const SizedBox(height: 8),
                   OutlinedButton.icon(
@@ -353,7 +427,9 @@ class _PersonalGuideViewState extends State<_PersonalGuideView>
                       if (context.mounted &&
                           !widget.learning.storageUnavailable) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('내 문장에 저장했어요.')),
+                          const SnackBar(
+                            content: Text('복습의 ‘저장한 내 문장’에 저장했어요.'),
+                          ),
                         );
                       }
                     },
@@ -370,7 +446,7 @@ class _PersonalGuideViewState extends State<_PersonalGuideView>
             ),
             const SizedBox(height: 10),
             if (guide.points.isEmpty)
-              const Text('적용된 발음 변화가 없어요. 예시 음성을 들으며 연습해 보세요.'),
+              const Text('적용된 발음 변화가 없어요. 위의 읽는 소리를 참고해 연습해 보세요.'),
             for (final point in guide.points)
               Card(
                 color: Colors.white,
@@ -409,35 +485,17 @@ class _PersonalGuideViewState extends State<_PersonalGuideView>
             ),
           ],
           const SizedBox(height: 32),
-          Text(
-            '저장한 내 문장 · ${widget.learning.guides.length}',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+          OutlinedButton.icon(
+            key: const Key('guide-open-saved'),
+            onPressed: widget.onOpenSaved,
+            icon: const Icon(Icons.bookmarks_outlined),
+            label: Text('저장한 문장 보기 · ${widget.learning.guides.length}개'),
           ),
-          const SizedBox(height: 10),
-          if (widget.learning.guides.isEmpty)
-            const Text(
-              '다시 연습하고 싶은 문장을 저장해 보세요.',
-              style: TextStyle(color: muted),
-            ),
-          for (final saved in widget.learning.guides)
-            Card(
-              elevation: 0,
-              color: Colors.white,
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 8,
-                ),
-                title: Text(saved.text),
-                subtitle: const Text('눌러서 다시 연습하기'),
-                onTap: () => _fill(saved.text),
-                trailing: IconButton(
-                  tooltip: '저장한 문장 삭제',
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: () => widget.learning.deleteGuide(saved.text),
-                ),
-              ),
-            ),
+          const SizedBox(height: 8),
+          const Text(
+            '저장한 내 문장은 복습에서 다시 연습할 수 있어요.',
+            style: TextStyle(color: muted),
+          ),
         ],
       ),
     );
