@@ -12,6 +12,7 @@ import 'screens/scenario_screen.dart';
 import 'screens/meter_screen.dart';
 import 'features/pronunciation/presentation/pronunciation_screen.dart';
 import 'features/pronunciation/data/learning_store.dart';
+import 'features/pronunciation/data/speech_player.dart';
 import 'features/prosody/presentation/prosody_screen.dart';
 import 'features/prosody/practice_session.dart';
 
@@ -22,6 +23,7 @@ class VoiceMateApp extends StatefulWidget {
   final bool startWithProsody;
   final PracticeSession? prosodySession;
   final LearningController? pronunciationLearning;
+  final SpeechPlayer? pronunciationSpeech;
   const VoiceMateApp({
     super.key,
     this.audioPort,
@@ -30,6 +32,7 @@ class VoiceMateApp extends StatefulWidget {
     this.startWithProsody = false,
     this.prosodySession,
     this.pronunciationLearning,
+    this.pronunciationSpeech,
   });
   @override
   State<VoiceMateApp> createState() => _VoiceMateAppState();
@@ -42,6 +45,7 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
   late int section;
   bool changingSection = false;
   LearningController? pronunciationLearning;
+  SpeechPlayer? pronunciationSpeech;
   PracticeSession? prosody;
   @override
   void initState() {
@@ -52,6 +56,7 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
         ? 1
         : 0;
     pronunciationLearning = widget.pronunciationLearning;
+    pronunciationSpeech = widget.pronunciationSpeech;
     if (section == 2) _prepareProsody();
     session = SessionController(widget.audioPort ?? createAudioPort());
     semantics = WidgetsBinding.instance.ensureSemantics();
@@ -72,6 +77,7 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
     setState(() => changingSection = true);
     try {
       if (section == 0 && session.active) await session.stop();
+      if (section == 1) await pronunciationSpeech?.stop();
       final currentProsody = prosody;
       if (section == 2 && currentProsody != null) {
         await currentProsody.audio.stopPlayback();
@@ -88,6 +94,9 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
   @override
   void dispose() {
     if (widget.pronunciationLearning == null) pronunciationLearning?.dispose();
+    if (widget.pronunciationSpeech == null) {
+      unawaited(pronunciationSpeech?.dispose() ?? Future<void>.value());
+    }
     if (widget.prosodySession == null) prosody?.dispose();
     session.dispose();
     semantics.dispose();
@@ -138,6 +147,7 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
                   learning: pronunciationLearning ??= LearningController(
                     PreferencesLearningStore(),
                   ),
+                  speech: pronunciationSpeech ??= DeviceSpeechPlayer(),
                 )
               : LayoutBuilder(
                   builder: (context, constraints) {
