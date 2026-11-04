@@ -2,5 +2,5 @@
   "name": "voicemate-audio",
   "private": true,
   "type": "module",
-  "scripts": { "test": "node --test tests/audio/*.test.mjs" }
+  "scripts": { "test": "node --test tests/audio/*.test.mjs tools/prosody-web-tests/*.test.mjs" }
 }

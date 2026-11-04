@@ -18,5 +18,11 @@ dev_dependencies:
     sdk: flutter
 flutter:
   uses-material-design: true
+  fonts:
+    - family: Pretendard
+      fonts:
+        - asset: assets/fonts/PretendardVariable.ttf
   assets:
     - assets/prosody/guides/
+    - assets/fonts/OFL.txt
+    - web/prosody/vendor/supertonic/LICENSE-model.txt

@@ -40,7 +40,7 @@ class ScenarioScreen extends StatelessWidget {
         style: TextStyle(
           color: blue,
           fontWeight: FontWeight.w700,
-          fontSize: 13,
+          fontSize: 14,
         ),
       ),
       const SizedBox(height: 12),
@@ -82,7 +82,7 @@ class ScenarioScreen extends StatelessWidget {
           Expanded(
             child: Text(
               '휴대폰을 앞쪽 책상에 두고 사용한다.',
-              style: TextStyle(color: muted, fontSize: 13, height: 1.6),
+              style: TextStyle(color: muted, fontSize: 14, height: 1.6),
             ),
           ),
         ],
@@ -101,7 +101,7 @@ class ScenarioScreen extends StatelessWidget {
         child: Text(
           '시작할 때 마이크 권한을 확인한다.\n음성은 저장하거나 전송하지 않는다.',
           textAlign: TextAlign.center,
-          style: TextStyle(color: muted, fontSize: 12, height: 1.7),
+          style: TextStyle(color: muted, fontSize: 14, height: 1.7),
         ),
       ),
     ],
@@ -161,7 +161,7 @@ class ScenarioScreen extends StatelessWidget {
                     s.subtitle,
                     style: const TextStyle(
                       color: muted,
-                      fontSize: 12,
+                      fontSize: 14,
                       height: 1.6,
                     ),
                   ),

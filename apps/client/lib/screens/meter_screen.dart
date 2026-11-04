@@ -112,6 +112,8 @@ class MeterScreen extends StatelessWidget {
         '브라우저 처리 설정을 확인할 수 없어 환경 잡음 추정과 자동 범위를 보류했다.',
       (_, _, _, 'processing_settings', _) =>
         '브라우저 처리가 켜져 있어 환경 잡음 추정과 자동 범위를 보류했다.',
+      (_, _, _, _, 'ready') when a['provenance'] == 'relative_input' =>
+        '상대 입력 분석 중',
       (_, _, _, _, 'ready') => '환경 분석 중',
       (_, _, _, _, 'collecting') => '비발화 증거를 수집하고 있다.',
       (_, _, _, _, 'held') => '잡음 정보가 오래됐거나 불확실해 보류했다.',
@@ -159,7 +161,7 @@ class MeterScreen extends StatelessWidget {
         Text(
           description,
           textAlign: TextAlign.center,
-          style: const TextStyle(color: muted, fontSize: 13, height: 1.7),
+          style: const TextStyle(color: muted, fontSize: 14, height: 1.7),
         ),
         const SizedBox(height: 8),
         SwitchListTile(
@@ -171,7 +173,7 @@ class MeterScreen extends StatelessWidget {
           ),
           subtitle: Text(
             session.noiseReductionEnabled ? '켜짐' : '꺼짐',
-            style: const TextStyle(color: muted, fontSize: 12),
+            style: const TextStyle(color: muted, fontSize: 14),
           ),
           value: session.noiseReductionEnabled,
           onChanged: session.state == CaptureState.requesting
@@ -181,76 +183,104 @@ class MeterScreen extends StatelessWidget {
         Text(
           analysisStatus,
           textAlign: TextAlign.center,
-          style: const TextStyle(color: muted, fontSize: 12),
+          style: const TextStyle(color: muted, fontSize: 14),
         ),
-        VolumeGauge(
-          scenario: s,
-          displayLevel: session.displayLevel,
-          lower: range.lower,
-          upper: range.upper,
-        ),
-        Text(
-          '입력 수준 ${session.displayLevel?.toStringAsFixed(1) ?? '—'}',
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-        ),
-        const Text(
-          '상대 입력 막대 · 본인 목소리로 확인된 음량이 아니다.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: muted, fontSize: 12, height: 1.7),
-        ),
-        Text(
-          session.displayLevel != null
-              ? '발화로 판정된 입력이다. 다른 사람의 소리도 포함될 수 있다.'
-              : a['meterState'] == 'confirming'
-              ? '발화 판정을 연속 확인하고 있다.'
-              : a['meterState'] == 'nonSpeech'
-              ? '발화가 감지되지 않아 막대를 비웠다.'
-              : '발화 판정이 없거나 확인할 수 없어 막대를 비웠다.',
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: muted, fontSize: 12, height: 1.7),
-        ),
-        if (a['reason'] == 'processing_settings')
-          Text(
-            processingUnknown
-                ? '전처리 미확인 · 막대는 상대 참고값이다.'
-                : '전처리 적용 · 막대는 상대 참고값이다.',
+        if (a['provenance'] == 'relative_input')
+          const Text(
+            '실험적 상대 입력 기준 · 실제 음압 아님',
             textAlign: TextAlign.center,
-            style: const TextStyle(color: muted, fontSize: 12, height: 1.7),
+            style: TextStyle(color: muted, fontSize: 14),
           ),
-        const SizedBox(height: 5),
-        const Text(
-          '빨간 선은 참고 범위의 하한·상한이다.\n참고 척도 · 실제 데시벨은 아니다.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: muted, fontSize: 12, height: 1.7),
-        ),
-        const SizedBox(height: 12),
-        Semantics(
-          liveRegion: true,
-          child: Text(
-            [
-              if (a['state'] == 'ready') ...[
-                '발화 판정 ${a['speech'] == 'speech'
-                    ? '발화 감지'
-                    : a['speech'] == 'nonSpeech'
-                    ? '비발화'
-                    : '불확실'}',
-                '주변 잡음 추정 ${noise?.toStringAsFixed(1) ?? '—'} dBFS',
-                '발화 수준 추정 ${voice == null ? '—' : (voice + SessionController.inputLevelOffset).clamp(0, 120).toStringAsFixed(1)}',
-                '환경 적응 참고범위 ${range.lower.toStringAsFixed(1)}–${range.upper.toStringAsFixed(1)}',
+        TweenAnimationBuilder<double>(
+          tween: Tween(end: range.lower - s.referenceLower),
+          duration: MediaQuery.disableAnimationsOf(context) || !range.adjusted
+              ? Duration.zero
+              : const Duration(milliseconds: 400),
+          curve: Curves.easeOut,
+          builder: (context, value, child) {
+            final visualLower = double.parse(
+              (s.referenceLower + value).toStringAsFixed(1),
+            );
+            final visualUpper = double.parse(
+              (s.referenceUpper + value).toStringAsFixed(1),
+            );
+            return Column(
+              children: [
+                VolumeGauge(
+                  scenario: s,
+                  displayLevel: session.displayLevel,
+                  lower: visualLower,
+                  upper: visualUpper,
+                ),
+                Text(
+                  '입력 수준 ${session.displayLevel?.toStringAsFixed(1) ?? '—'}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (session.displayLevel != null ||
+                    a['meterState'] != 'nonSpeech')
+                  Text(
+                    session.displayLevel != null
+                        ? '발화로 판정된 입력이다. 다른 사람의 소리도 포함될 수 있다.'
+                        : a['meterState'] == 'confirming'
+                        ? '발화 판정을 연속 확인하고 있다.'
+                        : '발화 판정이 없거나 확인할 수 없어 막대를 비웠다.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: muted,
+                      fontSize: 14,
+                      height: 1.7,
+                    ),
+                  ),
+                if (a['reason'] == 'processing_settings' && !processingUnknown)
+                  Text(
+                    '전처리 적용 · 막대는 상대 참고값이다.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: muted,
+                      fontSize: 14,
+                      height: 1.7,
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    [
+                      if (a['state'] == 'ready') ...[
+                        '발화 판정 ${a['speech'] == 'speech'
+                            ? '발화 감지'
+                            : a['speech'] == 'nonSpeech'
+                            ? '비발화'
+                            : '불확실'}',
+                        if (a['provenance'] != 'relative_input') ...[
+                          '주변 잡음 추정 ${noise?.toStringAsFixed(1) ?? '—'} dBFS',
+                          '발화 수준 추정 ${voice == null ? '—' : (voice + SessionController.inputLevelOffset).clamp(0, 120).toStringAsFixed(1)}',
+                        ],
+                        '${a['provenance'] == 'relative_input' ? '상대 입력 참고범위' : '환경 적응 참고범위'} ${visualLower.toStringAsFixed(1)}–${visualUpper.toStringAsFixed(1)}',
+                      ],
+                      if (value == range.lower - s.referenceLower)
+                        if (session.displayLevel case final level?)
+                          '참고 범위 비교 ${double.parse(level.toStringAsFixed(1)) < range.lower
+                              ? '하한 미만'
+                              : double.parse(level.toStringAsFixed(1)) > range.upper
+                              ? '상한 초과'
+                              : '범위 안'} · 척도 정합성 미검증',
+                    ].join('\n'),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: muted,
+                      fontSize: 14,
+                      height: 1.7,
+                    ),
+                  ),
+                ),
               ],
-              if (!range.adjusted) '환경 적응 보류 · 기본 참고범위',
-              if (session.displayLevel case final level?)
-                '참고 범위 비교 ${double.parse(level.toStringAsFixed(1)) < range.lower
-                    ? '하한 미만'
-                    : double.parse(level.toStringAsFixed(1)) > range.upper
-                    ? '상한 초과'
-                    : '범위 안'} · 척도 정합성 미검증',
-              '실험적 환경 추정 · 실제 음압이 아니다.',
-            ].join('\n'),
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: muted, fontSize: 12, height: 1.7),
-          ),
+            );
+          },
         ),
         const SizedBox(height: 28),
         OutlinedButton(
@@ -361,6 +391,8 @@ class MeterScreen extends StatelessWidget {
         '브라우저 처리 설정을 확인할 수 없어 환경 잡음 추정과 자동 범위를 보류했다.',
       (_, _, _, 'processing_settings', _) =>
         '브라우저 처리가 켜져 있어 환경 잡음 추정과 자동 범위를 보류했다.',
+      (_, _, _, _, 'ready') when a['provenance'] == 'relative_input' =>
+        '상대 입력 분석 중',
       (_, _, _, _, 'ready') => '환경 분석 중',
       (_, _, _, _, 'collecting') => '비발화 증거를 수집하고 있다.',
       (_, _, _, _, 'held') => '잡음 정보가 오래됐거나 불확실해 보류했다.',
@@ -380,14 +412,25 @@ class MeterScreen extends StatelessWidget {
           child: Text(
             '$frameStatus\n오디오 엔진 $contextLabel · 처리 주파수 ${settings['contextSampleRate'] ?? '확인 불가'} Hz\n$analysisStatus\n발화 판별기 $vadLabel\n자동 이득 ${flag('autoGainControl')} · 잡음 억제 ${flag('noiseSuppression')} · 반향 제거 ${flag('echoCancellation')}',
             textAlign: TextAlign.center,
-            style: const TextStyle(color: muted, fontSize: 12, height: 1.7),
+            style: const TextStyle(color: muted, fontSize: 14, height: 1.7),
           ),
+        ),
+        if (a['provenance'] == 'relative_input')
+          const Text(
+            '상대 입력 추정은 브라우저 자동 이득 변화와 실제 소음 변화를 구분할 수 없다.',
+            style: TextStyle(fontSize: 14, color: muted, height: 1.8),
+          ),
+        TextButton.icon(
+          onPressed: () =>
+              showLicensePage(context: context, applicationName: 'VoiceMate'),
+          icon: const Icon(Icons.description_outlined),
+          label: const Text('오픈소스 · 모델 이용 조건'),
         ),
         Align(
           alignment: Alignment.centerLeft,
           child: Text(
             '$inputLabel ${session.level?.dbfs?.toStringAsFixed(1) ?? '—'} dBFS\n수신 프레임 ${session.frameCount}\n입력 상태 ${session.state.name}\n${_settingsText()}',
-            style: const TextStyle(fontSize: 12, color: muted, height: 1.8),
+            style: const TextStyle(fontSize: 14, color: muted, height: 1.8),
           ),
         ),
       ],

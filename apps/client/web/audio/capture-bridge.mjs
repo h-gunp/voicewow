@@ -1,5 +1,11 @@
 import { EnvironmentEstimator } from './environment-estimator.mjs';
 
+export function processingProvenance(settings) {
+  const keys = ['autoGainControl','noiseSuppression','echoCancellation'];
+  if (keys.some(key => Object.prototype.hasOwnProperty.call(settings,key) && settings[key] !== false)) return 'unavailable';
+  return keys.every(key => Object.prototype.hasOwnProperty.call(settings,key)) ? 'verified' : 'relative_input';
+}
+
 function browserPlatform() {
   const devices = globalThis.navigator?.mediaDevices;
   return {
@@ -147,20 +153,23 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
         function publishSettings() {
           // Only non-identifying processing settings leave the audio bridge.
           const raw = readTrackSettings(track), settings = {contextSampleRate:s.context.sampleRate, contextState:s.context.state};
-          for (const key of ['sampleRate','channelCount','autoGainControl','noiseSuppression','echoCancellation']) if (raw[key] !== undefined) settings[key] = raw[key];
+          for (const key of ['sampleRate','channelCount','autoGainControl','noiseSuppression','echoCancellation']) if (Object.prototype.hasOwnProperty.call(raw,key)) settings[key] = raw[key] ?? null;
           settings.noiseReductionState = s.noiseReductionState;
           if (s.node?.vadStatus) settings.vadStatus = s.node.vadStatus;
           if (s.noiseReductionReason) settings.noiseReductionReason = s.noiseReductionReason;
+          const provenance = processingProvenance(raw);
           const settingsKey = JSON.stringify(settings);
           if (settingsKey !== lastSettingsKey) {
             if (lastSettingsKey !== undefined) {
-              s.estimator = new EnvironmentEstimator(); s.analysisOrigin = null;
+              s.analysisOrigin = null;
               s.speechFrames = 0;
               s.settingsRevision++;
             }
+            s.estimator = new EnvironmentEstimator({relative:provenance === 'relative_input'});
             lastSettingsKey = settingsKey;
             onEvent({type:'settings',settings});
           }
+          return raw;
         }
         if (!noiseReductionEnabled) {
           s.noiseReductionState = 'disabled';
@@ -204,8 +213,7 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
           }
           if (data?.type === 'analysis') {
             try {
-              publishSettings();
-              const settings = readTrackSettings(track);
+              const settings = publishSettings();
               if (s.node.vadStatus && s.node.vadStatus !== 'ready') {
                 s.lastAnalysisAt = undefined; s.lastAnalysisSignature = null; s.speechFrames = 0;
                 onEvent({type:'analysis',analysis:{state:'unavailable',meterState:'unavailable',reason:'vad_unavailable'}}); return;
@@ -215,7 +223,8 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
                 s.lastAnalysisAt = undefined; s.lastAnalysisSignature = null; s.speechFrames = 0;
                 onEvent({type:'analysis',analysis:{state:'unavailable',meterState:'unavailable',reason:'noise_reduction_unavailable'}}); return;
               }
-              const environmentSupported = ['autoGainControl','noiseSuppression','echoCancellation'].every(key=>settings[key] === false);
+              const provenance = processingProvenance(settings);
+              const environmentSupported = provenance !== 'unavailable';
               const now = platform.now();
               if (!Number.isSafeInteger(data.seq) || data.seq < 0 || data.sampleStart !== data.seq*480 || data.sampleEnd !== (data.seq+1)*480 || typeof data.clipped !== 'boolean' || !Number.isFinite(data.sampleTime) || !Number.isFinite(s.context.currentTime)) throw new Error('invalid analysis');
               const origin = data.sampleTime - data.sampleEnd/48000;
@@ -229,7 +238,7 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
               if (s.lastAnalysisSeq !== undefined && data.seq !== s.lastAnalysisSeq + 1) s.speechFrames = 0;
               s.lastAnalysisSeq = data.seq; s.lastAnalysisAt = now;
               if (environmentSupported) s.estimator.add(data);
-              const snapshot = environmentSupported ? s.estimator.snapshot() : {state:'unavailable',reason:'processing_settings',speech:data.clipped?'uncertain':data.speech,noiseDbfs:null,voiceDbfs:null,offset:null};
+              const snapshot = environmentSupported ? {...s.estimator.snapshot(), provenance} : {state:'unavailable',reason:'processing_settings',speech:data.clipped?'uncertain':data.speech,noiseDbfs:null,voiceDbfs:null,offset:null};
               const validSpeech = age <= 200 && !data.clipped && snapshot.speech === 'speech' && data.meterRms > 0;
               // Experimental 30 ms onset confirmation.
               s.speechFrames = validSpeech ? Math.min((s.speechFrames || 0) + 1, 3) : 0;
