@@ -20,7 +20,7 @@ Push-Location apps/client
 & ../../.tools/flutter/bin/flutter.bat analyze
 & ../../.tools/flutter/bin/flutter.bat build web --release --no-web-resources-cdn
 Pop-Location
-node --test tests/audio/*.test.mjs
+npm test
 .\scripts\start-web.ps1
 ```
 

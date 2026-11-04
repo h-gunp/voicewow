@@ -6,7 +6,7 @@ const validRegions = regions => Array.isArray(regions) ? regions.filter(region =
 
 function geometry(width) {
   const height = Math.max(255, Math.min(350, width * .58));
-  return { width, height, left: 48, right: width - 12, top: 30, bottom: height - 51 };
+  return { width, height, left: 48, right: width - 12, top: width < 320 ? 48 : 30, bottom: height - 51 };
 }
 
 /** Returns the supplied time-region index, never an inferred word position.
@@ -61,7 +61,7 @@ export function drawGraph(canvas, { reference, trace = [], field = 'relativePitc
   ctx.font = '12px Pretendard, sans-serif';
   ctx.textAlign = 'right';
   ctx.fillStyle = '#465a74';
-  ctx.fillText(live ? '기준: 녹음 중 갱신' : '기준: 각 목소리의 중간값', right, 13);
+  ctx.fillText(live ? '기준: 녹음 중 갱신' : '기준: 각 목소리의 중간값', right, width < 320 ? 30 : 13, right - 4);
 
   const backgroundRegions = actualRegions.length ? actualRegions : [{ start: 0, end: regionDuration }];
   for (let i = 0; i < backgroundRegions.length; i++) {

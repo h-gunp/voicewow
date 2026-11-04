@@ -28,7 +28,7 @@ function canvas() {
 
 const frame = (time, value) => ({ time, relativePitch: value, relativeDb: value });
 const reference = { duration: 2, frames: [frame(0, -1), frame(1, 1), frame(2, 0)] };
-const voiceColor = '#de5d43';
+const voiceColor = '#34455e';
 const dots = c => c.painted.filter(p => p.kind === 'fill' && p.color === voiceColor).flatMap(p => p.path.filter(op => op.type === 'arc'));
 const voicePath = c => c.painted.find(p => p.kind === 'stroke' && p.color === voiceColor)?.path;
 
@@ -112,7 +112,7 @@ test('graph labels, shading and hit testing use the actual supplied time ranges 
   const labels = c.text.map(t => t.value);
   assert.ok(labels.includes('짧은 앞 구간') && labels.includes('남은 구간'));
   assert.ok(!labels.includes('중간'));
-  const highlighted = c.rectangles.find(rectangle => rectangle.color === '#fff1e6');
+  const highlighted = c.rectangles.find(rectangle => rectangle.color === '#eaf1fe');
   assert.equal(highlighted.width, (388 - 48) / 4);
   assert.equal(graphSegmentAt(c, reference, 48 + (388 - 48) * .1, 100, regions), 0);
   assert.equal(graphSegmentAt(c, reference, 48 + (388 - 48) * .3, 100, regions), 1);
@@ -139,4 +139,20 @@ test('aligned result never connects across skipped user silence, including withi
     assert.deepEqual(operations.map(op=>op.type),expected,'stroke must not bridge the skipped user frame');
     assert.ok(dots(c).length>0,'isolated measurements remain visible');
   }
+});
+
+
+test('narrow chart places heading and explanatory text on separate rows above the plot', () => {
+  const c = canvas(); c.clientWidth = 173;
+  drawGraph(c, { reference });
+  const title = c.text.find(item => item.value === '음 높이');
+  const description = c.text.find(item => item.value === '기준: 각 목소리의 중간값');
+  assert.ok(title && description);
+  assert.ok(description.y - title.y >= 14, 'narrow headings must not share a row');
+  const plot = c.rectangles.find(rect => rect.color === '#f0f5fc');
+  assert.ok(plot.y >= description.y + 8, 'the plot must start below the description');
+  c.getBoundingClientRect = () => ({left:0, top:0, width:173, height:255});
+  const regions = [{label:'앞',start:0,end:1},{label:'뒤',start:1,end:2}];
+  assert.equal(graphSegmentAt(c, reference, 80, 35, regions), null, 'header is outside the selectable plot');
+  assert.equal(graphSegmentAt(c, reference, 80, 80, regions), 0);
 });
