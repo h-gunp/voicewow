@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>음성 인식 모델·라이선스 고지 — VoiceMate</title>
+<style>
+body{margin:0;padding:24px;font-family:system-ui,sans-serif;line-height:1.7;color:#202522;background:#fafbf9}
+main{max-width:720px;margin:auto}h1{font-size:1.5rem;line-height:1.4}h2{font-size:1.15rem;margin-top:28px}
+a{color:#185d40;text-underline-offset:3px;overflow-wrap:anywhere}a:focus-visible{outline:3px solid #185d40;outline-offset:4px}
+li{margin:8px 0}p{overflow-wrap:anywhere}
+</style>
+</head>
+<body><main>
+<h1>음성 인식 모델·라이선스 고지</h1>
+<p>VoiceMate의 음성 대본 위치 표시는 sherpa-onnx와 한국어 Streaming Zipformer 모델을 사용합니다. 인식은 기기 안에서 처리하며 음성·대본을 서버로 전송하지 않습니다.</p>
+<h2>한국어 모델</h2>
+<p>원본 모델 카드는 Apache-2.0을 선언합니다. 변환 모델 카드는 원본 출처를 연결하지만, 변환본의 별도 라이선스 선언은 명시되지 않았습니다. <strong>변환 모델 재배포 권리는 확인 중입니다.</strong> 아래 출처·전문을 확인해 주세요. 이 안내는 별도의 이용 허가를 부여하지 않습니다.</p>
+<p><a href="https://github.com/k2-fsa/icefall/pull/1655/files" rel="noreferrer">공식 변환 절차 기록(icefall PR #1655)</a>에는 원본 pretrained.pt를 epoch-99.pt로 연결해 ONNX로 내보내고 해당 변환 저장소에 올리는 과정이 있습니다. 미확인 사항은 실행 당시 원본 revision의 고정 여부, 현재 배포 파일의 독립 재현, 변환 저장소 자체의 별도 라이선스 표기입니다. 변환 기록이 없다는 뜻은 아닙니다.</p>
+<ul>
+<li><a href="./vendor/sherpa/MODEL-ORIGINAL-CARD.md">보관된 원본 모델 카드</a> · <a href="https://huggingface.co/johnBamma/icefall-asr-ksponspeech-pruned-transducer-stateless7-streaming-2024-06-12" rel="noreferrer">원본 모델 출처</a></li>
+<li><a href="./vendor/sherpa/MODEL-CONVERSION-CARD.md">보관된 변환 모델 카드</a> · <a href="https://huggingface.co/k2-fsa/sherpa-onnx-streaming-zipformer-korean-2024-06-16/tree/ba6078bca4daf3f0dd37f79d0ab505af71df14a6" rel="noreferrer">사용 중인 변환 모델 버전</a></li>
+<li><a href="./vendor/sherpa/LICENSE">Apache License 2.0 전문</a></li>
+</ul>
+<p>모델 가중치는 사이트 파일에 포함하지 않고 사용자가 준비할 때 고정된 공개 주소에서 내려받습니다. 직접 다운로드 방식이 추가 권리를 보장하거나 라이선스 의무를 없애지는 않습니다. 학습 데이터·평가 음성의 재배포 권리는 별개입니다.</p>
+<h2>실행 코드와 의존성</h2>
+<p>공식 sherpa_onnx_web 2.0.1의 JavaScript·WebAssembly 파일을 수정 없이 사용합니다. <a href="./vendor/sherpa/README.md">버전·출처·고지 설명</a></p>
+<ul>
+<li><a href="./vendor/sherpa/LICENSE">sherpa-onnx — Apache-2.0</a></li>
+<li><a href="./vendor/sherpa/ONNXRUNTIME-LICENSE">ONNX Runtime — MIT</a> · <a href="./vendor/sherpa/ONNXRUNTIME-ThirdPartyNotices.txt">ONNX Runtime 제3자 고지 전문</a></li>
+<li><a href="./vendor/sherpa/LICENSE-kaldi-native-fbank.txt">kaldi-native-fbank 라이선스</a></li>
+<li><a href="./vendor/sherpa/LICENSE-kaldi-decoder.txt">kaldi-decoder 라이선스</a></li>
+<li><a href="./vendor/sherpa/LICENSE-openfst.txt">OpenFst 고지</a></li>
+<li><a href="./vendor/sherpa/LICENSE-simple-sentencepiece.txt">simple-sentencepiece 라이선스</a></li>
+<li><a href="./vendor/sherpa/LICENSE-utf8proc.txt">utf8proc·Unicode 고지</a></li>
+<li><a href="./vendor/sherpa/LICENSE-json.txt">nlohmann/json 라이선스</a></li>
+<li><a href="./vendor/sherpa/LICENSE-hclust-cpp.txt">hclust-cpp 라이선스</a></li>
+<li><a href="./vendor/sherpa/LICENSE-Eigen-MPL2.txt">Eigen — MPL-2.0 전문</a> · <a href="https://gitlab.com/libeigen/eigen/-/tree/5.0.1" rel="noreferrer">사용한 Eigen 원본 소스</a></li>
+</ul>
+<p>이 창을 닫으면 진행 중인 연습 화면으로 돌아갈 수 있습니다.</p>
+</main></body>
+</html>

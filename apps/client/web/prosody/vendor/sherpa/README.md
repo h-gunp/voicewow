@@ -19,5 +19,12 @@ declaration. Both cards are retained for provenance. No training dataset or
 public test WAV is distributed with the feature. This does not establish
 separate redistribution rights for those samples.
 
+An official conversion workflow does exist:
+https://github.com/k2-fsa/icefall/pull/1655/files
+It links original pretrained.pt as epoch-99.pt, exports ONNX and uploads to the
+conversion repository. Remaining verification concerns are the original revision
+used at execution, independent reproduction of the current artifacts, and the
+conversion repository's separate license declaration—not absence of a workflow.
+
 Recognition runs locally after model loading. There is no remote ASR fallback.
 See docs/wasm-asr-feasibility.md in the repository for measurements and limits.
