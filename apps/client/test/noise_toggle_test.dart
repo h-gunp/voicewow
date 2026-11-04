@@ -140,4 +140,42 @@ void main() {
       }
     });
   }
+  for (final failure in ['disabled', 'initial_failed', 'vad_runtime_failed']) {
+    testWidgets(
+      'unclassified loud input stays blank when processing is $failure',
+      (tester) async {
+        final port = FakeAudioPort();
+        await startMeter(tester, port);
+        port.send(const AudioEvent.state(CaptureState.running));
+        port.send(
+          const AudioEvent.analysis({
+            'meterState': 'speech',
+            'speech': 'speech',
+            'meterDbfs': -30.0,
+          }),
+        );
+        await tester.pump();
+        expect(find.byKey(const Key('input-fill')), findsOneWidget);
+        port.send(AudioEvent.settings({'noiseReductionState': failure}));
+        port.send(
+          AudioEvent.analysis({
+            'state': 'unavailable',
+            'meterState': 'unavailable',
+            'reason': failure,
+          }),
+        );
+        port.send(
+          const AudioEvent.level(
+            rms: .9,
+            dbfs: -1,
+            normalized: .99,
+            sampleCount: 4800,
+          ),
+        );
+        await tester.pump();
+        expect(find.byKey(const Key('input-fill')), findsNothing);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
 }
