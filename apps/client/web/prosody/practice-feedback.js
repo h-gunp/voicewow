@@ -222,20 +222,20 @@ export function describeSegmentPractice(reference, user, comparison, segment, ta
   };
   let tone = 'neutral', title = '내 목소리의 흐름을 같이 살펴봐요', cardLabel = '함께 살펴봐요';
   let observation = `이번에는 ${qualitative(u)}. 중간의 움직임은 그래프에서 함께 볼 수 있어요.`;
-  let action = '파란 선과 주황 선을 나란히 봐 주세요. 더 연습하고 싶은 부분이 있다면, 그 부분만 다시 읽어도 좋아요.';
+  let action = '짙은 청록색 선과 짙은 자주색 선을 나란히 봐 주세요. 더 연습하고 싶은 부분이 있다면, 그 부분만 다시 읽어도 좋아요.';
   if (sameDirection) {
     const reading = pitch ? (u.direction === 'rise' ? '올려' : '내려')
       : (u.direction === 'rise' ? '크게' : '작게');
     tone = 'encourage'; title = `좋아요! 끝을 ${reading} 읽었네요.`;
     cardLabel = pitch ? (u.direction === 'rise' ? '끝을 올렸어요' : '끝을 내렸어요') : `끝을 ${reading} 읽었어요`;
-    observation = `${regionLabel}에서 ${qualitative(u)}. 파란 예시도 같은 쪽으로 움직여요.`;
+    observation = `${regionLabel}에서 ${qualitative(u)}. 짙은 청록색 예시도 같은 쪽으로 움직여요.`;
     action = '지금처럼 편하게 읽어 보세요. 다음 부분도 같이 해 볼까요?';
   } else if (opposite || (r.direction !== 'rounded-zero' && u.direction === 'rounded-zero')) {
     tone = 'practice'; title = '끝부분만 조금 바꿔 볼까요?'; cardLabel = '조금씩 연습해요';
-    observation = `${regionLabel}에서 ${qualitative(u)}. 파란 예시는 ${qualitative(r)}.`;
+    observation = `${regionLabel}에서 ${qualitative(u)}. 짙은 청록색 예시는 ${qualitative(r)}.`;
     const movement = pitch ? (r.direction === 'rise' ? '높여서' : '낮춰서')
       : (r.direction === 'rise' ? '키워서' : '줄여서');
-    action = `파란 선을 보면서 끝 ${pitch ? '음을' : '소리를'} 조금 ${movement} 읽어 볼까요? 편하게 한 번 더 해 봐요.`;
+    action = `짙은 청록색 선을 보면서 끝 ${pitch ? '음을' : '소리를'} 조금 ${movement} 읽어 볼까요? 편하게 한 번 더 해 봐요.`;
   }
   const note = `${ROUNDING_NOTE}${pitch ? '' : ' 크기는 각 녹음의 기준 크기에 대한 값이며 실제 소음계 데시벨이 아니에요.'}`;
   return {

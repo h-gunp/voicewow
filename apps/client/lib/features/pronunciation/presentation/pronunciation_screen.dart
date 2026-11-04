@@ -72,7 +72,7 @@ class _PronunciationScreenState extends State<PronunciationScreen> {
               const Text(
                 '내 속도로, 함께',
                 style: TextStyle(
-                  color: Color(0xff146b70),
+                  color: Color(0xff355757),
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
                 ),
@@ -107,7 +107,7 @@ class _PronunciationScreenState extends State<PronunciationScreen> {
                   indicator: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xffcbd9ef)),
+                    border: Border.all(color: const Color(0xffa9cecc)),
                   ),
                   tabs: const [
                     Tab(text: '발음 퀴즈'),

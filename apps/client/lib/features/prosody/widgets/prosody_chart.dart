@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../audio/audio_analysis.dart';
 
-const _guide = Color(0xff2f62d6);
-const _voice = Color(0xff34455e);
+const _guide = Color(0xff355f5f);
+const _voice = Color(0xff590219);
 
 /// Feature contours, not raw waveform or a normative score. During recording
 /// the horizontal axis is elapsed time; final traces may be DTW-aligned.
@@ -35,44 +35,55 @@ class ProsodyChart extends StatelessWidget {
   Widget build(BuildContext context) => Semantics(
     image: true,
     label:
-        '${volume ? '상대적인 소리 크기' : '상대적인 음높이'} 그래프. 파란 점선은 가이드, 짙은 회색 선과 점은 내 목소리. '
+        '${volume ? '상대적인 소리 크기' : '상대적인 음높이'} 그래프. 청록색 점선은 가이드, 짙은 자주색 선과 점은 내 목소리. '
         '${live ? '가로축은 녹음 경과 시간입니다.' : '가로축은 시간이며, 표시한 구간은 단어나 음절 경계가 아닙니다.'}'
         '${!live && regions.isNotEmpty ? ' 비교 구간: ${regions.map((region) => region.label).join(', ')}.' : ''}'
         '${selected == null ? '' : ' 선택한 구간: ${selected!.label}.'} 확인할 수 없는 소리는 선을 비워 둡니다.',
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Padding(
-          padding: EdgeInsets.only(bottom: 8),
-          child: Wrap(
-            spacing: 18,
-            runSpacing: 4,
-            alignment: WrapAlignment.end,
-            children: [
-              _Legend('가이드', _guide, dashed: true),
-              _Legend('내 목소리', _voice),
-            ],
-          ),
-        ),
-        SizedBox(
-          height: height * (MediaQuery.textScalerOf(context).scale(12) / 12),
-          width: double.infinity,
-          child: CustomPaint(
-            painter: _ProsodyPainter(
-              reference: reference,
-              trace: trace,
-              volume: volume,
-              live: live,
-              progress: progress,
-              selected: selected,
-              regions: regions,
-              domainSeconds: domainSeconds,
-              scaleBound: scaleBound,
-              textScale: MediaQuery.textScalerOf(context).scale(12) / 12,
+    child: Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xffc9ded9)),
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(bottom: 8),
+              child: Wrap(
+                spacing: 18,
+                runSpacing: 4,
+                alignment: WrapAlignment.end,
+                children: [
+                  _Legend('가이드', _guide, dashed: true),
+                  _Legend('내 목소리', _voice),
+                ],
+              ),
             ),
-          ),
+            SizedBox(
+              height:
+                  height * (MediaQuery.textScalerOf(context).scale(12) / 12),
+              width: double.infinity,
+              child: CustomPaint(
+                painter: _ProsodyPainter(
+                  reference: reference,
+                  trace: trace,
+                  volume: volume,
+                  live: live,
+                  progress: progress,
+                  selected: selected,
+                  regions: regions,
+                  domainSeconds: domainSeconds,
+                  scaleBound: scaleBound,
+                  textScale: MediaQuery.textScalerOf(context).scale(12) / 12,
+                ),
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     ),
   );
 }
@@ -98,7 +109,7 @@ class _Legend extends StatelessWidget {
       const SizedBox(width: 4),
       Text(
         label,
-        style: const TextStyle(fontSize: 14, color: Color(0xff465a74)),
+        style: const TextStyle(fontSize: 14, color: Color(0xff355757)),
       ),
     ],
   );
@@ -172,7 +183,7 @@ class _ProsodyPainter extends CustomPainter {
       canvas.drawRect(
         Rect.fromLTRB(x(bands[i].$1), plot.top, x(bands[i].$2), plot.bottom),
         Paint()
-          ..color = i.isOdd ? const Color(0xfff8fafc) : const Color(0xfff0f5fc),
+          ..color = i.isOdd ? const Color(0xfffbfdfb) : const Color(0xffeff7f4),
       );
     }
     if (selected != null) {
@@ -182,17 +193,17 @@ class _ProsodyPainter extends CustomPainter {
         x(selected!.end),
         plot.bottom,
       );
-      canvas.drawRect(area, Paint()..color = const Color(0xffeaf1fe));
+      canvas.drawRect(area, Paint()..color = const Color(0xffd9f3ef));
       canvas.drawRect(
         area.deflate(1),
         Paint()
-          ..color = const Color(0xff7c9fe0)
+          ..color = const Color(0xff588c8c)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.5,
       );
     }
     final grid = Paint()
-      ..color = const Color(0xffdce5f2)
+      ..color = const Color(0xffc9ded9)
       ..strokeWidth = 1;
     canvas.drawLine(plot.topLeft, plot.topRight, grid);
     canvas.drawLine(plot.bottomLeft, plot.bottomRight, grid);
@@ -212,7 +223,7 @@ class _ProsodyPainter extends CustomPainter {
         ..moveTo(plot.left, y(0))
         ..lineTo(plot.right, y(0)),
       Paint()
-        ..color = const Color(0xffa8b8cf)
+        ..color = const Color(0xffa5bfba)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1,
       dash: 4,
@@ -297,7 +308,7 @@ class _ProsodyPainter extends CustomPainter {
         Path()
           ..moveTo(endX, plot.top)
           ..lineTo(endX, plot.bottom),
-        stroke(const Color(0xff94b6ec), 1),
+        stroke(const Color(0xff83b5af), 1),
         dash: 3,
         gap: 5,
       );
@@ -325,7 +336,7 @@ class _ProsodyPainter extends CustomPainter {
     if (progress != null && progress!.isFinite) {
       final current = trace.isNotEmpty && measured(trace.last);
       final color = live
-          ? (current ? _voice : const Color(0xff7d8da5))
+          ? (current ? _voice : const Color(0xff526e6a))
           : _guide;
       final xx = x(progress!),
           label = live ? (current ? '내 목소리' : '소리 확인 중') : '지금';
@@ -396,7 +407,7 @@ class _ProsodyPainter extends CustomPainter {
     String text,
     Offset offset, {
     TextAlign align = TextAlign.left,
-    Color color = const Color(0xff465a74),
+    Color color = const Color(0xff355757),
     double font = 12,
     double maxWidth = double.infinity,
     bool bold = false,

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ko">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#f3f6fc">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#f5fafa">
 <title>VoiceMate · 눈으로 따라 하는 목소리 연습</title>
 <link rel="stylesheet" href="styles.css"><script type="module" src="app.js"></script>
 </head>
@@ -39,7 +39,7 @@
 
 <div class="legend"><span><i class="guide-line"></i>연습용 예시</span><span><i class="voice-line"></i>내 목소리</span></div>
 <div class="chart-wrap"><canvas id="practice-chart" width="1000" height="400" role="img" aria-label="참고 음성의 흐름과 녹음 중 내 목소리 그래프"></canvas></div>
-<p id="practice-chart-help" class="chart-help">위쪽은 각 목소리의 중간값보다 높은 음, 아래쪽은 낮은 음이에요.<br>목소리 크기와는 달라요.</p><p id="live-status" class="live-status" role="status" aria-live="polite">녹음을 시작하면 짙은 회색 선으로 내 목소리가 나타나요.</p></div>
+<p id="practice-chart-help" class="chart-help">위쪽은 각 목소리의 중간값보다 높은 음, 아래쪽은 낮은 음이에요.<br>목소리 크기와는 달라요.</p><p id="live-status" class="live-status" role="status" aria-live="polite">녹음을 시작하면 짙은 자주색 선으로 내 목소리가 나타나요.</p></div>
 <div class="instruction"><span aria-hidden="true">↗</span><p id="practice-status" role="status" aria-live="polite">녹음을 시작하고 선택한 문구를 말해 보세요.</p></div>
 <div class="secondary-actions"><label class="button quiet" for="user-file">음성 파일 불러오기</label><input id="user-file" class="file-input" type="file" accept="audio/*"><button id="user-play" class="button quiet" type="button" disabled>내 녹음 듣기</button><button id="reset" class="button quiet" type="button">초기화</button></div>
 <p class="small-note">최대 20초 · 녹음은 이 기기 안에서만 처리돼요.</p>
@@ -54,7 +54,7 @@
 <div id="result-phrase" class="result-phrase" hidden><span>이번에 연습한 말</span><strong id="result-phrase-text"></strong></div>
 <div class="observation-note"><strong id="exercise-note-title">내 속도로, 편하게 연습해요</strong><p id="exercise-note-text">한 번에 똑같이 따라 하지 않아도 괜찮아요. 마음에 드는 부분은 이어가고, 더 연습하고 싶은 부분만 골라 보세요.</p></div>
 <div class="tabs" role="group" aria-label="결과 비교 항목"><button type="button" data-result-tab="pitch" aria-pressed="true">높낮이</button><button type="button" data-result-tab="volume" aria-pressed="false">소리 크기</button><button type="button" data-result-tab="duration" aria-pressed="false">길이</button></div>
-<div id="graph-details" class="graph-details"><div class="graph-heading"><h3 id="graph-title">높낮이 비교</h3><span id="graph-selected-label">앞 · 중간 · 끝</span></div><p id="result-graph-help" class="chart-help">파란 점선은 예시, 짙은 회색 실선은 내 목소리예요. 각 목소리의 중간값을 기준으로 두 흐름을 겹쳐 보여줘요.</p>
+<div id="graph-details" class="graph-details"><div class="graph-heading"><h3 id="graph-title">높낮이 비교</h3><span id="graph-selected-label">앞 · 중간 · 끝</span></div><p id="result-graph-help" class="chart-help">짙은 청록색 점선은 예시, 짙은 자주색 실선은 내 목소리예요. 각 목소리의 중간값을 기준으로 두 흐름을 겹쳐 보여줘요.</p>
 <div class="legend"><span><i class="guide-line"></i>연습용 예시</span><span><i class="voice-line"></i>내 목소리</span></div>
 <div id="result-chart-wrap" class="chart-wrap"><canvas id="result-chart" width="1000" height="520" role="img" aria-label="선택한 시간 구간에서 예시와 내 목소리를 비교하는 그래프"></canvas></div><p class="graph-footnote">비교하는 그래프는 말하는 속도를 대략 맞춘 모습이에요. 선이 빈 곳은 비교에서 제외했어요.</p>
 </div>
