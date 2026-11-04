@@ -106,16 +106,7 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
       child: child!,
     ),
     home: Scaffold(
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          boxShadow: [
-            BoxShadow(
-              color: Color(0x1224467a),
-              blurRadius: 24,
-              offset: Offset(0, -4),
-            ),
-          ],
-        ),
+      bottomNavigationBar: GlassNavigation(
         child: NavigationBar(
           selectedIndex: section,
           onDestinationSelected: changingSection ? null : _selectSection,

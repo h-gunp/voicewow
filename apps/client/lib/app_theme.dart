@@ -1,12 +1,14 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 
-const ink = Color(0xff172b4d),
-    muted = Color(0xff52647b),
-    blue = Color(0xff2f62d6),
-    canvas = Color(0xfff1f5fc),
-    line = Color(0xffcbd8ea),
-    wash = Color(0xffedf3ff),
-    red = Color(0xffb63a43);
+const ink = Color(0xff590219),
+    muted = Color(0xff355757),
+    blue = Color(0xff590219),
+    canvas = Color(0xfff5fafa),
+    line = Color(0xffd8d0c7),
+    wash = Color(0xffe1f3f1),
+    red = Color(0xff590219);
 
 ThemeData buildAppTheme() => ThemeData(
   useMaterial3: true,
@@ -18,8 +20,8 @@ ThemeData buildAppTheme() => ThemeData(
   scaffoldBackgroundColor: canvas,
   fontFamily: 'Pretendard',
   navigationBarTheme: NavigationBarThemeData(
-    backgroundColor: const Color(0xeefbfcff),
-    indicatorColor: const Color(0xffdce8ff),
+    backgroundColor: Colors.transparent,
+    indicatorColor: const Color(0xff77d9d9),
     height: 72,
     labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
     labelTextStyle: WidgetStateProperty.all(
@@ -85,7 +87,7 @@ class AppBackdrop extends StatelessWidget {
       gradient: LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [Color(0xffe9f2ff), Color(0xfff1f5fc), Color(0xffeeeafa)],
+        colors: [Color(0xffbdebea), Color(0xfff5fafa), Color(0xffeee0d8)],
       ),
     ),
     child: child,
@@ -111,13 +113,13 @@ class GlassSurface extends StatelessWidget {
           : const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xfaffffff), Color(0xeef9fbff)],
+              colors: [Color(0xfaffffff), Color(0xf7f8f5ef)],
             ),
       borderRadius: BorderRadius.circular(24),
-      border: Border.all(color: const Color(0xffd5e0ef)),
+      border: Border.all(color: const Color(0xffe0d8d0)),
       boxShadow: const [
         BoxShadow(
-          color: Color(0x1224467a),
+          color: Color(0x18590219),
           blurRadius: 30,
           offset: Offset(0, 10),
         ),
@@ -125,4 +127,50 @@ class GlassSurface extends StatelessWidget {
     ),
     child: child,
   );
+}
+
+/// A floating navigation surface; content panels stay opaque and blur-free.
+class GlassNavigation extends StatelessWidget {
+  const GlassNavigation({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final highContrast = MediaQuery.highContrastOf(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x20590219),
+              blurRadius: 24,
+              offset: Offset(0, 6),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(
+              sigmaX: highContrast ? 0 : 12,
+              sigmaY: highContrast ? 0 : 12,
+            ),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: highContrast ? Colors.white : const Color(0xe9f6fbf8),
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(
+                  color: highContrast ? ink : Colors.white,
+                  width: 1,
+                ),
+              ),
+              child: child,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

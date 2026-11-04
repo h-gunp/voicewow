@@ -81,7 +81,7 @@ class VolumeGauge extends StatelessWidget {
                       gradient: const LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
-                        colors: [Color(0xffe4ecf8), Color(0xfff9fbff)],
+                        colors: [Color(0xffd6ebe8), Color(0xfff7faf6)],
                       ),
                       borderRadius: BorderRadius.circular(40),
                       border: Border.all(color: line),
@@ -117,10 +117,13 @@ class VolumeGauge extends StatelessWidget {
                         ),
                         child: const DecoratedBox(
                           decoration: BoxDecoration(
+                            border: Border(
+                              top: BorderSide(color: blue, width: 3),
+                            ),
                             gradient: LinearGradient(
                               begin: Alignment.bottomCenter,
                               end: Alignment.topCenter,
-                              colors: [blue, Color(0xff82b2ff)],
+                              colors: [Color(0xff588c8c), Color(0xff77d9d9)],
                             ),
                           ),
                         ),

@@ -270,10 +270,10 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
         .where((item) => widget.learning.answers.containsKey(item.id))
         .length;
     final colors = [
-      const Color(0xfffff4ab),
-      const Color(0xffeed8fc),
-      const Color(0xffd3ebff),
-      const Color(0xffcff0df),
+      const Color(0xff77d9d9),
+      const Color(0xffe2f4f1),
+      const Color(0xffe8f1ed),
+      const Color(0xfff3ece5),
     ];
     final icons = [
       Icons.abc_rounded,
@@ -557,7 +557,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
                           : '한 번 더 연습해 보세요',
                       style: TextStyle(
                         color: answered == true
-                            ? const Color(0xff267153)
+                            ? const Color(0xff355757)
                             : muted,
                         fontSize: 14,
                       ),
@@ -633,7 +633,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
         const Text('올바른 발음을 골라 주세요.', style: TextStyle(color: muted)),
         const SizedBox(height: 22),
         _Panel(
-          color: const Color(0xffeef4ff),
+          color: const Color(0xfff1f8f6),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -699,8 +699,8 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
             liveRegion: true,
             child: _Panel(
               color: correct
-                  ? const Color(0xffe7f5ee)
-                  : const Color(0xfffff3e5),
+                  ? const Color(0xffe3f4ef)
+                  : const Color(0xfff8f1e5),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -714,8 +714,8 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
                             ? Icons.check_circle_outline_rounded
                             : Icons.lightbulb_outline_rounded,
                         color: correct
-                            ? const Color(0xff267153)
-                            : const Color(0xff925500),
+                            ? const Color(0xff355757)
+                            : const Color(0xff705a1d),
                       ),
                       Text(
                         correct ? '맞았어요!' : '이렇게 읽어요',
@@ -808,18 +808,18 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
     final isCorrect = _submitted && option == item.pronunciation;
     final isWrong = _submitted && selected && !isCorrect;
     final border = isCorrect
-        ? const Color(0xff267153)
+        ? const Color(0xff355757)
         : isWrong
         ? red
         : selected
         ? blue
         : line;
     final fill = isCorrect
-        ? const Color(0xffe7f5ee)
+        ? const Color(0xffe3f4ef)
         : isWrong
-        ? const Color(0xffffedf0)
+        ? const Color(0xfff9e9ec)
         : selected
-        ? const Color(0xffedf3ff)
+        ? const Color(0xffe9f5f2)
         : Colors.white;
     return Semantics(
       button: true,
@@ -913,7 +913,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
         ),
         const SizedBox(height: 26),
         _Panel(
-          color: const Color(0xffedf3ff),
+          color: const Color(0xffe9f5f2),
           child: Column(
             children: [
               const Text('이번 연습 결과', style: TextStyle(color: muted)),

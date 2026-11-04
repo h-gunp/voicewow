@@ -146,13 +146,13 @@ class _ProsodyScreenState extends State<ProsodyScreen>
   );
 
   Widget _bottom(List<Widget> children) => Material(
-    color: const Color(0xeef8fbff),
+    color: const Color(0xeef8fcf9),
     child: SafeArea(
       top: false,
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
         decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: Color(0xffdce5f2))),
+          border: Border(top: BorderSide(color: Color(0xffc9ded9))),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -266,7 +266,7 @@ class _ProsodyScreenState extends State<ProsodyScreen>
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xffdce5f2)),
+          border: Border.all(color: const Color(0xffc9ded9)),
         ),
         child: _copy(s.phrase, size: 23),
       ),
@@ -274,7 +274,7 @@ class _ProsodyScreenState extends State<ProsodyScreen>
       _copy(
         s.reference?.source ?? '이 문구의 한국어 가이드를 먼저 만들어 주세요.',
         size: 14,
-        color: const Color(0xff63748d),
+        color: const Color(0xff355757),
       ),
       if (!s.usingScript && s.reference == null && !s.busy)
         OutlinedButton(
@@ -308,7 +308,7 @@ class _ProsodyScreenState extends State<ProsodyScreen>
       _copy(
         '가이드는 한 가지 읽기 예시예요. 말하기 실력이나 자연스러움을 채점하지 않아요.',
         size: 14,
-        color: const Color(0xff63748d),
+        color: const Color(0xff355757),
       ),
     ],
   );
@@ -368,10 +368,10 @@ class _ProsodyScreenState extends State<ProsodyScreen>
       final hint = _stopping
           ? '잠시 멈추고 있어요. 이전 결과는 보관해 둘게요.'
           : !s.recording
-          ? '파란 선은 이 문구의 읽기 예시예요. 녹음하면 내 목소리를 짙은 회색 선으로 보여드려요.'
+          ? '청록색 선은 이 문구의 읽기 예시예요. 녹음하면 내 목소리를 짙은 자주색 선으로 보여드려요.'
           : s.currentVoice
-          ? '지금 목소리를 짙은 회색 선과 점으로 보여드려요.'
-          : '잠시 쉬어도 괜찮아요. 목소리가 잡히면 짙은 회색 점이 나타나요.';
+          ? '지금 목소리를 짙은 자주색 선과 점으로 보여드려요.'
+          : '잠시 쉬어도 괜찮아요. 목소리가 잡히면 짙은 자주색 점이 나타나요.';
       return SingleChildScrollView(
         key: const PageStorageKey('prosody-record-scroll'),
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
@@ -416,7 +416,7 @@ class _ProsodyScreenState extends State<ProsodyScreen>
             ),
             Semantics(
               liveRegion: true,
-              child: _copy(hint, size: 14, color: const Color(0xff536987)),
+              child: _copy(hint, size: 14, color: const Color(0xff355757)),
             ),
             if (s.phase == PracticePhase.processing) ...[
               const SizedBox(height: 8),
@@ -516,7 +516,7 @@ class _ProsodyScreenState extends State<ProsodyScreen>
           _copy(
             '합성 시험 신호예요. 실제 사람의 녹음은 아니에요.',
             size: 14,
-            color: const Color(0xff94662d),
+            color: const Color(0xff705a1d),
           ),
         const SizedBox(height: 8),
         _featurePicker(),
@@ -531,12 +531,12 @@ class _ProsodyScreenState extends State<ProsodyScreen>
         const SizedBox(height: 8),
         _copy(
           [
-            '파란 점선은 예시, 짙은 회색 선은 내 목소리예요. 녹음 뒤에는 읽는 속도를 대략 맞춰 겹쳐 보여줘요.',
+            '청록색 점선은 예시, 짙은 자주색 선은 내 목소리예요. 녹음 뒤에는 읽는 속도를 대략 맞춰 겹쳐 보여줘요.',
             if (result.summary.segmentationNote.isNotEmpty)
               result.summary.segmentationNote,
           ].join('\n\n'),
           size: 14,
-          color: const Color(0xff536987),
+          color: const Color(0xff355757),
         ),
         const SizedBox(height: 16),
         Wrap(
@@ -591,7 +591,7 @@ class _ProsodyScreenState extends State<ProsodyScreen>
         _copy(
           '음성과 대본은 이 기기 안에서 처리해요. 재생에 필요한 앱 임시 파일을 사용해요.',
           size: 14,
-          color: const Color(0xff63748d),
+          color: const Color(0xff355757),
         ),
       ],
     );
@@ -602,7 +602,7 @@ class _ProsodyScreenState extends State<ProsodyScreen>
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: const Color(0xffdce5f2)),
+      border: Border.all(color: const Color(0xffc9ded9)),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -681,9 +681,9 @@ class _ProsodyScreenState extends State<ProsodyScreen>
           if (!didPop) unawaited(_back());
         },
         child: Scaffold(
-          backgroundColor: const Color(0xfff1f5fc),
+          backgroundColor: const Color(0xfff5f8f5),
           appBar: AppBar(
-            backgroundColor: const Color(0xeef8fbff),
+            backgroundColor: const Color(0xeef8fcf9),
             automaticallyImplyLeading: false,
             leading:
                 _step != ProsodyStep.prepare || s.busy || widget.onExit != null
