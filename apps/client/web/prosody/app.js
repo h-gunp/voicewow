@@ -1,6 +1,6 @@
 import { GUIDES } from './guide-data.js';
 import { analyzeAudio, analyzeFrame, trimAnalysis, compareAnalyses } from './audio-analysis.js';
-import { alignedTrace, makeDemo, wavBytes, segmentObservation } from './lab-utils.js';
+import { alignedTrace, wavBytes, segmentObservation } from './lab-utils.js';
 import { drawGraph, graphSegmentAt } from './charts.js';
 import { parsePracticeScript, selectLocalKoreanVoice } from './script-utils.js';
 import { generateGuide, cancelGuide } from './tts-client.js';
@@ -16,7 +16,7 @@ let playback=null,playbackTimer=null,previewTimer=null,selectedIndex=0,generatio
 let practiceMode='guide',scriptLines=[],scriptIndex=0,ttsUtterance=null;
 let wholeGuide=null;
 let scriptUnits=[],appliedScript='',previewRegions=[];
-let pager=null;
+let pager=null,prepareView='edit';
 let guideBatch=null,guideNotice='';
 const scriptReferences=new Map(),practicedSentences=new Set();
 const guideFailures=new Map();
@@ -49,7 +49,7 @@ function stopPreview(){clearInterval(previewTimer);previewTimer=null;$('guide-pr
 function clearClip(){stopPlayback();if(clip)URL.revokeObjectURL(clip.url);clip=null;}
 function refresh(){
   const busy=isBusy();
-  for(const id of ['guide-select','demo','guide-play','guide-preview','user-file','reset','retry'])$(id).disabled=busy;
+  for(const id of ['guide-select','guide-play','guide-preview','user-file','reset','retry'])$(id).disabled=busy;
   for(const id of ['script-input','apply-script','script-sentence-select','reference-file','remove-reference'])$(id).disabled=busy;
   for(const button of document.querySelectorAll('[data-mode]')){button.disabled=busy;button.setAttribute('aria-pressed',String(button.dataset.mode===practiceMode));}
   $('sentence-prev').disabled=busy||scriptIndex===0;$('sentence-next').disabled=busy||scriptIndex>=scriptLines.length-1;
@@ -74,7 +74,6 @@ function refresh(){
   $('remove-reference').disabled=busy||pending;
   $('sentence-prev').disabled=busy||pending||scriptIndex===0;
   $('sentence-next').disabled=busy||pending||scriptIndex>=scriptLines.length-1;
-  $('demo').disabled=busy||pending||!guide.analysis||Boolean(wholeGuide);
   $('guide-preview').disabled=busy||!guide.analysis;
   $('guide-play').disabled=busy||unprepared||(!guide.audioUrl&&!selectLocalKoreanVoice(window.speechSynthesis?.getVoices()||[]));
   $('guide-play').textContent=guide.audioUrl?'▷ 예시 듣기':'▷ 기기 음성으로 읽어주기';
@@ -91,6 +90,17 @@ function refresh(){
   setText('record-indicator',state==='recording'?'녹음 중':state==='requesting'?'마이크 권한 확인 중':state==='processing'?'기기에서 분석 중':'마이크 대기');
   for(const button of document.querySelectorAll('[data-practice-tab]'))button.setAttribute('aria-pressed',String(button.dataset.practiceTab===practiceTab));
   for(const button of document.querySelectorAll('[data-result-tab]'))button.setAttribute('aria-pressed',String(button.dataset.resultTab===resultTab));
+  const scriptContext=practiceMode==='script'&&scriptLines.length>0;
+  $('script-reading-context').hidden=!scriptContext;$('script-reading-after').hidden=!scriptContext;
+  if(scriptContext){
+    setText('reading-position',`전체 ${scriptLines.length}개 중 ${scriptIndex+1}번째 연습 구간`);
+    setText('reading-before',scriptLines[scriptIndex-1]||'대본의 시작이에요.');
+    setText('reading-after',scriptLines[scriptIndex+1]||'대본의 마지막이에요.');
+  }
+  $('reading-prev').disabled=busy||pending||scriptIndex===0;
+  $('reading-next').disabled=busy||pending||scriptIndex>=scriptLines.length-1;
+  refreshPreparation();
+  $('change-mode').disabled=busy;
   pager?.refresh();
   setText('flow-navigation-note',busy?'작업 중에는 화면을 넘기지 않아요. 마치거나 취소한 뒤 이동해 주세요.':!guide.analysis?'이 문장의 가이드를 준비하면 녹음 화면으로 갈 수 있어요.':'좌우로 넘기거나 이전·다음 버튼을 눌러 주세요.');
 }
@@ -383,10 +393,41 @@ function updateScriptStatus(){
   if(state!=='generating')setText('generation-status',guideNotice||(scriptReferences.size===scriptLines.length?'전체 가이드가 준비됐어요. 문장을 바꿔도 바로 연습할 수 있어요.':`전체 가이드 만들기를 한 번 누르면 ${scriptLines.length}개 문장을 차례로 준비해요.`));
   $('remove-reference').hidden=!ref;
 }
+function refreshPreparation(){
+  const script=practiceMode==='script';
+  $('prepare-tabs').hidden=!script;
+  $('script-editor').hidden=!script||prepareView==='preview';
+  $('script-edit-panel').hidden=prepareView!=='edit';
+  $('script-session').hidden=prepareView!=='build'||!scriptLines.length;
+  $('guide-preview-panel').hidden=script&&prepareView!=='preview';
+  for(const view of ['edit','build','preview']){
+    const button=$('prepare-'+view);
+    button.setAttribute('aria-pressed',String(view===prepareView));
+    button.disabled=isBusy()||(view!=='edit'&&(!scriptLines.length||draftPending()));
+  }
+}
+function showPreparation(view){
+  if(isBusy()||(view!=='edit'&&(!scriptLines.length||draftPending())))return;
+  prepareView=view;refreshPreparation();paintPractice();
+  $('flow-prepare').scrollTop=0;
+}
 function switchMode(mode){
   if(isBusy())return;
+  $('mode-choice').hidden=true;$('practice-workflow').hidden=false;
+  setText('selected-mode-label',mode==='script'?'내 대본으로 연습':'준비된 예시');
+  if(mode===practiceMode){
+    refresh();
+    // The workflow was hidden; clientWidth now reflects the displayed layout.
+    // Redraw without replacing the selected guide, recording, or comparison.
+    paintPractice();renderResult();
+    $('flow-deck').scrollIntoView({block:'start'});
+    document.querySelectorAll('[data-flow-step]')[pager?.index||0]?.focus({preventScroll:true});
+    return;
+  }
+  prepareView=scriptLines.length?'build':'edit';
   practiceMode=mode;$('script-editor').hidden=mode!=='script';$('guide-select').hidden=mode==='script';
   selectGuide();updateScriptStatus();
+  $(mode==='script'?'prepare-'+prepareView:'guide-heading').focus({preventScroll:true});
 }
 function chooseSentence(index){
   if(isBusy()||draftPending()||index<0||index>=scriptLines.length)return;
@@ -401,7 +442,7 @@ function applyScript(){
     scriptReferences.clear();practicedSentences.clear();guideFailures.clear();guideNotice='';scriptLines=parsed;scriptUnits=units;scriptIndex=0;appliedScript=$('script-input').value;
     const select=$('script-sentence-select');select.replaceChildren();
     parsed.forEach((text,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent=`${i+1}. ${text.length>40?text.slice(0,40)+'…':text}`;select.append(option);});
-    $('script-session').hidden=false;chooseSentence(0);$('guide-batch-panel').scrollIntoView({block:'nearest'});
+    prepareView='build';$('script-session').hidden=false;chooseSentence(0);$('guide-batch-panel').scrollIntoView({block:'nearest'});
   }catch(error){setText('script-status',error.message);}
 }
 function syncScriptReference(){
@@ -507,7 +548,6 @@ $('record').addEventListener('click',record);
 $('guide-preview').addEventListener('click',preview);
 $('result-chart').addEventListener('click',event=>{if(!result||resultTab==='duration'||wholeGuide)return;const index=graphSegmentAt($('result-chart'),guide.analysis,event.clientX,event.clientY,result.summary.segments);if(index!==null){selectedIndex=index;stopPlayback();renderResult();}});
 $('guide-play').addEventListener('click',()=>{if(!guide.audioUrl){readScript();return;}stopPreview();paintPractice();const start=wholeGuide?(guide.analysis.startTime||0):0;playUrl(guide.audioUrl,start,wholeGuide?start+guide.analysis.duration:null);});
-$('demo').addEventListener('click',()=>{const audio=makeDemo(guide.analysis);processClip(new Blob([wavBytes(audio.samples,audio.sampleRate)],{type:'audio/wav'}),{demo:true});});
 $('user-file').addEventListener('change',e=>{const file=e.target.files[0];if(file)processClip(file);e.target.value='';});
 $('user-play').addEventListener('click',()=>{if(clip)playUrl(clip.url);});
 $('segment-play').addEventListener('click',()=>{if(!clip||!result)return;const segment=result.summary.segments[selectedIndex],range=userPlaybackRange(segment,result.user);if(range)playUrl(clip.url,range.start,range.end,`내 녹음 · ${range.whole?'전체':segment.label}`);});
@@ -521,6 +561,9 @@ for(const button of document.querySelectorAll('[data-practice-tab]'))button.addE
 for(const button of document.querySelectorAll('[data-result-tab]'))button.addEventListener('click',()=>{
   resultTab=button.dataset.resultTab;stopPlayback();renderResult();
 });
+for(const [id,delta] of [['reading-prev',-1],['reading-next',1]])$(id).addEventListener('click',()=>{chooseSentence(scriptIndex+delta);if(guide.analysis)pager?.goTo(1);else showPreparation('build');});
+$('change-mode').addEventListener('click',()=>{if(isBusy())return;stopPlayback();stopPreview();$('practice-workflow').hidden=true;$('mode-choice').hidden=false;$('mode-choice-heading').focus({preventScroll:true});});
+for(const view of ['edit','build','preview'])$('prepare-'+view).addEventListener('click',()=>showPreparation(view));
 for(const button of document.querySelectorAll('[data-mode]'))button.addEventListener('click',()=>switchMode(button.dataset.mode));
 $('generate-guide').addEventListener('click',()=>makeScriptGuide());
 $('regenerate-guide').addEventListener('click',()=>makeScriptGuide({replaceSelected:true}));
@@ -543,9 +586,6 @@ window.addEventListener('resize',()=>{paintPractice();renderResult();});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&!isBusy()){stopPreview();stopPlayback();paintStoredRecording();}if(document.hidden&&isBusy()){const generating=state==='generating';cancelRecording();setText(generating?'generation-status':'practice-status',generating?'화면을 벗어나 가이드 생성을 중지했어요. 다시 시도해 주세요.':'화면을 벗어나 녹음을 중지했어요. 다시 시작해 주세요.');}});
 if(new URLSearchParams(location.search).get('embedded')==='1'){
   document.body.classList.add('embedded');
-  const exit=document.createElement('button');exit.type='button';exit.className='button secondary embedded-exit';exit.textContent='← 음량 측정으로';
-  exit.addEventListener('click',()=>{cancelRecording();window.parent.postMessage({type:'voicemate:prosody:exit'},location.origin);});
-  const actions=document.createElement('div');actions.className='embedded-actions';actions.append(exit,$('demo'));document.querySelector('main').prepend(actions);
 }
 if(document.body)document.body.dataset.currentFlow='0';
 pager=createFlowPager({

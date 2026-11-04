@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../app_theme.dart';
 import '../scenario.dart';
 
@@ -92,7 +93,8 @@ class VolumeGauge extends StatelessWidget {
                       borderRadius: BorderRadius.circular(40),
                       child: TweenAnimationBuilder<double>(
                         tween: Tween(
-                          begin: 0,
+                          // A newly detected syllable must start at its measured level.
+                          begin: (displayLevel! / 120).clamp(0.0, 1.0),
                           end: (displayLevel! / 120).clamp(0.0, 1.0),
                         ),
                         duration: MediaQuery.disableAnimationsOf(context)

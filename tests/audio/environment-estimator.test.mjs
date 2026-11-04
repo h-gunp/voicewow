@@ -40,7 +40,7 @@ test('repeated or out-of-order evidence cannot move target', () => {
   assert.equal(e.snapshot().offset, offset);
 });
 
-test('sustained change needs new evidence and excessive change is unsupported', () => {
+test('sustained change needs new evidence and excessive change caps adaptation', () => {
   const e = new EnvironmentEstimator();
   feed(e, 0, 400, .01);
   feed(e, 400, 100, .03);
@@ -48,8 +48,8 @@ test('sustained change needs new evidence and excessive change is unsupported', 
   feed(e, 500, 1800, .03);
   assert.ok(e.snapshot().offset > 0);
   feed(e, 2300, 1800, .1);
-  assert.equal(e.snapshot().state, 'unsupported');
-  assert.equal(e.snapshot().offset, null);
+  assert.equal(e.snapshot().state, 'ready');
+  assert.equal(e.snapshot().offset, 3);
 });
 
 test('speech and uncertain frames do not create initial noise evidence', () => {
@@ -85,3 +85,62 @@ test('continued steps do not require another full entry threshold', () => {
   assert.ok(e.snapshot().offset >= 2);
 });
 
+
+test('digital silence cannot invent a noise baseline and real ambience recovers', () => {
+  for (const relative of [false, true]) {
+    const e = new EnvironmentEstimator({relative});
+    feed(e, 0, 500, 0);
+    assert.equal(e.snapshot().state, 'held');
+    assert.equal(e.snapshot().noiseDbfs, null);
+    assert.equal(e.initial, null);
+    feed(e, 500, 800, .000001);
+    assert.equal(e.snapshot().state, 'ready');
+    assert.equal(e.snapshot().noiseDbfs, -60);
+    assert.equal(e.snapshot().offset, 0);
+    if (relative) assert.equal(e.snapshot().voiceDbfs, null);
+  }
+});
+
+test('four seconds speech followed by a two second pause can collect a baseline', () => {
+  const e = new EnvironmentEstimator();
+  feed(e, 0, 400, .1, 'speech');
+  feed(e, 400, 200, .01);
+  assert.equal(e.snapshot().state, 'ready');
+});
+
+test('two dB ambient rise adapts within eight seconds without exceeding safe cap', () => {
+  const e = new EnvironmentEstimator();
+  feed(e, 0, 500, .01);
+  feed(e, 500, 800, .01 * 10 ** .2);
+  assert.ok(e.snapshot().offset >= .75);
+  assert.ok(e.snapshot().offset <= 3);
+});
+
+
+test('speech, uncertain sound and clipped claps never adjust the ambient baseline', () => {
+  for (const relative of [false, true]) {
+    for (const [speech, clipped] of [['speech', false], ['uncertain', false], ['nonSpeech', true]]) {
+      const e = new EnvironmentEstimator({relative});
+      feed(e, 0, 500, .01);
+      for (let seq=500;seq<800;seq++) e.add({seq,power:.8,speech,clipped});
+      assert.equal(e.offset, 0);
+      feed(e, 800, 700, .01);
+      assert.equal(e.snapshot().state, 'ready');
+      assert.equal(e.snapshot().offset, 0);
+      assert.equal(e.snapshot().noiseDbfs, -20);
+    }
+  }
+});
+
+test('short non-speech bursts do not change the baseline after the sound ends', () => {
+  for (const duration of [10, 50, 100, 200]) {
+    const e = new EnvironmentEstimator();
+    feed(e, 0, 500, .01);
+    for (let seq=500;seq<500+duration+1000;seq++) {
+      e.add({seq,power:seq < 500 + duration ? .3 : .01,speech:'nonSpeech',clipped:false});
+      assert.equal(e.offset, 0);
+    }
+    assert.equal(e.snapshot().state, 'ready');
+    assert.equal(e.snapshot().noiseDbfs, -20);
+  }
+});

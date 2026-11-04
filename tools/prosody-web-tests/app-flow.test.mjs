@@ -41,9 +41,15 @@ async function settle(predicate){
   assert.fail('UI operation did not settle');
 }
 
-async function setup({microphone=false, holdResume=false, holdPermission=false, rejectResume=false}={}){
+async function setup({microphone=false, holdResume=false, holdPermission=false, rejectResume=false, layoutWidth=null}={}){
   const html=await readFile(new URL('../../apps/client/web/prosody/index.html',import.meta.url),'utf8');
   const elements=new Map([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new Element(m[1])]));
+  if(layoutWidth!==null){
+    elements.get('practice-workflow').hidden=true;
+    for(const [id,page] of [['guide-chart','flow-prepare'],['practice-chart','flow-record'],['result-chart','flow-results']]){
+      Object.defineProperty(elements.get(id),'clientWidth',{get:()=>elements.get('practice-workflow').hidden||elements.get(page).hidden?0:layoutWidth});
+    }
+  }
   const groups={};
   for(const name of ['mode','practice-tab','result-tab','flow-step']){
     const key=name.replace(/-([a-z])/g,(_,c)=>c.toUpperCase());
@@ -619,4 +625,127 @@ test('a failed AudioContext resume releases the microphone and allows retry',asy
     assert.equal(ui.trackStopped(),true);
     assert.equal(ui.el('record').disabled,false);
   } finally {ui.cleanup();}
+});
+
+
+test('content choice opens focused preparation screens and removes obsolete entry actions',async()=>{
+  const ui=await setup(),{el}=ui;
+  try{
+    assert.match(ui.html, /id="practice-workflow" hidden/);
+    assert.doesNotMatch(ui.html, /id="demo"/);
+    await ui.button('mode','guide').fire('click');
+    assert.equal(el('mode-choice').hidden,true);
+    assert.equal(el('practice-workflow').hidden,false);
+    assert.equal(el('guide-preview-panel').hidden,false);
+    assert.equal(el('script-editor').hidden,true);
+    await el('change-mode').fire('click');
+    assert.equal(el('mode-choice').hidden,false);
+    assert.equal(el('practice-workflow').hidden,true);
+    await ui.button('mode','script').fire('click');
+    assert.equal(el('script-edit-panel').hidden,false);
+    assert.equal(el('guide-preview-panel').hidden,true);
+    assert.equal(el('prepare-build').disabled,true);
+    await ui.prepareScript();
+    assert.equal(el('script-edit-panel').hidden,true);
+    assert.equal(el('script-session').hidden,false);
+    await el('prepare-preview').fire('click');
+    assert.equal(el('script-editor').hidden,true);
+    assert.equal(el('guide-preview-panel').hidden,false);
+    await el('prepare-edit').fire('click');
+    el('script-input').value+=' 수정';await el('script-input').fire('input');
+    assert.equal(el('prepare-build').disabled,true);
+    await el('prepare-build').fire('click');
+    assert.equal(el('script-edit-panel').hidden,false,'a stale draft cannot enter guide preparation');
+  }finally{ui.cleanup();}
+});
+
+test('first mobile choice redraws hidden charts at visible width and restores result chart after reopening',async()=>{
+  const ui=await setup({layoutWidth:253}),{el,button}=ui;
+  try{
+    assert.equal(el('guide-chart').clientWidth,0);
+    assert.equal(el('guide-chart').width,1000,'hidden initialization uses the 500px fallback');
+    await button('mode','guide').fire('click');
+    assert.equal(el('guide-chart').clientWidth,253);
+    assert.equal(el('guide-chart').width,506,'first visible chart uses the actual mobile width');
+    assert.equal(el('guide-chart').height,510,'mobile geometry must retain its 255px drawing height');
+    await ui.inputAudio('user-file');await settle(()=>el('flow-results').hidden===false);
+    await el('change-mode').fire('click');
+    ui.resize();
+    assert.equal(el('result-chart').clientWidth,0);
+    assert.equal(el('result-chart').width,1000);
+    await button('mode','guide').fire('click');
+    assert.equal(el('result-chart').width,506);
+    assert.equal(el('result-chart').height,510);
+    assert.equal(el('user-play').disabled,false,'redrawing must preserve the accepted recording');
+  }finally{ui.cleanup();}
+});
+
+test('recording context shows selected text and neighbors without claiming speech recognition',async()=>{
+  const ui=await setup(),{el}=ui;
+  try{
+    await ui.prepareScript();
+    assert.equal(el('script-reading-context').hidden,false);
+    assert.match(el('reading-position').textContent,/1번째/);
+    assert.equal(el('reading-after').textContent,'잠시 말씀드릴게요.');
+    assert.equal(el('reading-prev').disabled,true);
+    await el('reading-next').fire('click');
+    assert.equal(el('reading-before').textContent,'안녕하세요.');
+    assert.equal(el('recording-phrase-text').textContent,'잠시 말씀드릴게요.');
+    assert.equal(el('reading-next').disabled,true);
+    assert.equal(el('script-session').hidden,false,'missing audio returns to guide preparation');
+    assert.match(ui.html,/말하고 있는 글자를 자동으로 인식하지는 않아요/);
+    await ui.button('mode','guide').fire('click');
+    assert.equal(el('script-reading-context').hidden,true);
+    assert.equal(el('script-reading-after').hidden,true);
+  }finally{ui.cleanup();}
+});
+
+
+test('reopening the chosen mode retains accepted results, while another mode requires its own guide',async()=>{
+  const ui=await setup(),{el,button}=ui;
+  try{
+    await button('mode','guide').fire('click');
+    await ui.inputAudio('user-file');await settle(()=>el('flow-results').hidden===false);
+    assert.equal(el('flow-results').hidden,false);
+    await el('user-play').fire('click');
+    const acceptedUrl=ui.playedAudio.at(-1).url;
+    const feedback=()=>el('feedback-list').children.map(card=>({label:card.attributes['aria-label'],selected:card.attributes['aria-pressed'],text:card.children.map(child=>child.textContent)}));
+    const acceptedFeedback=feedback();
+    await el('change-mode').fire('click');
+    assert.equal(el('practice-workflow').hidden,true);
+    await button('mode','guide').fire('click');
+    assert.equal(el('flow-results').hidden,false,'choosing the same content resumes the current step');
+    assert.equal(el('user-play').disabled,false);
+    assert.deepEqual(feedback(),acceptedFeedback,'redrawing preserves accepted feedback and selection');
+    await el('user-play').fire('click');
+    assert.equal(ui.playedAudio.at(-1).url,acceptedUrl);
+    await el('change-mode').fire('click');
+    await button('mode','script').fire('click');
+    assert.equal(el('flow-results').hidden,true);
+    assert.equal(el('record').disabled,true,'a different mode cannot use the old reference');
+    assert.equal(el('user-play').disabled,true,'old results are not misrepresented as results for a different script');
+  }finally{ui.cleanup();}
+});
+
+test('content chooser and text navigation cannot interrupt an active recording; stop stays enabled',async()=>{
+  const ui=await setup({microphone:true}),{el,button}=ui;
+  try{
+    await ui.prepareScript();await ui.inputAudio('reference-file');await settle(()=>el('record').disabled===false);
+    await button('flow-step','1').fire('click');
+    const text=el('recording-phrase-text').textContent;
+    await el('record').fire('click');await settle(()=>ui.liveReads()>1);
+    for(const id of ['change-mode','prepare-edit','prepare-build','prepare-preview','reading-next']){
+      assert.equal(el(id).disabled,true,id);
+      await el(id).fire('click');
+    }
+    await button('mode','guide').fire('click');
+    assert.equal(el('mode-choice').hidden,true);
+    assert.equal(el('practice-workflow').hidden,false);
+    assert.equal(el('flow-record').hidden,false);
+    assert.equal(el('recording-phrase-text').textContent,text);
+    assert.equal(el('record').disabled,false,'record stop must remain operable while navigation is locked');
+    await el('record').fire('click');
+    await settle(()=>ui.trackStopped()&&el('flow-results').hidden===false);
+    assert.equal(el('change-mode').disabled,false);
+  }finally{ui.cleanup();}
 });
