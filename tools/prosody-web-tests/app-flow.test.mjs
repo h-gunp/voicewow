@@ -134,6 +134,32 @@ async function setup({microphone=false, holdResume=false, holdPermission=false, 
   };
 }
 
+test('ASR is opt-in, preparation is cancellable and never requests the microphone',async()=>{
+  const ui=await setup(),{el}=ui;
+  try{
+    await ui.prepareScript();
+    assert.equal(ui.workers.length,0);
+    el('asr-enabled').checked=true;await el('asr-enabled').fire('change');
+    const pending=el('prepare-asr').fire('click');
+    await settle(()=>ui.workers.length===1);
+    const worker=ui.workers[0];assert.equal(worker.requests[0].type,'init');assert.equal(ui.microphoneRequests(),0);
+    await el('cancel-asr').fire('click');await pending;
+    assert.equal(worker.terminated,true);assert.equal(el('asr-enabled').checked,false);
+    assert.equal(el('asr-match').textContent,'');
+  }finally{ui.cleanup();}
+});
+
+test('prepared ASR is terminated on hidden page and late ready cannot revive it',async()=>{
+  const ui=await setup(),{el}=ui;
+  try{
+    await ui.prepareScript();el('asr-enabled').checked=true;await el('asr-enabled').fire('change');
+    const pending=el('prepare-asr').fire('click');await settle(()=>ui.workers.length===1);
+    const worker=ui.workers[0];worker.emit({type:'ready'});await pending;ui.hide();
+    assert.equal(worker.terminated,true);worker.emit({type:'ready'});
+    assert.equal(el('asr-match').textContent,'');
+  }finally{ui.cleanup();}
+});
+
 test('reference practice keeps per-sentence guides and chosen segments without grades',async()=>{
   const ui=await setup(),{el,button,inputAudio}=ui;
   try{

@@ -1,5 +1,8 @@
 # Offline Korean script tracking: feasibility result
 
+Historical first spike at `a21616d`. The follow-up implementation supersedes the
+"no application imports" description below: see `offline-script-tracking.md`.
+
 2026-11-04. Branch `codex/offline-script-tracking`, base main `f848720`.
 This is an isolated, throwaway spike, NOT a shipped feature. No application
 imports, audio capture, remote transcription, Web Speech fallback, or UI changes.

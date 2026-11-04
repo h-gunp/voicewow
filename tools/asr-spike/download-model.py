@@ -34,3 +34,12 @@ for name in FILES:
                    'seconds': round(time.perf_counter()-start, 3), 'cached': cached})
     print(json.dumps(report[-1]), flush=True)
 (ROOT / 'download-report.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
+
+# Additional official public Korean sample; not redistributed or treated as a
+# reference transcript. Used only for the heterogeneous local robustness suite.
+extra = ROOT / 'sensevoice-ko.wav'
+if not extra.exists():
+    url = ('https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/'
+           'resolve/2365baeacb507f821a0c8120fcee3d484dba7a07/test_wavs/ko.wav')
+    extra.write_bytes(urllib.request.urlopen(url, timeout=60).read())
+assert hashlib.sha256(extra.read_bytes()).hexdigest() == '0dc797a5c81ed30fc339d91f3da718ab02854e17ffa37cb93c4c039ac5c6bb9c'
