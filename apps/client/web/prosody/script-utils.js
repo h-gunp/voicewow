@@ -7,6 +7,33 @@ export const TARGET_PRACTICE_UNIT_CHARACTERS = 50;
 export const MAX_PRACTICE_UNIT_CHARACTERS = 60;
 export const MAX_PRACTICE_UNITS = 60;
 
+// A reading aid for the graph. These text boundaries are not audio timestamps.
+export function splitRegionText(text, count) {
+  if (count < 1) return [];
+  const graphemes = typeof Intl.Segmenter === 'function'
+    ? Array.from(new Intl.Segmenter('ko', { granularity: 'grapheme' }).segment(text.trim()), part => part.segment)
+    : Array.from(text.trim());
+  const visible = graphemes.flatMap((part, index) => /[\p{L}\p{N}\p{S}]/u.test(part) ? [index] : []);
+  if (visible.length < count) return [];
+
+  const snippets = [];
+  let start = 0;
+  let consumed = 0;
+  for (let remaining = count; remaining > 1; remaining--) {
+    const lastCut = visible.length - remaining + 1;
+    const balanced = Math.round(visible.length * (count - remaining + 1) / count);
+    const target = Math.min(lastCut, Math.max(consumed + 1, balanced));
+    const cut = [target, target - 1, target + 1].find(i => i > consumed
+      && i <= lastCut && /\s/u.test(graphemes[visible[i] - 1])) ?? target;
+    const end = visible[cut];
+    snippets.push(graphemes.slice(start, end).join('').trim());
+    start = end;
+    consumed = cut;
+  }
+  snippets.push(graphemes.slice(start).join('').trim());
+  return snippets;
+}
+
 function protectedPeriod(characters, index) {
   const before = characters[index - 1] || '';
   const after = characters[index + 1] || '';
