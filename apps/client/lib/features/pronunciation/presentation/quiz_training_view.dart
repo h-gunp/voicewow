@@ -282,21 +282,32 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
       Icons.business_center_outlined,
     ];
     return Material(
-      color: colors[category.index],
-      borderRadius: BorderRadius.circular(22),
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: const BorderSide(color: line),
+      ),
       child: InkWell(
         key: ValueKey('category-${category.name}'),
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(20),
         onTap: () => setState(() {
           _category = category;
           _group = null;
         }),
         child: Padding(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(icons[category.index], color: ink, size: 28),
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: colors[category.index],
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(icons[category.index], color: ink, size: 26),
+              ),
               const SizedBox(height: 16),
               Text(
                 category.label,
@@ -309,7 +320,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
               const SizedBox(height: 8),
               Text(
                 category.subtitle,
-                style: const TextStyle(color: ink, height: 1.5),
+                style: const TextStyle(color: ink, height: 1.5, fontSize: 16),
               ),
               const SizedBox(height: 16),
               Wrap(

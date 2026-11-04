@@ -20,8 +20,8 @@ class ScenarioScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(7),
             decoration: BoxDecoration(
-              color: blue,
-              borderRadius: BorderRadius.circular(9),
+              gradient: const LinearGradient(colors: [blue, Color(0xff7c8fee)]),
+              borderRadius: BorderRadius.circular(14),
             ),
             child: const Icon(Icons.graphic_eq, color: Colors.white, size: 23),
           ),
@@ -45,9 +45,9 @@ class ScenarioScreen extends StatelessWidget {
       ),
       const SizedBox(height: 12),
       const Text(
-        '사용할 모드를\n선택한다.',
+        '내 목소리를\n눈으로 살펴봐요',
         style: TextStyle(
-          fontSize: 29,
+          fontSize: 30,
           fontWeight: FontWeight.w800,
           height: 1.4,
           letterSpacing: -1,
@@ -55,7 +55,7 @@ class ScenarioScreen extends StatelessWidget {
       ),
       const SizedBox(height: 10),
       const Text(
-        '상황을 고른 뒤 마이크 입력을 확인한다.',
+        '편한 상황부터 골라 주세요.',
         style: TextStyle(color: muted, fontSize: 14, height: 1.7),
       ),
       const SizedBox(height: 28),
@@ -121,9 +121,9 @@ class ScenarioScreen extends StatelessWidget {
       excludeSemantics: true,
       onTap: () => session.selectScenario(s),
       child: Material(
-        color: selected ? wash : Colors.white,
+        color: selected ? const Color(0xffe7efff) : const Color(0xf5ffffff),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(22),
           side: BorderSide(
             color: selected ? blue : line,
             width: selected ? 2 : 1,
