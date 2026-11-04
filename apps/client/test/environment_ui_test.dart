@@ -38,6 +38,71 @@ void main() {
     session.dispose();
   });
 
+  testWidgets(
+    'requested meter copy is absent while speech and non-speech still work',
+    (tester) async {
+      final port = FakeAudioPort();
+      final session = SessionController(port)
+        ..selectScenario(Scenario.values.first);
+      await session.start();
+      port.send(
+        const AudioEvent.settings({
+          'noiseReductionState': 'active',
+          'vadStatus': 'ready',
+          'echoCancellation': false,
+        }),
+      );
+      port.send(const AudioEvent.state(CaptureState.running));
+      port.send(
+        const AudioEvent.analysis({
+          'state': 'unavailable',
+          'reason': 'processing_settings',
+          'speech': 'nonSpeech',
+          'meterState': 'nonSpeech',
+        }),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: AnimatedBuilder(
+                animation: session,
+                builder: (_, _) => MeterScreen(session: session, onBack: () {}),
+              ),
+            ),
+          ),
+        ),
+      );
+      for (final text in [
+        '상대 입력 막대 · 본인 목소리로 확인된 음량이 아니다.',
+        '발화가 감지되지 않아 막대를 비웠다.',
+        '전처리 미확인 · 막대는 상대 참고값이다.',
+        '빨간 선은 참고 범위의 하한·상한이다.',
+        '참고 척도 · 실제 데시벨은 아니다.',
+        '환경 적응 보류 · 기본 참고범위',
+        '실험적 환경 추정 · 실제 음압이 아니다.',
+      ]) {
+        expect(find.textContaining(text), findsNothing, reason: text);
+      }
+      expect(find.byKey(const Key('input-fill')), findsNothing);
+      port.send(
+        const AudioEvent.analysis({
+          'state': 'unavailable',
+          'reason': 'processing_settings',
+          'speech': 'speech',
+          'meterState': 'speech',
+          'meterDbfs': -40.0,
+        }),
+      );
+      await tester.pump();
+      expect(session.displayLevel, 74.0);
+      expect(find.byKey(const Key('input-fill')), findsOneWidget);
+      expect(find.byKey(const Key('reference-lower')), findsOneWidget);
+      expect(find.byKey(const Key('reference-upper')), findsOneWidget);
+      session.dispose();
+    },
+  );
+
   testWidgets('input gap reports that analysis is restarting', (tester) async {
     final port = FakeAudioPort();
     final session = SessionController(port)
@@ -99,7 +164,7 @@ void main() {
       );
       expect(find.byKey(const Key('input-fill')), findsOneWidget);
       expect(find.textContaining('환경 잡음 추정과 자동 범위를 보류했다.'), findsOneWidget);
-      expect(find.textContaining('전처리 미확인 · 막대는 상대 참고값이다.'), findsOneWidget);
+      expect(find.textContaining('전처리 미확인 · 막대는 상대 참고값이다.'), findsNothing);
       session.dispose();
     },
   );

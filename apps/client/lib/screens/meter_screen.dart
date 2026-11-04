@@ -194,36 +194,22 @@ class MeterScreen extends StatelessWidget {
           textAlign: TextAlign.center,
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
         ),
-        const Text(
-          '상대 입력 막대 · 본인 목소리로 확인된 음량이 아니다.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: muted, fontSize: 12, height: 1.7),
-        ),
-        Text(
-          session.displayLevel != null
-              ? '발화로 판정된 입력이다. 다른 사람의 소리도 포함될 수 있다.'
-              : a['meterState'] == 'confirming'
-              ? '발화 판정을 연속 확인하고 있다.'
-              : a['meterState'] == 'nonSpeech'
-              ? '발화가 감지되지 않아 막대를 비웠다.'
-              : '발화 판정이 없거나 확인할 수 없어 막대를 비웠다.',
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: muted, fontSize: 12, height: 1.7),
-        ),
-        if (a['reason'] == 'processing_settings')
+        if (session.displayLevel != null || a['meterState'] != 'nonSpeech')
           Text(
-            processingUnknown
-                ? '전처리 미확인 · 막대는 상대 참고값이다.'
-                : '전처리 적용 · 막대는 상대 참고값이다.',
+            session.displayLevel != null
+                ? '발화로 판정된 입력이다. 다른 사람의 소리도 포함될 수 있다.'
+                : a['meterState'] == 'confirming'
+                ? '발화 판정을 연속 확인하고 있다.'
+                : '발화 판정이 없거나 확인할 수 없어 막대를 비웠다.',
             textAlign: TextAlign.center,
             style: const TextStyle(color: muted, fontSize: 12, height: 1.7),
           ),
-        const SizedBox(height: 5),
-        const Text(
-          '빨간 선은 참고 범위의 하한·상한이다.\n참고 척도 · 실제 데시벨은 아니다.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: muted, fontSize: 12, height: 1.7),
-        ),
+        if (a['reason'] == 'processing_settings' && !processingUnknown)
+          Text(
+            '전처리 적용 · 막대는 상대 참고값이다.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: muted, fontSize: 12, height: 1.7),
+          ),
         const SizedBox(height: 12),
         Semantics(
           liveRegion: true,
@@ -239,14 +225,12 @@ class MeterScreen extends StatelessWidget {
                 '발화 수준 추정 ${voice == null ? '—' : (voice + SessionController.inputLevelOffset).clamp(0, 120).toStringAsFixed(1)}',
                 '환경 적응 참고범위 ${range.lower.toStringAsFixed(1)}–${range.upper.toStringAsFixed(1)}',
               ],
-              if (!range.adjusted) '환경 적응 보류 · 기본 참고범위',
               if (session.displayLevel case final level?)
                 '참고 범위 비교 ${double.parse(level.toStringAsFixed(1)) < range.lower
                     ? '하한 미만'
                     : double.parse(level.toStringAsFixed(1)) > range.upper
                     ? '상한 초과'
                     : '범위 안'} · 척도 정합성 미검증',
-              '실험적 환경 추정 · 실제 음압이 아니다.',
             ].join('\n'),
             textAlign: TextAlign.center,
             style: const TextStyle(color: muted, fontSize: 12, height: 1.7),
