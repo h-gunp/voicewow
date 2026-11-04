@@ -105,7 +105,8 @@ No simulator or desktop-native number can close the actual-device gate.
 - [Converted model repository](https://huggingface.co/k2-fsa/sherpa-onnx-streaming-zipformer-korean-2024-06-16/tree/ba6078bca4daf3f0dd37f79d0ab505af71df14a6)
   is pinned to `ba6078bca4daf3f0dd37f79d0ab505af71df14a6`. Three model binary SHA-256
   digests are checked against upstream LFS metadata; sizes are checked for every
-  downloaded file. Token/sample digests are recorded for reproducibility.
+  downloaded file. All files, including tokens and samples, are also checked
+  against the committed digest manifest, even when reused from local cache.
 - [Original model card](https://huggingface.co/johnBamma/icefall-asr-ksponspeech-pruned-transducer-stateless7-streaming-2024-06-12)
   declares Apache-2.0. The conversion card links to it but contains no independent
   license declaration. This is provenance evidence, not independent clearance of
@@ -122,3 +123,7 @@ No simulator or desktop-native number can close the actual-device gate.
 Evidence: `tools/asr-spike/evidence/*.json`. An independent Astra review should
 review these claims and experiment code; passing review does not establish
 iPhone support or authorize presenting the spike as a completed feature.
+
+Independent Astra review found no blockers for this isolated spike. Its two
+hardening suggestions were applied: only boolean `true` accepts finalized input,
+and all cached/downloaded files must match the committed digest manifest.

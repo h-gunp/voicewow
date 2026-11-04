@@ -22,7 +22,7 @@ export function alignFinal(source, hypothesis, { final = false, scope = [0, sour
   const [from, to] = scope;
   if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to > source.length || from >= to)
     throw new RangeError('Invalid source scope');
-  if (!final) return { status: 'partial', range: null };
+  if (final !== true) return { status: 'partial', range: null };
   const script = indexed(source).filter(unit => unit.start >= from && unit.end <= to);
   const heard = indexed(hypothesis);
   if (heard.length < 6) return { status: 'insufficient', range: null };

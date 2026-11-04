@@ -9,6 +9,8 @@ FILES = ['encoder-epoch-99-avg-1.int8.onnx', 'decoder-epoch-99-avg-1.onnx',
          'joiner-epoch-99-avg-1.int8.onnx', 'tokens.txt', 'README.md',
          'test_wavs/README.md', 'test_wavs/trans.txt'] + [f'test_wavs/{i}.wav' for i in range(4)]
 ROOT.mkdir(parents=True, exist_ok=True)
+trusted = {x['file']: x['sha256'] for x in json.loads(
+    (Path(__file__).parent / 'evidence/download-report.json').read_text(encoding='utf-8'))}
 metadata = json.load(urllib.request.urlopen(f'https://huggingface.co/api/models/{REPO}/tree/{REVISION}?recursive=true'))
 metadata = {entry['path']: entry for entry in metadata}
 report = []
@@ -24,6 +26,7 @@ for name in FILES:
                 while chunk := response.read(1024 * 1024):
                     out.write(chunk)
     digest = hashlib.sha256(target.read_bytes()).hexdigest()
+    assert digest == trusted[name], f'Pinned digest mismatch: {name}'
     assert target.stat().st_size == entry['size'], name
     if entry.get('lfs'):
         assert digest == entry['lfs']['oid'], name

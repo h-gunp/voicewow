@@ -9,6 +9,7 @@ test('final recognized range keeps original offsets and context', () => {
 });
 test('partial revisions never mark a confirmed position', () => {
   assert.deepEqual(alignFinal(source, '오늘은 날씨가 좋습니다'), { status: 'partial', range: null });
+  assert.equal(alignFinal(source, '오늘은 날씨가 좋습니다', { final: 'false' }).status, 'partial');
 });
 test('repeated sentence is ambiguous, never first indexOf', () => {
   assert.equal(alignFinal('오늘은 날씨가 좋습니다. 오늘은 날씨가 좋습니다.', '오늘은 날씨가 좋습니다', { final:true }).status, 'ambiguous');
