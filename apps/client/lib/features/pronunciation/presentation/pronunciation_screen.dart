@@ -70,28 +70,51 @@ class _PronunciationScreenState extends State<PronunciationScreen> {
             children: [
               const SizedBox(height: 22),
               const Text(
+                '내 속도로, 함께',
+                style: TextStyle(
+                  color: Color(0xff146b70),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
                 '발음 훈련',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
+                style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 6),
               const Text(
                 '익숙한 말부터, 내 속도로 연습해요.',
-                style: TextStyle(color: muted, fontSize: 15),
+                style: TextStyle(color: muted, fontSize: 16),
               ),
               const SizedBox(height: 18),
-              TabBar(
-                onTap: (value) {
-                  unawaited(_stopSpeech());
-                  setState(() => _tab = value);
-                },
-                labelColor: ink,
-                unselectedLabelColor: muted,
-                indicatorColor: blue,
-                tabs: const [
-                  Tab(text: '발음 퀴즈'),
-                  Tab(text: '내 문장'),
-                  Tab(text: '복습'),
-                ],
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .65),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white),
+                ),
+                child: TabBar(
+                  onTap: (value) {
+                    unawaited(_stopSpeech());
+                    setState(() => _tab = value);
+                  },
+                  labelColor: ink,
+                  unselectedLabelColor: muted,
+                  indicatorSize: TabBarIndicatorSize.tab,
+                  dividerColor: Colors.transparent,
+                  indicator: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xffcbd9ef)),
+                  ),
+                  tabs: const [
+                    Tab(text: '발음 퀴즈'),
+                    Tab(text: '내 문장'),
+                    Tab(text: '복습'),
+                  ],
+                ),
               ),
               Expanded(
                 child: ListenableBuilder(
@@ -207,11 +230,15 @@ class _PersonalGuideViewState extends State<_PersonalGuideView>
     text.text = value;
     _analyze();
     if (scroll.hasClients) {
-      scroll.animateTo(
-        0,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-      );
+      if (MediaQuery.disableAnimationsOf(context)) {
+        scroll.jumpTo(0);
+      } else {
+        scroll.animateTo(
+          0,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+      }
     }
   }
 
@@ -278,8 +305,9 @@ class _PersonalGuideViewState extends State<_PersonalGuideView>
               key: const Key('guide-result'),
               padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
-                color: const Color(0xffe1f2e9),
-                borderRadius: BorderRadius.circular(22),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: line),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,

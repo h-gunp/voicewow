@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
 const ink = Color(0xff172b4d),
-    muted = Color(0xff5d6d82),
+    muted = Color(0xff52647b),
     blue = Color(0xff2f62d6),
-    canvas = Color(0xfff8f9f7),
-    line = Color(0xffd8e0e8),
+    canvas = Color(0xfff1f5fc),
+    line = Color(0xffcbd8ea),
     wash = Color(0xffedf3ff),
     red = Color(0xffb63a43);
 
@@ -18,8 +18,10 @@ ThemeData buildAppTheme() => ThemeData(
   scaffoldBackgroundColor: canvas,
   fontFamily: 'Pretendard',
   navigationBarTheme: NavigationBarThemeData(
-    backgroundColor: Colors.white,
-    indicatorColor: wash,
+    backgroundColor: const Color(0xeefbfcff),
+    indicatorColor: const Color(0xffdce8ff),
+    height: 72,
+    labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
     labelTextStyle: WidgetStateProperty.all(
       const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ink),
     ),
@@ -71,3 +73,56 @@ ThemeData buildAppTheme() => ThemeData(
     ),
   ),
 );
+
+// A static pastel backdrop keeps the glass treatment inexpensive while listening.
+class AppBackdrop extends StatelessWidget {
+  const AppBackdrop({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: const BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xffe9f2ff), Color(0xfff1f5fc), Color(0xffeeeafa)],
+      ),
+    ),
+    child: child,
+  );
+}
+
+class GlassSurface extends StatelessWidget {
+  const GlassSurface({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(20),
+  });
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: padding,
+    decoration: BoxDecoration(
+      color: MediaQuery.highContrastOf(context) ? Colors.white : null,
+      gradient: MediaQuery.highContrastOf(context)
+          ? null
+          : const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xfaffffff), Color(0xeef9fbff)],
+            ),
+      borderRadius: BorderRadius.circular(24),
+      border: Border.all(color: const Color(0xffd5e0ef)),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x1224467a),
+          blurRadius: 30,
+          offset: Offset(0, 10),
+        ),
+      ],
+    ),
+    child: child,
+  );
+}

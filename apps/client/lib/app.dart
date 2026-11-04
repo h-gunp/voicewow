@@ -106,24 +106,35 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
       child: child!,
     ),
     home: Scaffold(
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: section,
-        onDestinationSelected: changingSection ? null : _selectSection,
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.graphic_eq), label: '음량 측정'),
-          NavigationDestination(
-            key: Key('open-pronunciation'),
-            icon: Icon(Icons.auto_stories_outlined),
-            selectedIcon: Icon(Icons.auto_stories),
-            label: '발음 훈련',
-          ),
-          NavigationDestination(
-            key: Key('open-prosody'),
-            icon: Icon(Icons.multiline_chart_outlined),
-            selectedIcon: Icon(Icons.multiline_chart),
-            label: '높낮이 연습',
-          ),
-        ],
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: Color(0x1224467a),
+              blurRadius: 24,
+              offset: Offset(0, -4),
+            ),
+          ],
+        ),
+        child: NavigationBar(
+          selectedIndex: section,
+          onDestinationSelected: changingSection ? null : _selectSection,
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.graphic_eq), label: '음량 측정'),
+            NavigationDestination(
+              key: Key('open-pronunciation'),
+              icon: Icon(Icons.auto_stories_outlined),
+              selectedIcon: Icon(Icons.auto_stories),
+              label: '발음 훈련',
+            ),
+            NavigationDestination(
+              key: Key('open-prosody'),
+              icon: Icon(Icons.multiline_chart_outlined),
+              selectedIcon: Icon(Icons.multiline_chart),
+              label: '높낮이 연습',
+            ),
+          ],
+        ),
       ),
       body: AbsorbPointer(
         absorbing: changingSection,
@@ -142,8 +153,7 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
               : LayoutBuilder(
                   builder: (context, constraints) {
                     final wide = constraints.maxWidth > 600;
-                    return ColoredBox(
-                      color: wide ? const Color(0xffeef1f3) : canvas,
+                    return AppBackdrop(
                       child: SingleChildScrollView(
                         key: ValueKey(meter),
                         child: ConstrainedBox(
@@ -155,28 +165,24 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
                             child: Padding(
                               padding: EdgeInsets.symmetric(
                                 vertical: wide ? 32 : 8,
-                                horizontal: wide ? 24 : 12,
+                                horizontal: wide ? 24 : 20,
                               ),
-                              child: Container(
-                                width: 460,
-                                padding: EdgeInsets.all(wide ? 28 : 16),
-                                decoration: BoxDecoration(
-                                  color: canvas,
-                                  borderRadius: BorderRadius.circular(28),
-                                  border: wide ? Border.all(color: line) : null,
-                                ),
+                              child: SizedBox(
+                                width: 560,
                                 child: Material(
-                                  color: canvas,
+                                  color: Colors.transparent,
                                   child: ListenableBuilder(
                                     listenable: session,
                                     builder: (context, _) =>
                                         meter && session.scenario != null
-                                        ? MeterScreen(
-                                            session: session,
-                                            onBack: () {
-                                              setState(() => meter = false);
-                                              session.stop();
-                                            },
+                                        ? GlassSurface(
+                                            child: MeterScreen(
+                                              session: session,
+                                              onBack: () {
+                                                setState(() => meter = false);
+                                                session.stop();
+                                              },
+                                            ),
                                           )
                                         : ScenarioScreen(
                                             session: session,

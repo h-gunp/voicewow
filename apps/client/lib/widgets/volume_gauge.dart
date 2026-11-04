@@ -24,9 +24,10 @@ class VolumeGauge extends StatelessWidget {
       height: railHeight + 40,
       child: LayoutBuilder(
         builder: (context, box) {
-          const railWidth = 72.0, top = 20.0;
+          const top = 20.0;
           final large = MediaQuery.textScalerOf(context).scale(14) > 20;
-          final left = large ? 18.0 : (box.maxWidth - railWidth) / 2;
+          final railWidth = large ? 52.0 : 72.0;
+          final left = large ? 10.0 : (box.maxWidth - railWidth) / 2;
           Widget marker(double value, String name, Key key) {
             final label = value == value.roundToDouble()
                 ? value.toInt().toString()
@@ -77,7 +78,11 @@ class VolumeGauge extends StatelessWidget {
                   child: DecoratedBox(
                     key: const Key('gauge-rail'),
                     decoration: BoxDecoration(
-                      color: const Color(0xffeaf0f5),
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xffe4ecf8), Color(0xfff9fbff)],
+                      ),
                       borderRadius: BorderRadius.circular(40),
                       border: Border.all(color: line),
                     ),
@@ -115,7 +120,7 @@ class VolumeGauge extends StatelessWidget {
                             gradient: LinearGradient(
                               begin: Alignment.bottomCenter,
                               end: Alignment.topCenter,
-                              colors: [blue, Color(0xff8ab5ff)],
+                              colors: [blue, Color(0xff82b2ff)],
                             ),
                           ),
                         ),

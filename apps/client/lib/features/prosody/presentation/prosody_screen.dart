@@ -126,13 +126,13 @@ class _ProsodyScreenState extends State<ProsodyScreen>
   Widget _heading(String text) => Text(
     text,
     style: const TextStyle(
-      fontSize: 21,
+      fontSize: 22,
       fontWeight: FontWeight.w700,
       height: 1.4,
     ),
   );
 
-  Widget _copy(String text, {double size = 15, Color? color}) => Text(
+  Widget _copy(String text, {double size = 16, Color? color}) => Text(
     text,
     style: TextStyle(fontSize: size, height: 1.6, color: color),
   );
@@ -146,7 +146,7 @@ class _ProsodyScreenState extends State<ProsodyScreen>
   );
 
   Widget _bottom(List<Widget> children) => Material(
-    color: Colors.white,
+    color: const Color(0xeef8fbff),
     child: SafeArea(
       top: false,
       child: Container(
@@ -264,8 +264,9 @@ class _ProsodyScreenState extends State<ProsodyScreen>
       Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: const Color(0xffedf4ff),
-          borderRadius: BorderRadius.circular(16),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xffdce5f2)),
         ),
         child: _copy(s.phrase, size: 23),
       ),
@@ -299,11 +300,6 @@ class _ProsodyScreenState extends State<ProsodyScreen>
         onPressed: s.busy || s.reference == null ? null : s.playGuide,
         icon: const Icon(Icons.play_arrow),
         label: const Text('가이드 듣기 · 선택', textAlign: TextAlign.center),
-      ),
-      TextButton(
-        key: const Key('prosody-demo'),
-        onPressed: s.busy || s.reference == null ? null : s.demo,
-        child: const Text('녹음 없이 데모 보기', textAlign: TextAlign.center),
       ),
       if (s.phase == PracticePhase.loading ||
           s.phase == PracticePhase.generating)
@@ -604,8 +600,9 @@ class _ProsodyScreenState extends State<ProsodyScreen>
   Widget _feedbackCard(PracticeFeedback feedback) => Container(
     padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
-      color: const Color(0xffedf4ff),
-      borderRadius: BorderRadius.circular(16),
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: const Color(0xffdce5f2)),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -664,10 +661,14 @@ class _ProsodyScreenState extends State<ProsodyScreen>
     return Theme(
       data: Theme.of(context).copyWith(
         filledButtonTheme: FilledButtonThemeData(
-          style: FilledButton.styleFrom(minimumSize: const Size(48, 50)),
+          style: Theme.of(context).filledButtonTheme.style?.copyWith(
+            minimumSize: const WidgetStatePropertyAll(Size(48, 50)),
+          ),
         ),
         outlinedButtonTheme: OutlinedButtonThemeData(
-          style: OutlinedButton.styleFrom(minimumSize: const Size(48, 48)),
+          style: Theme.of(context).outlinedButtonTheme.style?.copyWith(
+            minimumSize: const WidgetStatePropertyAll(Size(48, 48)),
+          ),
         ),
       ),
       child: PopScope(
@@ -680,7 +681,9 @@ class _ProsodyScreenState extends State<ProsodyScreen>
           if (!didPop) unawaited(_back());
         },
         child: Scaffold(
+          backgroundColor: const Color(0xfff1f5fc),
           appBar: AppBar(
+            backgroundColor: const Color(0xeef8fbff),
             automaticallyImplyLeading: false,
             leading:
                 _step != ProsodyStep.prepare || s.busy || widget.onExit != null
