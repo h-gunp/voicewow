@@ -53,10 +53,13 @@ export class EnvironmentEstimator {
     this.lastEvidence = frame.seq;
     this.noise.push(frame);
     this.evidenceSinceStats++;
-    this.noise = this.noise.filter(x=>frame.seq-x.seq<1000);
-    if (this.noise.length < 300 || frame.seq % 10 !== 0) return;
+    // One second of eligible silence fits normal pauses; a three-second window
+    // forgets old ambience without mixing speech into the baseline.
+    this.noise = this.noise.filter(x=>frame.seq-x.seq<300);
+    if (this.noise.length < 100 || frame.seq % 10 !== 0) return;
     const fresh = this.evidenceSinceStats;
     this.evidenceSinceStats = 0;
+    // Zero input is not measured ambience; never fabricate a dBFS baseline.
     const values = this.noise.map(x=>x.power).sort((a,b)=>a-b);
     const q1 = values[Math.floor(values.length*.25)], q3 = values[Math.floor(values.length*.75)];
     if (q1 <= 0 || db(q3/q1) > 3) { this.state = 'held'; this.candidate = null; this.transition = false; return; }
@@ -64,13 +67,13 @@ export class EnvironmentEstimator {
     this.smooth = this.smooth === null ? value : this.smooth + (1-Math.exp(-.1/2))*(value-this.smooth);
     if (this.initial === null) this.initial = this.smooth;
     this.state = 'ready';
-    const change = db(this.smooth/this.initial), desired = Math.max(0, change*.5);
-    if (desired > 3) { this.state = 'unsupported'; this.candidate = null; return; }
+    // Saturate at the existing safe adjustment cap instead of reverting to zero.
+    const change = db(this.smooth/this.initial), desired = Math.min(3, Math.max(0, change*.5));
     // Return to the baseline in steps even when one step is smaller than entry hysteresis.
-    const target = desired <= .75 ? 0 : desired;
+    const target = desired <= .25 ? 0 : desired;
     const difference = target-this.offset;
-    if (Math.abs(difference) <= .75 && !(target === 0 && this.offset > 0)) { this.candidate = null; this.transition = false; return; }
-    if (difference > 0 && difference < 1.5 && !this.transition) return;
+    if (Math.abs(difference) <= .25 && !(target === 0 && this.offset > 0)) { this.candidate = null; this.transition = false; return; }
+    if (difference > 0 && difference < .5 && !this.transition) return;
     const direction = Math.sign(difference);
     if (!this.candidate || this.candidate.direction !== direction || frame.seq-this.candidate.last > 200) {
       this.candidate = {direction,start:frame.seq,last:frame.seq,count:1};
@@ -78,7 +81,7 @@ export class EnvironmentEstimator {
       this.candidate.count += Math.min(fresh, 10);
     }
     this.candidate.last = frame.seq;
-    if (this.candidate.count >= 300 && frame.seq-this.candidate.start >= 500) {
+    if (this.candidate.count >= 100 && frame.seq-this.candidate.start >= 200) {
       this.offset = Math.max(0,Math.min(3,this.offset + direction*Math.min(1,Math.abs(difference))));
       this.transition = true;
       this.candidate = null;
