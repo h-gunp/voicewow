@@ -2,36 +2,52 @@
   "method": "sRGB alpha compositing and WCAG relative luminance from implemented fill tokens; not screenshot/pixel evidence",
   "results": [
     {
-      "surface": "Web step control",
-      "fill": "e7f8f6",
-      "alpha": 0.88,
+      "surface": "Web controls",
+      "fill": "ffffff",
+      "alpha": 0.96,
       "backdrop": "000000",
-      "foreground": "590219",
-      "ratio": 10.084
+      "foreground": "172b4d",
+      "ratio": 12.912
     },
     {
-      "surface": "Web step control",
-      "fill": "e7f8f6",
-      "alpha": 0.88,
+      "surface": "Web controls",
+      "fill": "ffffff",
+      "alpha": 0.96,
       "backdrop": "000000",
-      "foreground": "355757",
-      "ratio": 5.504
+      "foreground": "52647b",
+      "ratio": 5.545
+    },
+    {
+      "surface": "Web controls",
+      "fill": "ffffff",
+      "alpha": 0.96,
+      "backdrop": "000000",
+      "foreground": "2f62d6",
+      "ratio": 5.009
     },
     {
       "surface": "Flutter navigation",
-      "fill": "f6fbf8",
-      "alpha": 0.9137254901960784,
+      "fill": "f6f9ff",
+      "alpha": 0.9490196078431372,
       "backdrop": "000000",
-      "foreground": "590219",
-      "ratio": 11.43
+      "foreground": "172b4d",
+      "ratio": 11.95
     },
     {
       "surface": "Flutter navigation",
-      "fill": "f6fbf8",
-      "alpha": 0.9137254901960784,
+      "fill": "f6f9ff",
+      "alpha": 0.9490196078431372,
       "backdrop": "000000",
-      "foreground": "355757",
-      "ratio": 6.238
+      "foreground": "52647b",
+      "ratio": 5.132
+    },
+    {
+      "surface": "Flutter navigation",
+      "fill": "f6f9ff",
+      "alpha": 0.9490196078431372,
+      "backdrop": "000000",
+      "foreground": "2f62d6",
+      "ratio": 4.636
     }
   ],
   "limitations": "Actual rendered pixels, blur performance and mobile devices were not verified."

@@ -2,13 +2,13 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 
-const ink = Color(0xff590219),
-    muted = Color(0xff355757),
-    blue = Color(0xff590219),
-    canvas = Color(0xfff5fafa),
-    line = Color(0xffd8d0c7),
-    wash = Color(0xffe1f3f1),
-    red = Color(0xff590219);
+const ink = Color(0xff172b4d),
+    muted = Color(0xff52647b),
+    blue = Color(0xff2f62d6),
+    canvas = Color(0xfff1f5fc),
+    line = Color(0xffcbd8ea),
+    wash = Color(0xffedf3ff),
+    red = Color(0xffb63a43);
 
 ThemeData buildAppTheme() => ThemeData(
   useMaterial3: true,
@@ -21,7 +21,7 @@ ThemeData buildAppTheme() => ThemeData(
   fontFamily: 'Pretendard',
   navigationBarTheme: NavigationBarThemeData(
     backgroundColor: Colors.transparent,
-    indicatorColor: const Color(0xff77d9d9),
+    indicatorColor: const Color(0xffdce8ff),
     height: 72,
     labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
     labelTextStyle: WidgetStateProperty.all(
@@ -87,7 +87,7 @@ class AppBackdrop extends StatelessWidget {
       gradient: LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [Color(0xffbdebea), Color(0xfff5fafa), Color(0xffeee0d8)],
+        colors: [Color(0xffe9f2ff), Color(0xfff1f5fc), Color(0xffeeeafa)],
       ),
     ),
     child: child,
@@ -113,13 +113,13 @@ class GlassSurface extends StatelessWidget {
           : const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xfaffffff), Color(0xf7f8f5ef)],
+              colors: [Color(0xfaffffff), Color(0xeef9fbff)],
             ),
       borderRadius: BorderRadius.circular(24),
-      border: Border.all(color: const Color(0xffe0d8d0)),
+      border: Border.all(color: const Color(0xffd5e0ef)),
       boxShadow: const [
         BoxShadow(
-          color: Color(0x18590219),
+          color: Color(0x1224467a),
           blurRadius: 30,
           offset: Offset(0, 10),
         ),
@@ -144,7 +144,7 @@ class GlassNavigation extends StatelessWidget {
           borderRadius: BorderRadius.circular(28),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x20590219),
+              color: Color(0x2024467a),
               blurRadius: 24,
               offset: Offset(0, 6),
             ),
@@ -159,7 +159,7 @@ class GlassNavigation extends StatelessWidget {
             ),
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: highContrast ? Colors.white : const Color(0xe9f6fbf8),
+                color: highContrast ? Colors.white : const Color(0xf2f6f9ff),
                 borderRadius: BorderRadius.circular(28),
                 border: Border.all(
                   color: highContrast ? ink : Colors.white,

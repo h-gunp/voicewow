@@ -115,8 +115,8 @@ function paintPractice(trace=[],progress=null,options={}){
   if(finished&&!trace.length)trace=result.trace;
   $('practice-graph-card').dataset.phase=live?'recording':finished?'result':'guide';
   setText('practice-view-label',live?'실시간 · 시간 기준':finished?'녹음 후 · 속도 맞춤':'가이드 미리보기');
-  setText('practice-chart-help',live?'짙은 청록색 점선은 가이드, 굵은 짙은 자주색 선·점은 지금 측정한 내 목소리예요. 녹음 중에는 실제 경과 시간으로 보여줘요.':!guide.analysis?'대본에 맞는 AI 가이드를 만들거나 같은 문장의 참고 음성을 넣어 주세요.':finished?'결과창과 같은 비교예요. 짙은 청록색 점선은 가이드, 짙은 자주색 선은 내 목소리예요.':practiceTab==='pitch'?'위쪽은 각 목소리의 중간값보다 높은 음, 아래쪽은 낮은 음이에요. 목소리 크기와는 달라요.':'위쪽은 각 녹음의 중간값보다 큰 소리, 아래쪽은 작은 소리예요. 한 녹음 안의 강약을 볼 수 있어요.');
-  if(!live){$('live-status').dataset.voice='idle';setText('live-status',finished?'녹음이 끝났어요. 내 목소리의 움직임을 함께 살펴봐요.':'녹음을 시작하면 짙은 자주색 선으로 내 목소리가 나타나요.');}
+  setText('practice-chart-help',live?'파란 점선은 가이드, 굵은 짙은 회색 선·점은 지금 측정한 내 목소리예요. 녹음 중에는 실제 경과 시간으로 보여줘요.':!guide.analysis?'대본에 맞는 AI 가이드를 만들거나 같은 문장의 참고 음성을 넣어 주세요.':finished?'결과창과 같은 비교예요. 파란 점선은 가이드, 짙은 회색 선은 내 목소리예요.':practiceTab==='pitch'?'위쪽은 각 목소리의 중간값보다 높은 음, 아래쪽은 낮은 음이에요. 목소리 크기와는 달라요.':'위쪽은 각 녹음의 중간값보다 큰 소리, 아래쪽은 작은 소리예요. 한 녹음 안의 강약을 볼 수 있어요.');
+  if(!live){$('live-status').dataset.voice='idle';setText('live-status',finished?'녹음이 끝났어요. 내 목소리의 움직임을 함께 살펴봐요.':'녹음을 시작하면 짙은 회색 선으로 내 목소리가 나타나요.');}
   drawGraph($('practice-chart'),{reference:guide.analysis,trace,field:field(practiceTab),progress,regions:result?.summary.segments||previewRegions,timeAxis:Boolean(wholeGuide),...options});
   drawGraph($('guide-chart'),{reference:guide.analysis,regions:previewRegions,progress:live?null:progress});
 }
@@ -124,7 +124,7 @@ function paintLive(s){
   const elapsed=Math.max(0,(performance.now()-s.started)/1000-(s.firstVoice??0));
   const view=s.view.update(s.frames,s.firstVoice===null?0:elapsed);
   $('live-status').dataset.voice=view.hasCurrentVoice?'active':'waiting';
-  const message=s.firstVoice===null?'목소리를 기다리고 있어요. 문구를 읽어 보세요.':view.hasCurrentVoice?'내 목소리를 짙은 자주색 선과 점으로 표시하고 있어요.':'지금은 높낮이를 확인하기 어려워요. 측정이 되면 짙은 자주색 점이 다시 나타나요.';
+  const message=s.firstVoice===null?'목소리를 기다리고 있어요. 문구를 읽어 보세요.':view.hasCurrentVoice?'내 목소리를 짙은 회색 선과 점으로 표시하고 있어요.':'지금은 높낮이를 확인하기 어려워요. 측정이 되면 짙은 회색 점이 다시 나타나요.';
   if($('live-status').textContent!==message)setText('live-status',message);
   paintPractice(view.trace,s.firstVoice===null?0:elapsed,{live:true,domainSeconds:view.domainSeconds,scaleBound:practiceTab==='volume'?view.levelBound:view.pitchBound});
 }
@@ -153,7 +153,7 @@ function selectGuide(){
   setText('phrase-text',guide.text);setText('guide-source',guide.source);setText('timer','00:00');
   setText('recording-phrase-text',guide.text);
   renderGuideRegions();
-  setText('practice-status',guide.analysis?'짙은 청록색 선은 선택한 예시의 흐름이에요. 녹음을 시작하고 같은 문구를 말해 보세요.':'먼저 이 문장의 AI 가이드를 만들거나 참고 음성을 넣어 주세요.');
+  setText('practice-status',guide.analysis?'파란 선은 선택한 예시의 흐름이에요. 녹음을 시작하고 같은 문구를 말해 보세요.':'먼저 이 문장의 AI 가이드를 만들거나 참고 음성을 넣어 주세요.');
   $('user-file').value='';state='idle';clearResult();paintPractice();refresh();pager?.goTo(0);
 }
 function paintStoredRecording(){paintPractice([]);}
@@ -195,7 +195,7 @@ function renderResult(){
   $('playback-range-info').hidden=!result||durationView;
   if(!result){
     setText('graph-title',resultTab==='volume'?'강약 비교':'높낮이 비교');setText('graph-selected-label',previewRegions.map(region=>region.label).join(' · ')||'가이드 준비 전');
-    setText('result-graph-help',guide.analysis?'녹음하면 예시와 내 목소리를 함께 볼 수 있어요.':'대본에 맞는 가이드를 만들면 짙은 청록색 선이 나타나요.');
+    setText('result-graph-help',guide.analysis?'녹음하면 예시와 내 목소리를 함께 볼 수 있어요.':'대본에 맞는 가이드를 만들면 파란 선이 나타나요.');
     for(const id of ['reference-duration','user-duration'])setText(id,'—');
     for(const id of ['reference-duration-bar','user-duration-bar'])$(id).style.width='0%';
     setText('duration-delta','녹음을 마치면 말한 길이가 나타나요.');
@@ -208,7 +208,7 @@ function renderResult(){
   $('coverage-fill').style.width=`${Math.min(100,used/Math.max(total,.01)*100)}%`;
   setText('graph-title',resultTab==='volume'?'강약 비교':'높낮이 비교');
   setText('graph-selected-label',`${result.summary.segments[selectedIndex].label} 선택됨`);
-  setText('result-graph-help','짙은 청록색 점선은 예시, 짙은 자주색 실선은 내 목소리예요. 각 목소리의 중간값을 기준으로 두 흐름을 겹쳐 보여줘요.');
+  setText('result-graph-help','파란 점선은 예시, 짙은 회색 실선은 내 목소리예요. 각 목소리의 중간값을 기준으로 두 흐름을 겹쳐 보여줘요.');
   if(durationView){
     const {reference:r,user:u}=result.summary.duration,max=Math.max(r,u,.1);
     setText('reference-duration',`${r.toFixed(2)}초`);setText('user-duration',`${u.toFixed(2)}초`);
@@ -348,7 +348,7 @@ async function record(){
     }
     recorder.addEventListener('stop',finish,{once:true});
     recorder.start();state='recording';s.started=performance.now();refresh();paintLive(s);
-    setText('practice-status','짙은 자주색 선과 점을 보며 같은 문구를 읽어 보세요. 녹음을 마치면 말하는 속도를 맞춰 다시 비교해요.');
+    setText('practice-status','짙은 회색 선과 점을 보며 같은 문구를 읽어 보세요. 녹음을 마치면 말하는 속도를 맞춰 다시 비교해요.');
     const data=new Float32Array(analyser.fftSize);
     s.liveTimer=setInterval(()=>{
       const elapsed=(performance.now()-s.started)/1000;setText('timer',`00:${String(Math.floor(elapsed)).padStart(2,'0')}`);
@@ -380,7 +380,7 @@ function preview(){
   if(previewTimer){stopPreview();paintPractice();return;}
   stopPlayback();const started=performance.now(),duration=guide.analysis.duration*1.8;
   $('guide-preview').textContent='■ 움직임 멈추기';
-  setText('practice-status','짙은 청록색 선을 따라 예시의 흐름을 살펴보세요. 이 움직임은 보기 편하게 천천히 재생돼요.');
+  setText('practice-status','파란 선을 따라 예시의 흐름을 살펴보세요. 이 움직임은 보기 편하게 천천히 재생돼요.');
   previewTimer=setInterval(()=>{const elapsed=(performance.now()-started)/1000;paintPractice([],Math.min(guide.analysis.duration,elapsed/1.8));if(elapsed>=duration){stopPreview();paintPractice();}},40);
 }
 function updateScriptStatus(){
