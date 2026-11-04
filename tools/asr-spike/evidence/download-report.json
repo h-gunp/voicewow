@@ -1,0 +1,79 @@
+[
+  {
+    "file": "encoder-epoch-99-avg-1.int8.onnx",
+    "bytes": 126968852,
+    "sha256": "8d0b1aa24fbedd4e3948564ab7facd151b8ce9b0c48fc987c541de2de3af5697",
+    "seconds": 4.51,
+    "cached": false
+  },
+  {
+    "file": "decoder-epoch-99-avg-1.onnx",
+    "bytes": 11309084,
+    "sha256": "b29cfb4575141e50a30a22b2c4579934f3d4f45b83c9c8c08c3aef5a3fa7abfc",
+    "seconds": 1.739,
+    "cached": false
+  },
+  {
+    "file": "joiner-epoch-99-avg-1.int8.onnx",
+    "bytes": 2581421,
+    "sha256": "128b80a66a1f718488af8560f9d15895109b99ff3e573f0a0130e03774ef1ced",
+    "seconds": 1.595,
+    "cached": false
+  },
+  {
+    "file": "tokens.txt",
+    "bytes": 60246,
+    "sha256": "016bdf0965029263b7ad01b742366ee542ef0bef38261510e8176ff6f2e9e668",
+    "seconds": 0.261,
+    "cached": false
+  },
+  {
+    "file": "README.md",
+    "bytes": 251,
+    "sha256": "68d37fa4123899cda2f91045624cf0da3b17ca3c6d9ae5445feedde8d3b98dbb",
+    "seconds": 0.226,
+    "cached": false
+  },
+  {
+    "file": "test_wavs/README.md",
+    "bytes": 117,
+    "sha256": "c78ad86c0dbf77638090b258faaf4e80307e00324f6f7691f3815cef96202553",
+    "seconds": 0.251,
+    "cached": false
+  },
+  {
+    "file": "test_wavs/trans.txt",
+    "bytes": 283,
+    "sha256": "7dafa4e5fcdeae1552e4144494e83de6d88ead237f7fc3e851999c61b71f9f75",
+    "seconds": 0.229,
+    "cached": false
+  },
+  {
+    "file": "test_wavs/0.wav",
+    "bytes": 112892,
+    "sha256": "0faf0b037efe428e5e561195f4d2aa148b2a0a2a5fc540b2c184b9d5c241e984",
+    "seconds": 0.242,
+    "cached": false
+  },
+  {
+    "file": "test_wavs/1.wav",
+    "bytes": 108992,
+    "sha256": "b59bf1209d0d37088335d94f21394f31d794743bc9c849e3a4c9932a985c0bae",
+    "seconds": 0.233,
+    "cached": false
+  },
+  {
+    "file": "test_wavs/2.wav",
+    "bytes": 212142,
+    "sha256": "ed95184720061842e8f0f5df7e5826f97b0b26cd3c9bff18709f5be07ff18728",
+    "seconds": 0.236,
+    "cached": false
+  },
+  {
+    "file": "test_wavs/3.wav",
+    "bytes": 85834,
+    "sha256": "b1d2de5f90c73dfacddc1d6ab93a41427c89573f261ed2d425a6a37b3ee32931",
+    "seconds": 0.236,
+    "cached": false
+  }
+]

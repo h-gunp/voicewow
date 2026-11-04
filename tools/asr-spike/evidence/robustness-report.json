@@ -1,0 +1,374 @@
+{
+  "note": "Small heterogeneous public/synthetic suite, not accuracy or real-noise benchmark. Additional Korean sample lacks a verified reference.",
+  "results": [
+    {
+      "name": "public-0-clean",
+      "kind": "speech",
+      "seconds": 3.5265,
+      "text": "걔는괜찮은척하려구애쓰는거같았다",
+      "script": "그는 괜찮은 척하려고 애쓰는 것 같았다.",
+      "alignment": {
+        "status": "uncertain-tail",
+        "range": {
+          "start": 1,
+          "end": 10
+        },
+        "text": "는 괜찮은 척하려",
+        "before": "그",
+        "after": "고 애쓰는 것 같았다.",
+        "matchedCharacters": 7,
+        "trailingUnmatched": 8
+      }
+    },
+    {
+      "name": "public-0-10dB-synthetic-white-noise",
+      "kind": "speech",
+      "seconds": 3.5265,
+      "text": "괜찮은척하자고?",
+      "script": "그는 괜찮은 척하려고 애쓰는 것 같았다.",
+      "alignment": {
+        "status": "uncertain",
+        "range": null
+      }
+    },
+    {
+      "name": "public-0-0dB-synthetic-white-noise",
+      "kind": "speech",
+      "seconds": 3.5265,
+      "text": "똑같다고",
+      "script": "그는 괜찮은 척하려고 애쓰는 것 같았다.",
+      "alignment": {
+        "status": "insufficient",
+        "range": null
+      }
+    },
+    {
+      "name": "public-0-repeated-audio-and-script",
+      "kind": "ambiguous-repeat",
+      "seconds": 7.553,
+      "text": "걔는괜찮은척하려구애쓰는거같았다, 그거는괜찮은척하려고애쓰는거같았다",
+      "script": "그는 괜찮은 척하려고 애쓰는 것 같았다. 그는 괜찮은 척하려고 애쓰는 것 같았다.",
+      "alignment": {
+        "status": "ambiguous",
+        "range": null
+      }
+    },
+    {
+      "name": "public-0-wrong-script",
+      "kind": "mismatch",
+      "seconds": 3.5265,
+      "text": "걔는괜찮은척하려구애쓰는거같았다",
+      "script": "이번 발표는 우주 탐사 기술과 미래의 행성 자원 개발에 대한 내용입니다.",
+      "alignment": {
+        "status": "uncertain",
+        "range": null
+      }
+    },
+    {
+      "name": "public-1-clean",
+      "kind": "speech",
+      "seconds": 3.404625,
+      "text": "지하철에서다리를벌리고하진마라.",
+      "script": "지하철에서 다리를 벌리고 앉지 마라.",
+      "alignment": {
+        "status": "uncertain-tail",
+        "range": {
+          "start": 0,
+          "end": 13
+        },
+        "text": "지하철에서 다리를 벌리고",
+        "before": "",
+        "after": " 앉지 마라.",
+        "matchedCharacters": 11,
+        "trailingUnmatched": 4
+      }
+    },
+    {
+      "name": "public-1-10dB-synthetic-white-noise",
+      "kind": "speech",
+      "seconds": 3.404625,
+      "text": "지하철에서다리를벌리고하진않아.",
+      "script": "지하철에서 다리를 벌리고 앉지 마라.",
+      "alignment": {
+        "status": "uncertain-tail",
+        "range": {
+          "start": 0,
+          "end": 13
+        },
+        "text": "지하철에서 다리를 벌리고",
+        "before": "",
+        "after": " 앉지 마라.",
+        "matchedCharacters": 11,
+        "trailingUnmatched": 4
+      }
+    },
+    {
+      "name": "public-1-0dB-synthetic-white-noise",
+      "kind": "speech",
+      "seconds": 3.404625,
+      "text": "지하철에서달리고있지",
+      "script": "지하철에서 다리를 벌리고 앉지 마라.",
+      "alignment": {
+        "status": "uncertain",
+        "range": null
+      }
+    },
+    {
+      "name": "public-1-repeated-audio-and-script",
+      "kind": "ambiguous-repeat",
+      "seconds": 7.30925,
+      "text": "지하철에서다리를벌리고하진마라. 지하철에서다리를벌리고앉지마라.",
+      "script": "지하철에서 다리를 벌리고 앉지 마라. 지하철에서 다리를 벌리고 앉지 마라.",
+      "alignment": {
+        "status": "matched",
+        "range": {
+          "start": 17,
+          "end": 40
+        },
+        "text": "마라. 지하철에서 다리를 벌리고 앉지 마라",
+        "before": "지하철에서 다리를 벌리고 앉지 ",
+        "after": ".",
+        "matchedCharacters": 17,
+        "trailingUnmatched": 0
+      }
+    },
+    {
+      "name": "public-1-wrong-script",
+      "kind": "mismatch",
+      "seconds": 3.404625,
+      "text": "지하철에서다리를벌리고하진마라.",
+      "script": "이번 발표는 우주 탐사 기술과 미래의 행성 자원 개발에 대한 내용입니다.",
+      "alignment": {
+        "status": "uncertain",
+        "range": null
+      }
+    },
+    {
+      "name": "public-2-clean",
+      "kind": "speech",
+      "seconds": 6.6280625,
+      "text": "부모가저질른큰실수중하나는자기아이를다른집안과비교하는것이다.",
+      "script": "부모가 저지르는 큰 실수 중 하나는 자기 아이를 다른 집 아이와 비교하는 것이다.",
+      "alignment": {
+        "status": "matched",
+        "range": {
+          "start": 36,
+          "end": 44
+        },
+        "text": "비교하는 것이다",
+        "before": "부모가 저지르는 큰 실수 중 하나는 자기 아이를 다른 집 아이와 ",
+        "after": ".",
+        "matchedCharacters": 7,
+        "trailingUnmatched": 0
+      }
+    },
+    {
+      "name": "public-2-10dB-synthetic-white-noise",
+      "kind": "speech",
+      "seconds": 6.6280625,
+      "text": "부모가저지르는큰실수지, 분야는자기아이를다른집안이라비교하는것이다.",
+      "script": "부모가 저지르는 큰 실수 중 하나는 자기 아이를 다른 집 아이와 비교하는 것이다.",
+      "alignment": {
+        "status": "matched",
+        "range": {
+          "start": 36,
+          "end": 44
+        },
+        "text": "비교하는 것이다",
+        "before": "부모가 저지르는 큰 실수 중 하나는 자기 아이를 다른 집 아이와 ",
+        "after": ".",
+        "matchedCharacters": 7,
+        "trailingUnmatched": 0
+      }
+    },
+    {
+      "name": "public-2-0dB-synthetic-white-noise",
+      "kind": "speech",
+      "seconds": 6.6280625,
+      "text": "뭐가제대로된아이를다른걸",
+      "script": "부모가 저지르는 큰 실수 중 하나는 자기 아이를 다른 집 아이와 비교하는 것이다.",
+      "alignment": {
+        "status": "uncertain",
+        "range": null
+      }
+    },
+    {
+      "name": "public-2-repeated-audio-and-script",
+      "kind": "ambiguous-repeat",
+      "seconds": 13.756125,
+      "text": "부모가저질른큰실수중하나는자기아이를다른집안과비교하는것이다. 부모가저지르는큰실수중하나는, 자기아이를다른집알바비교하는것이다.",
+      "script": "부모가 저지르는 큰 실수 중 하나는 자기 아이를 다른 집 아이와 비교하는 것이다. 부모가 저지르는 큰 실수 중 하나는 자기 아이를 다른 집 아이와 비교하는 것이다.",
+      "alignment": {
+        "status": "ambiguous",
+        "range": null
+      }
+    },
+    {
+      "name": "public-2-wrong-script",
+      "kind": "mismatch",
+      "seconds": 6.6280625,
+      "text": "부모가저질른큰실수중하나는자기아이를다른집안과비교하는것이다.",
+      "script": "이번 발표는 우주 탐사 기술과 미래의 행성 자원 개발에 대한 내용입니다.",
+      "alignment": {
+        "status": "uncertain",
+        "range": null
+      }
+    },
+    {
+      "name": "public-3-clean",
+      "kind": "speech",
+      "seconds": 2.6809375,
+      "text": "주민등록증을보여주시겠어요?",
+      "script": "주민등록증을 보여 주시겠어요?",
+      "alignment": {
+        "status": "matched",
+        "range": {
+          "start": 0,
+          "end": 15
+        },
+        "text": "주민등록증을 보여 주시겠어요",
+        "before": "",
+        "after": "?",
+        "matchedCharacters": 13,
+        "trailingUnmatched": 0
+      }
+    },
+    {
+      "name": "public-3-10dB-synthetic-white-noise",
+      "kind": "speech",
+      "seconds": 2.6809375,
+      "text": "국민등록진을보여주시겠어?",
+      "script": "주민등록증을 보여 주시겠어요?",
+      "alignment": {
+        "status": "matched",
+        "range": {
+          "start": 5,
+          "end": 14
+        },
+        "text": "을 보여 주시겠어",
+        "before": "주민등록증",
+        "after": "요?",
+        "matchedCharacters": 7,
+        "trailingUnmatched": 0
+      }
+    },
+    {
+      "name": "public-3-0dB-synthetic-white-noise",
+      "kind": "speech",
+      "seconds": 2.6809375,
+      "text": "",
+      "script": "주민등록증을 보여 주시겠어요?",
+      "alignment": {
+        "status": "insufficient",
+        "range": null
+      }
+    },
+    {
+      "name": "public-3-repeated-audio-and-script",
+      "kind": "ambiguous-repeat",
+      "seconds": 5.861875,
+      "text": "주민등록증을보여주시겠어요? 주민등록증을보여주시겠어요?",
+      "script": "주민등록증을 보여 주시겠어요? 주민등록증을 보여 주시겠어요?",
+      "alignment": {
+        "status": "matched",
+        "range": {
+          "start": 0,
+          "end": 32
+        },
+        "text": "주민등록증을 보여 주시겠어요? 주민등록증을 보여 주시겠어요",
+        "before": "",
+        "after": "?",
+        "matchedCharacters": 26,
+        "trailingUnmatched": 0
+      }
+    },
+    {
+      "name": "public-3-wrong-script",
+      "kind": "mismatch",
+      "seconds": 2.6809375,
+      "text": "주민등록증을보여주시겠어요?",
+      "script": "이번 발표는 우주 탐사 기술과 미래의 행성 자원 개발에 대한 내용입니다.",
+      "alignment": {
+        "status": "uncertain",
+        "range": null
+      }
+    },
+    {
+      "name": "bundled-TTS-hello",
+      "kind": "synthetic-speech",
+      "seconds": 1.1566666666666667,
+      "text": "안녕하세요?",
+      "script": "안녕하세요",
+      "alignment": {
+        "status": "insufficient",
+        "range": null
+      }
+    },
+    {
+      "name": "bundled-TTS-sunglasses",
+      "kind": "synthetic-speech",
+      "seconds": 1.1684583333333334,
+      "text": "",
+      "script": "선글라스",
+      "alignment": {
+        "status": "insufficient",
+        "range": null
+      }
+    },
+    {
+      "name": "bundled-TTS-phrase",
+      "kind": "synthetic-speech",
+      "seconds": 1.8167083333333334,
+      "text": "",
+      "script": "잠시 말씀드릴게요",
+      "alignment": {
+        "status": "insufficient",
+        "range": null
+      }
+    },
+    {
+      "name": "additional-sensevoice-ko-untranscribed",
+      "kind": "additional-public-no-reference",
+      "seconds": 4.608,
+      "text": "생각을하면서살면훨씬편할거야.",
+      "script": "그는 괜찮은 척하려고 애쓰는 것 같았다.",
+      "alignment": {
+        "status": "uncertain",
+        "range": null
+      }
+    },
+    {
+      "name": "silence",
+      "kind": "synthetic-nonspeech",
+      "seconds": 5,
+      "text": "",
+      "script": "그는 괜찮은 척하려고 애쓰는 것 같았다.",
+      "alignment": {
+        "status": "insufficient",
+        "range": null
+      }
+    },
+    {
+      "name": "synthetic-white-noise",
+      "kind": "synthetic-nonspeech",
+      "seconds": 5,
+      "text": "",
+      "script": "그는 괜찮은 척하려고 애쓰는 것 같았다.",
+      "alignment": {
+        "status": "insufficient",
+        "range": null
+      }
+    },
+    {
+      "name": "synthetic-tone",
+      "kind": "synthetic-nonspeech",
+      "seconds": 5,
+      "text": "",
+      "script": "그는 괜찮은 척하려고 애쓰는 것 같았다.",
+      "alignment": {
+        "status": "insufficient",
+        "range": null
+      }
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "dependencies": {
+    "sherpa-onnx-node": "2.0.1"
+  },
+  "name": "voicemate-asr-feasibility-spike",
+  "private": true,
+  "description": "Native-only public-fixture experiment; not product runtime",
+  "scripts": {
+    "test": "node --test alignment.test.mjs",
+    "measure": "node measure.mjs"
+  }
+}

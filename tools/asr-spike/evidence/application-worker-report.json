@@ -1,0 +1,111 @@
+{
+  "kind": "actual application classic worker in Node VM with official browser WASM; not actual browser/microphone",
+  "initMs": 1366.3118,
+  "requests": [
+    {
+      "url": "https://local.test/prosody/vendor/sherpa/sherpa-onnx-wasm-web.wasm",
+      "method": "GET"
+    },
+    {
+      "url": "https://huggingface.co/k2-fsa/sherpa-onnx-streaming-zipformer-korean-2024-06-16/resolve/ba6078bca4daf3f0dd37f79d0ab505af71df14a6/encoder-epoch-99-avg-1.int8.onnx",
+      "method": "GET"
+    },
+    {
+      "url": "https://huggingface.co/k2-fsa/sherpa-onnx-streaming-zipformer-korean-2024-06-16/resolve/ba6078bca4daf3f0dd37f79d0ab505af71df14a6/decoder-epoch-99-avg-1.onnx",
+      "method": "GET"
+    },
+    {
+      "url": "https://huggingface.co/k2-fsa/sherpa-onnx-streaming-zipformer-korean-2024-06-16/resolve/ba6078bca4daf3f0dd37f79d0ab505af71df14a6/joiner-epoch-99-avg-1.int8.onnx",
+      "method": "GET"
+    },
+    {
+      "url": "https://huggingface.co/k2-fsa/sherpa-onnx-streaming-zipformer-korean-2024-06-16/resolve/ba6078bca4daf3f0dd37f79d0ab505af71df14a6/tokens.txt",
+      "method": "GET"
+    }
+  ],
+  "outputs": [
+    {
+      "sample": 0,
+      "processingMs": 773.8741999999997,
+      "endpoints": [
+        {
+          "type": "result",
+          "sequence": 31,
+          "text": "걔는괜찮은척하려구애쓰는거같았다",
+          "endpoint": true
+        }
+      ],
+      "lastNonempty": {
+        "type": "result",
+        "sequence": 31,
+        "text": "걔는괜찮은척하려구애쓰는거같았다",
+        "endpoint": true
+      },
+      "errors": []
+    },
+    {
+      "sample": 1,
+      "processingMs": 744.1119000000003,
+      "endpoints": [
+        {
+          "type": "result",
+          "sequence": 68,
+          "text": "지하철에서다리를벌리고앉지마라.",
+          "endpoint": true
+        }
+      ],
+      "lastNonempty": {
+        "type": "result",
+        "sequence": 68,
+        "text": "지하철에서다리를벌리고앉지마라.",
+        "endpoint": true
+      },
+      "errors": []
+    },
+    {
+      "sample": 2,
+      "processingMs": 1102.2857000000004,
+      "endpoints": [
+        {
+          "type": "result",
+          "sequence": 124,
+          "text": "부모가저지르는큰실수중하나는자기아이를다른집아이와비교하는것이다.",
+          "endpoint": true
+        }
+      ],
+      "lastNonempty": {
+        "type": "result",
+        "sequence": 124,
+        "text": "부모가저지르는큰실수중하나는자기아이를다른집아이와비교하는것이다.",
+        "endpoint": true
+      },
+      "errors": []
+    },
+    {
+      "sample": 3,
+      "processingMs": 588.9065,
+      "endpoints": [
+        {
+          "type": "result",
+          "sequence": 155,
+          "text": "주민등록증을보여주시겠어요?",
+          "endpoint": true
+        }
+      ],
+      "lastNonempty": {
+        "type": "result",
+        "sequence": 155,
+        "text": "주민등록증을보여주시겠어요?",
+        "endpoint": true
+      },
+      "errors": []
+    }
+  ],
+  "invalidSequence": [
+    {
+      "type": "error",
+      "message": "기기 안 음성 인식을 계속할 수 없어요. 다시 준비하거나 위치 표시를 꺼 주세요."
+    }
+  ],
+  "peakRssKiB": 816192
+}

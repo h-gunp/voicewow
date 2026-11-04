@@ -1,0 +1,66 @@
+{
+  "LICENSE": {
+    "bytes": 11358,
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+  },
+  "LICENSE-Eigen-MPL2.txt": {
+    "bytes": 16727,
+    "sha256": "66a3107d5ad6a058aab753eaac2047ccb2ed0e39465dd0fe5844da3e300d5172"
+  },
+  "LICENSE-hclust-cpp.txt": {
+    "bytes": 1483,
+    "sha256": "e361d842da1d290351860ad6dcce2673a1e42e4f873a3ae1ff4eb92c6adaa882"
+  },
+  "LICENSE-json.txt": {
+    "bytes": 1995,
+    "sha256": "d4b7ed0261c2c840e9ccc7d483b3b659bfddc8be797f3007da080f0c4a78d960"
+  },
+  "LICENSE-kaldi-decoder.txt": {
+    "bytes": 11358,
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+  },
+  "LICENSE-kaldi-native-fbank.txt": {
+    "bytes": 11358,
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+  },
+  "LICENSE-openfst.txt": {
+    "bytes": 559,
+    "sha256": "4300529197035fd3452350718a0b8cee984e9412c9932d7f35fcde849fc97a4b"
+  },
+  "LICENSE-simple-sentencepiece.txt": {
+    "bytes": 11357,
+    "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+  },
+  "LICENSE-utf8proc.txt": {
+    "bytes": 5125,
+    "sha256": "3b510150d34f248a221bb88e1d811238d6c6c18b51231822c42974c39bb07256"
+  },
+  "MODEL-CONVERSION-CARD.md": {
+    "bytes": 251,
+    "sha256": "68d37fa4123899cda2f91045624cf0da3b17ca3c6d9ae5445feedde8d3b98dbb"
+  },
+  "MODEL-ORIGINAL-CARD.md": {
+    "bytes": 3164,
+    "sha256": "d3fb95817e1c3059fe322c9afa60d303a3879906db1afafee27e240db6bed10e"
+  },
+  "ONNXRUNTIME-LICENSE": {
+    "bytes": 1073,
+    "sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c"
+  },
+  "ONNXRUNTIME-ThirdPartyNotices.txt": {
+    "bytes": 325054,
+    "sha256": "0e07b95f3a8d6230037707c5c4a2b554d12c4cb67369669ac255635528ffcee2"
+  },
+  "assets/sherpa-onnx-asr.js": {
+    "bytes": 54712,
+    "sha256": "fff0b2059f4e203d8d3c9fc4af997d146e724236c081b9f5af1e5df05c5a421b"
+  },
+  "assets/sherpa-onnx-wasm-web.js": {
+    "bytes": 93272,
+    "sha256": "8200e26b659643104cd460b57cc7e1b33129bf20ef791331017da14d04794e99"
+  },
+  "assets/sherpa-onnx-wasm-web.wasm": {
+    "bytes": 15203590,
+    "sha256": "43fab086ecec5365ebee028bf3982c0336a923eca879757f6fe8329f863dabf6"
+  }
+}

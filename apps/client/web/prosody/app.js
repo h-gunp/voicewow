@@ -9,8 +9,10 @@ import { playbackRange } from './practice-region.js';
 import { createLiveView } from './live-view.js';
 import { createFlowPager } from './flow-pager.js';
 import { runGuideBatch } from './guide-batch.js';
+import { createScriptTracking } from './script-tracking-ui.js';
 
 const $=id=>document.getElementById(id);
+const scriptTracking=createScriptTracking({document,cancelTts:cancelGuide});
 let guide=GUIDES[0],practiceTab='pitch',resultTab='pitch',state='idle',clip=null,result=null,session=null;
 let playback=null,playbackTimer=null,previewTimer=null,selectedIndex=0,generation=0;
 let practiceMode='guide',scriptLines=[],scriptIndex=0,ttsUtterance=null;
@@ -21,7 +23,7 @@ let guideBatch=null,guideNotice='';
 const scriptReferences=new Map(),practicedSentences=new Set();
 const guideFailures=new Map();
 const field=tab=>tab==='volume'?'relativeDb':'relativePitch';
-const isBusy=()=>['requesting','recording','processing','generating'].includes(state);
+const isBusy=()=>['requesting','recording','processing','generating','asr-loading'].includes(state);
 const setText=(id,text)=>{$(id).textContent=text;};
 const draftPending=()=>practiceMode==='script'&&scriptLines.length>0&&$('script-input').value!==appliedScript;
 const seconds=value=>`${value.toFixed(2)}초`;
@@ -49,6 +51,9 @@ function stopPreview(){clearInterval(previewTimer);previewTimer=null;$('guide-pr
 function clearClip(){stopPlayback();if(clip)URL.revokeObjectURL(clip.url);clip=null;}
 function refresh(){
   const busy=isBusy();
+  $('asr-controls').hidden=practiceMode!=='script';
+  $('asr-enabled').disabled=busy;
+  $('prepare-asr').disabled=busy||!$('asr-enabled').checked;
   for(const id of ['guide-select','guide-play','guide-preview','user-file','reset','retry'])$(id).disabled=busy;
   for(const id of ['script-input','apply-script','script-sentence-select','reference-file','remove-reference'])$(id).disabled=busy;
   for(const button of document.querySelectorAll('[data-mode]')){button.disabled=busy;button.setAttribute('aria-pressed',String(button.dataset.mode===practiceMode));}
@@ -137,6 +142,7 @@ function clearResult(){
   renderResult();
 }
 function selectGuide(){
+  scriptTracking.stop();
   generation++;stopPreview();clearClip();wholeGuide=null;
   $('region-practice').hidden=true;
   guide=practiceMode==='guide'?(GUIDES.find(g=>g.id===$('guide-select').value)||GUIDES[0]):{
@@ -300,6 +306,7 @@ async function processClip(blob,{demo=false,decoded=null}={}){
 }
 function releaseSession(s){
   if(s.released)return;s.released=true;
+  if(session===s)scriptTracking.stop();
   clearInterval(s.liveTimer);clearTimeout(s.timeout);s.stream?.getTracks().forEach(t=>t.stop());
   try{s.source?.disconnect();s.analyser?.disconnect();}catch{}
   if(s.context&&s.context.state!=='closed')s.context.close().catch(()=>{});
@@ -310,6 +317,7 @@ async function record(){
   if(draftPending()){setText('practice-status','수정한 대본으로 연습 준비를 먼저 눌러 주세요.');return;}
   if(!guide.analysis){setText('practice-status','먼저 같은 대본의 가이드를 준비해 주세요.');return;}
   if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){setText('practice-status','이 브라우저에서 마이크를 사용할 수 없어요. Safari·Chrome의 보안 연결 또는 로컬 주소에서 열어 주세요. 파일 비교와 데모도 사용할 수 있어요.');return;}
+  if(practiceMode==='script'&&$('asr-enabled').checked&&!scriptTracking.ready){setText('practice-status','음성 위치 표시를 먼저 준비하거나 체크를 꺼 주세요.');return;}
   const ticket=++generation;state='requesting';stopPlayback();stopPreview();setText('timer','00:00');refresh();
   setText('practice-status','마이크 접근을 허용하면 녹음이 시작돼요.');
   let stream,context,s;
@@ -321,6 +329,11 @@ async function record(){
     if(ticket!==generation||document.hidden){if(session===s)cancelRecording();else releaseSession(s);return;}
     const source=context.createMediaStreamSource(stream);s.source=source;
     const analyser=context.createAnalyser();s.analyser=analyser;analyser.fftSize=4096;source.connect(analyser);
+    if(practiceMode==='script'&&$('asr-enabled').checked){
+      try{await scriptTracking.attach(stream,appliedScript,scriptLines,scriptIndex);}
+      catch{if(ticket===generation&&session===s){scriptTracking.stop();setText('asr-status','이 기기에서 음성 위치 표시를 시작하지 못했어요. 녹음은 계속해요.');}}
+      if(ticket!==generation||document.hidden){releaseSession(s);return;}
+    }
     const recorder=new MediaRecorder(stream),chunks=[];Object.assign(s,{recorder,failed:false,cancelled:false,frames:[],firstVoice:null,view:createLiveView(guide.analysis)});
     recorder.addEventListener('dataavailable',e=>{if(e.data.size)chunks.push(e.data);});
     recorder.addEventListener('error',()=>{s.failed=true;if(recorder.state!=='inactive')recorder.stop();else finish();},{once:true});
@@ -470,6 +483,7 @@ function paintBatchProgress(run,snapshot){
   if(run.paintKey!==key){run.paintKey=key;updateScriptStatus();refresh();}
 }
 async function makeScriptGuide({replaceSelected=false}={}){
+  if(!isBusy())scriptTracking.stop();
   if(isBusy()||draftPending()||practiceMode!=='script'||!scriptLines.length)return;
   if(!replaceSelected&&scriptReferences.size===scriptLines.length)return;
   const run={ticket:++generation,controller:new AbortController(),replaceSelected,currentId:null};
@@ -544,6 +558,18 @@ function readScript(){
 }
 for(const g of GUIDES){const option=document.createElement('option');option.value=g.id;option.textContent=`${g.kind==='word'?'단어':'구절'} · ${g.text}`;$('guide-select').append(option);}
 $('guide-select').addEventListener('change',selectGuide);
+$('prepare-asr').addEventListener('click',async()=>{
+  if(isBusy()||practiceMode!=='script'||!$('asr-enabled').checked)return;
+  const ticket=++generation;state='asr-loading';refresh();
+  try{await scriptTracking.prepare();}catch{if(ticket===generation)setText('asr-status','모델 준비를 완료하지 못했어요. 연결·메모리를 확인하고 다시 시도해 주세요.');}
+  finally{if(ticket===generation){state='idle';refresh();}}
+});
+$('cancel-asr').addEventListener('click',()=>{
+  scriptTracking.stop();$('asr-enabled').checked=false;
+  if(state==='asr-loading'){generation++;state='idle';}
+  setText('asr-status','음성 위치 표시를 껐어요.');refresh();
+});
+$('asr-enabled').addEventListener('change',()=>{if(!$('asr-enabled').checked)scriptTracking.stop();refresh();});
 $('record').addEventListener('click',record);
 $('guide-preview').addEventListener('click',preview);
 $('result-chart').addEventListener('click',event=>{if(!result||resultTab==='duration'||wholeGuide)return;const index=graphSegmentAt($('result-chart'),guide.analysis,event.clientX,event.clientY,result.summary.segments);if(index!==null){selectedIndex=index;stopPlayback();renderResult();}});
@@ -575,7 +601,7 @@ $('sentence-prev').addEventListener('click',()=>chooseSentence(scriptIndex-1));$
 $('reference-file').addEventListener('change',event=>{const file=event.target.files[0];if(file)loadReference(file);event.target.value='';});
 $('remove-reference').addEventListener('click',()=>{const ref=scriptReferences.get(scriptIndex);if(!ref||isBusy()||draftPending())return;URL.revokeObjectURL(ref.audioUrl);scriptReferences.delete(scriptIndex);guideFailures.delete(scriptIndex);guideNotice='';selectGuide();updateScriptStatus();});
 window.speechSynthesis?.addEventListener('voiceschanged',refresh);
-function cancelRecording(){const run=guideBatch;guideBatch=null;generation++;run?.controller.abort();cancelGuide();if(session){const s=session;s.cancelled=true;session=null;if(s.recorder&&s.recorder.state!=='inactive')s.recorder.stop();releaseSession(s);}state='idle';stopPreview();stopPlayback();if(run){guideNotice=`가이드 준비를 멈췄어요. 준비된 ${scriptReferences.size}개는 그대로 보관했어요.`;syncScriptReference();}paintStoredRecording();renderResult();refresh();}
+function cancelRecording(){scriptTracking.stop();const run=guideBatch;guideBatch=null;generation++;run?.controller.abort();cancelGuide();if(session){const s=session;s.cancelled=true;session=null;if(s.recorder&&s.recorder.state!=='inactive')s.recorder.stop();releaseSession(s);}state='idle';stopPreview();stopPlayback();if(run){guideNotice=`가이드 준비를 멈췄어요. 준비된 ${scriptReferences.size}개는 그대로 보관했어요.`;syncScriptReference();}paintStoredRecording();renderResult();refresh();}
 // The Flutter host calls this synchronously before removing the same-origin
 // frame. A queued postMessage alone can be lost during immediate disposal.
 window.voiceMateProsodyCleanup=cancelRecording;
@@ -583,7 +609,7 @@ window.addEventListener('message',event=>{if(event.origin===location.origin&&eve
 window.addEventListener('pagehide',()=>{cancelRecording();clearClip();for(const ref of scriptReferences.values())URL.revokeObjectURL(ref.audioUrl);scriptReferences.clear();});
 window.addEventListener('pageshow',event=>{if(event.persisted){selectGuide();updateScriptStatus();}});
 window.addEventListener('resize',()=>{paintPractice();renderResult();});
-document.addEventListener('visibilitychange',()=>{if(document.hidden&&!isBusy()){stopPreview();stopPlayback();paintStoredRecording();}if(document.hidden&&isBusy()){const generating=state==='generating';cancelRecording();setText(generating?'generation-status':'practice-status',generating?'화면을 벗어나 가이드 생성을 중지했어요. 다시 시도해 주세요.':'화면을 벗어나 녹음을 중지했어요. 다시 시작해 주세요.');}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)scriptTracking.stop();if(document.hidden&&!isBusy()){stopPreview();stopPlayback();paintStoredRecording();}if(document.hidden&&isBusy()){const generating=state==='generating';cancelRecording();setText(generating?'generation-status':'practice-status',generating?'화면을 벗어나 가이드 생성을 중지했어요. 다시 시도해 주세요.':'화면을 벗어나 녹음을 중지했어요. 다시 시작해 주세요.');}});
 if(new URLSearchParams(location.search).get('embedded')==='1'){
   document.body.classList.add('embedded');
 }
