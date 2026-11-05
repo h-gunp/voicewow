@@ -188,6 +188,7 @@ test('reference practice keeps per-sentence guides and chosen segments without g
   const ui=await setup(),{el,button,inputAudio}=ui;
   try{
     await ui.prepareScript();
+    assert.match(ui.html, /id="asr-controls"[^>]* hidden inert/);
     assert.equal(el('goal-target'),undefined,'standalone pitch goals must not remain in the app flow');
     assert.equal(el('goal-region'),undefined);
     assert.equal(el('script-sentence-select').children.length,2);
@@ -196,7 +197,13 @@ test('reference practice keeps per-sentence guides and chosen segments without g
     assert.equal(el('user-file').disabled,true);
     await inputAudio('reference-file');await settle(()=>el('reference-status').textContent.includes('연결한 파일'));
     assert.equal(el('record').disabled,false);
+    const axis = id => el(id + '-axis').children;
+    const labels = id => axis(id).map(item => item.children.map(child => child.textContent));
+    const expected = [['앞부분', '안녕'], ['중간', '하'], ['끝부분', '세요.']];
+    assert.deepEqual(labels('guide-chart'), expected);
+    assert.deepEqual(labels('practice-chart'), expected);
     await inputAudio('user-file');await settle(()=>el('feedback-list').children.length===3);
+    assert.deepEqual(labels('result-chart'), expected);
     assert.equal(el('pitch-score'),undefined);
     assert.equal(el('volume-score'),undefined);
     const measurementDetails=ui.html.match(/<details\b[^>]*id="measurement-details"[^>]*>[\s\S]*?<\/details>/)?.[0];
@@ -226,7 +233,8 @@ test('reference practice keeps per-sentence guides and chosen segments without g
     assert.equal(el('reference-segment-play').hidden,false);
     assert.equal(el('reference-segment-play').disabled,false);
     assert.equal(el('graph-selected-label').textContent,'앞부분 선택됨');
-    await el('feedback-list').children[2].fire('click');
+    await axis('result-chart')[2].fire('click');
+    assert.equal(axis('result-chart')[2].attributes['aria-pressed'], 'true');
     await button('result-tab','volume').fire('click');
     assert.equal(el('graph-selected-label').textContent,'끝부분 선택됨','tab switch must preserve the chosen region');
     assert.match(el('summary-observation').textContent,/0.0dB 차이/);
@@ -239,6 +247,7 @@ test('reference practice keeps per-sentence guides and chosen segments without g
     assert.doesNotMatch(el('result-detail').textContent,/합격|50점|100점|시험용 기준/);
     await el('sentence-next').fire('click');
     assert.equal(el('phrase-text').textContent,'잠시 말씀드릴게요.');
+    assert.equal(el('practice-chart-regions').hidden, true);
     assert.equal(el('remove-reference').hidden,true);
     assert.equal(el('record').disabled,true,'the previous sentence reference must not leak into the next sentence');
     await el('sentence-prev').fire('click');
@@ -567,8 +576,8 @@ test('repeated DTW matches at a single user timestamp cannot enable excerpt play
 
 test('recording shows measured voice live and keeps the completed comparison on the practice graph',async()=>{
   const ui=await setup({microphone:true}),{el,button,inputAudio}=ui;
-  const voiceStrokes=()=>el('practice-chart').strokes.filter(stroke=>stroke.color==='#34455e'&&stroke.points>0).length;
-  const voiceMarks=()=>el('practice-chart').marks.filter(mark=>mark.color==='#34455e').length;
+  const voiceStrokes=()=>el('practice-chart').strokes.filter(stroke=>stroke.color==='#b74415'&&stroke.points>0).length;
+  const voiceMarks=()=>el('practice-chart').marks.filter(mark=>mark.color==='#b74415').length;
   try{
     await ui.prepareScript();
     await inputAudio('reference-file');await settle(()=>el('reference-status').textContent.includes('연결한 파일'));

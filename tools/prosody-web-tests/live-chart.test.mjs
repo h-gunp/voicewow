@@ -28,7 +28,7 @@ function canvas() {
 
 const frame = (time, value) => ({ time, relativePitch: value, relativeDb: value });
 const reference = { duration: 2, frames: [frame(0, -1), frame(1, 1), frame(2, 0)] };
-const voiceColor = '#34455e';
+const voiceColor = '#b74415';
 const dots = c => c.painted.filter(p => p.kind === 'fill' && p.color === voiceColor).flatMap(p => p.path.filter(op => op.type === 'arc'));
 const voicePath = c => c.painted.find(p => p.kind === 'stroke' && p.color === voiceColor)?.path;
 

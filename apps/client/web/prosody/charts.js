@@ -1,4 +1,4 @@
-const COLORS = { guide: '#2f62d6', voice: '#34455e', text: '#465a74', grid: '#dce5f2' };
+const COLORS = { guide: '#2f62d6', voice: '#b74415', text: '#465a74', grid: '#dce5f2' };
 
 const validRegions = regions => Array.isArray(regions) ? regions.filter(region => region
   && Number.isFinite(region.start) && Number.isFinite(region.end)
@@ -27,9 +27,10 @@ export function graphSegmentAt(canvas, reference, clientX, clientY, regions = []
   return index < 0 ? null : regions.indexOf(actual[index]);
 }
 
-export function drawGraph(canvas, { reference, trace = [], field = 'relativePitch', progress = null, selected = null, regions = [], empty = false, timeAxis = false, live = false, domainSeconds = null, scaleBound = null }) {
+export function drawGraph(canvas, { reference, trace = [], field = 'relativePitch', progress = null, selected = null, regions = [], empty = false, timeAxis = false, live = false, domainSeconds = null, scaleBound = null, externalRegionLabels = false }) {
   const g = geometry(canvas.clientWidth || 500);
-  const { width, height, left, right, top, bottom } = g;
+  const { width, height, left, right, top } = g;
+  const bottom = externalRegionLabels ? height - 14 : g.bottom;
   const scale = Math.min(3, Math.max(2, globalThis.devicePixelRatio || 1));
   canvas.width = Math.round(width * scale);
   canvas.height = Math.round(height * scale);
@@ -153,7 +154,7 @@ export function drawGraph(canvas, { reference, trace = [], field = 'relativePitc
   }
   ctx.font = '600 14px Pretendard, sans-serif';
   ctx.textAlign = 'center';
-  const labels = showTime
+  const labels = externalRegionLabels ? [] : showTime
     ? [0, regionDuration / 2, regionDuration].map(time => ({ time, label: `${time.toFixed(1)}초`, selected: false }))
     : actualRegions.map((region, i) => ({ time: (region.start + region.end) / 2, label: region.label, selected: i === selectedIndex }));
   for (const label of labels) {

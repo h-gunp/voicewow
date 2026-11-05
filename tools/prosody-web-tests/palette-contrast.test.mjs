@@ -18,7 +18,9 @@ test('glass fills retain legible blue and slate text over dark backgrounds', () 
   }
 });
 test('graph lines and gauge edge remain distinguishable', () => {
-  for (const color of ['2f62d6','34455e']) assert.ok(contrast(rgb(color), rgb('ffffff')) >= 3);
+  for (const background of ['ffffff', 'f0f5fc', 'eaf1fe']) {
+    for (const color of ['2f62d6','b74415']) assert.ok(contrast(rgb(color), rgb(background)) >= 3);
+  }
   const gauge = readFileSync(new URL('../../apps/client/lib/widgets/volume_gauge.dart', import.meta.url), 'utf8');
   assert.match(gauge, /top: BorderSide\(color: Color\(0xff0a1530\), width: 3\)/);
   for (const adjacent of ['2f62d6','82b2ff','e4ecf8','f9fbff']) assert.ok(contrast(rgb('0a1530'), rgb(adjacent)) >= 3);
