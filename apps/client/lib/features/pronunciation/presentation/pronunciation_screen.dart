@@ -96,7 +96,7 @@ class _PronunciationScreenState extends State<PronunciationScreen>
   @override
   Widget build(BuildContext context) => Center(
     child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 800),
+      constraints: const BoxConstraints(maxWidth: 720),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Column(
@@ -106,28 +106,22 @@ class _PronunciationScreenState extends State<PronunciationScreen>
             const Text(
               '내 속도로, 함께',
               style: TextStyle(
-                color: Color(0xff146b70),
+                color: blue,
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 6),
-            const Text(
-              '발음 훈련',
-              style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800),
-            ),
+            const Text('발음 훈련', style: pageTitle),
             const SizedBox(height: 6),
-            const Text(
-              '익숙한 말부터, 내 속도로 연습해요.',
-              style: TextStyle(color: muted, fontSize: 16),
-            ),
+            const Text('익숙한 말부터, 내 속도로 연습해요.', style: smallCopy),
             const SizedBox(height: 18),
             Container(
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: .65),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.white),
+                color: canvas,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: line),
               ),
               child: TabBar(
                 controller: tabs,
@@ -138,9 +132,9 @@ class _PronunciationScreenState extends State<PronunciationScreen>
                 indicatorSize: TabBarIndicatorSize.tab,
                 dividerColor: Colors.transparent,
                 indicator: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xffa9cecc)),
+                  color: wash,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: line),
                 ),
                 tabs: const [
                   Tab(text: '발음 퀴즈'),
@@ -327,10 +321,7 @@ class _PersonalGuideViewState extends State<_PersonalGuideView>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            '내 문장 발음 가이드',
-            style: TextStyle(fontSize: 23, fontWeight: FontWeight.w700),
-          ),
+          const Text('내 문장 발음 가이드', style: sectionTitle),
           const SizedBox(height: 8),
           const Text('어렵게 느껴지는 문장을 입력하고 읽는 소리를 확인해 보세요.'),
           const SizedBox(height: 20),
@@ -347,7 +338,7 @@ class _PersonalGuideViewState extends State<_PersonalGuideView>
               filled: true,
               fillColor: Colors.white,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(6),
               ),
             ),
             onChanged: (_) {
@@ -386,7 +377,7 @@ class _PersonalGuideViewState extends State<_PersonalGuideView>
               padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(6),
                 border: Border.all(color: line),
               ),
               child: Column(
@@ -403,7 +394,7 @@ class _PersonalGuideViewState extends State<_PersonalGuideView>
                       '[${guide.pronunciation}]',
                       style: const TextStyle(
                         fontSize: 28,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         height: 1.5,
                       ),
                     ),
@@ -440,10 +431,7 @@ class _PersonalGuideViewState extends State<_PersonalGuideView>
               ),
             ),
             const SizedBox(height: 20),
-            const Text(
-              '발음 포인트',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-            ),
+            const Text('발음 포인트', style: sectionTitle),
             const SizedBox(height: 10),
             if (guide.points.isEmpty)
               const Text('적용된 발음 변화가 없어요. 위의 읽는 소리를 참고해 연습해 보세요.'),
@@ -451,6 +439,10 @@ class _PersonalGuideViewState extends State<_PersonalGuideView>
               Card(
                 color: Colors.white,
                 elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  side: const BorderSide(color: line),
+                ),
                 margin: const EdgeInsets.only(bottom: 8),
                 child: Padding(
                   padding: const EdgeInsets.all(18),

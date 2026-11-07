@@ -115,7 +115,10 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
       child: child!,
     ),
     home: Scaffold(
-      bottomNavigationBar: GlassNavigation(
+      bottomNavigationBar: DecoratedBox(
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: line)),
+        ),
         child: NavigationBar(
           selectedIndex: section,
           onDestinationSelected: changingSection ? null : _selectSection,
@@ -153,8 +156,9 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
                 )
               : LayoutBuilder(
                   builder: (context, constraints) {
-                    final wide = constraints.maxWidth > 600;
-                    return AppBackdrop(
+                    final wide = constraints.maxWidth > 800;
+                    return ColoredBox(
+                      color: canvas,
                       child: SingleChildScrollView(
                         key: ValueKey(meter),
                         child: ConstrainedBox(
@@ -165,34 +169,70 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
                             alignment: Alignment.topCenter,
                             child: Padding(
                               padding: EdgeInsets.symmetric(
-                                vertical: wide ? 32 : 8,
-                                horizontal: wide ? 24 : 20,
+                                vertical: wide ? 36 : 20,
+                                horizontal: wide ? 40 : 20,
                               ),
                               child: SizedBox(
-                                width: 560,
-                                child: Material(
-                                  color: Colors.transparent,
-                                  child: ListenableBuilder(
-                                    listenable: session,
-                                    builder: (context, _) =>
-                                        meter && session.scenario != null
-                                        ? GlassSurface(
-                                            child: MeterScreen(
-                                              session: session,
-                                              onBack: () {
-                                                setState(() => meter = false);
-                                                session.stop();
-                                              },
+                                width: 720,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.only(
+                                        bottom: 18,
+                                      ),
+                                      decoration: const BoxDecoration(
+                                        border: Border(
+                                          bottom: BorderSide(color: line),
+                                        ),
+                                      ),
+                                      child: const Wrap(
+                                        alignment: WrapAlignment.spaceBetween,
+                                        crossAxisAlignment:
+                                            WrapCrossAlignment.center,
+                                        spacing: 24,
+                                        runSpacing: 8,
+                                        children: [
+                                          Text(
+                                            'VoiceMate',
+                                            style: TextStyle(
+                                              fontSize: 21,
+                                              fontWeight: FontWeight.w700,
+                                              letterSpacing: -.7,
                                             ),
-                                          )
-                                        : ScenarioScreen(
-                                            session: session,
-                                            onStart: () {
-                                              setState(() => meter = true);
-                                              session.start();
-                                            },
                                           ),
-                                  ),
+                                          Text(
+                                            '목소리 입력 · 실험 버전',
+                                            style: smallCopy,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    SizedBox(height: wide ? 40 : 28),
+                                    Material(
+                                      color: Colors.transparent,
+                                      child: ListenableBuilder(
+                                        listenable: session,
+                                        builder: (context, _) =>
+                                            meter && session.scenario != null
+                                            ? MeterScreen(
+                                                session: session,
+                                                onBack: () {
+                                                  setState(() => meter = false);
+                                                  session.stop();
+                                                },
+                                              )
+                                            : ScenarioScreen(
+                                                session: session,
+                                                onStart: () {
+                                                  setState(() => meter = true);
+                                                  session.start();
+                                                },
+                                              ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),

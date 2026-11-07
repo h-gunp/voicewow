@@ -201,7 +201,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
           child: Align(
             alignment: Alignment.topCenter,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 800),
+              constraints: const BoxConstraints(maxWidth: 720),
               child: _session != null
                   ? _summary
                         ? _buildSummary(context)
@@ -227,7 +227,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
       children: [
         const _Eyebrow('한 문장씩, 자신 있게'),
         const SizedBox(height: 10),
-        Text('발음 구별 퀴즈', style: _heading(context)),
+        Text('발음 구별 퀴즈', style: pageTitle),
         const SizedBox(height: 10),
         const Text(
           '단어부터 일상과 업무의 문장까지.\n두 보기 중 올바른 읽는 소리를 골라 보세요.',
@@ -250,7 +250,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
           ),
         ),
         const SizedBox(height: 28),
-        Text('어떤 연습을 해볼까요?', style: _sectionHeading(context)),
+        Text('어떤 연습을 해볼까요?', style: sectionTitle),
         const SizedBox(height: 14),
         LayoutBuilder(
           builder: (context, constraints) {
@@ -295,12 +295,6 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
     final completed = items
         .where((item) => widget.learning.answers.containsKey(item.id))
         .length;
-    final colors = [
-      const Color(0xfffff4ab),
-      const Color(0xffeed8fc),
-      const Color(0xffd3ebff),
-      const Color(0xffcff0df),
-    ];
     final icons = [
       Icons.abc_rounded,
       Icons.waving_hand_outlined,
@@ -310,12 +304,12 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
     return Material(
       color: Colors.white,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(6),
         side: const BorderSide(color: line),
       ),
       child: InkWell(
         key: ValueKey('category-${category.name}'),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(6),
         onTap: () => setState(() {
           _category = category;
           _group = null;
@@ -329,17 +323,17 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: colors[category.index],
-                  borderRadius: BorderRadius.circular(16),
+                  color: wash,
+                  borderRadius: BorderRadius.circular(6),
                 ),
-                child: Icon(icons[category.index], color: ink, size: 26),
+                child: Icon(icons[category.index], color: blue, size: 26),
               ),
               const SizedBox(height: 16),
               Text(
                 category.label,
                 style: const TextStyle(
                   fontSize: 20,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   color: ink,
                 ),
               ),
@@ -399,7 +393,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
         const SizedBox(height: 10),
         Text(
           _group == null ? category.label : groupTitle(_group!),
-          style: _heading(context),
+          style: pageTitle,
         ),
         const SizedBox(height: 8),
         Text(
@@ -426,7 +420,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
             label: Text('${visible.length}문제 연습하기'),
           ),
           const SizedBox(height: 26),
-          Text('시작할 문제를 골라도 좋아요', style: _sectionHeading(context)),
+          Text('시작할 문제를 골라도 좋아요', style: sectionTitle),
           const SizedBox(height: 12),
           ..._questionList(visible),
         ],
@@ -448,12 +442,12 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
     return Material(
       color: Colors.white,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(6),
         side: const BorderSide(color: line),
       ),
       child: InkWell(
         key: ValueKey('quiz-group-${category.name}-$index'),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(6),
         onTap: () => setState(() => _group = group),
         child: Padding(
           padding: const EdgeInsets.all(20),
@@ -464,7 +458,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
                 groupTitle(group),
                 style: const TextStyle(
                   fontSize: 20,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   height: 1.5,
                 ),
               ),
@@ -533,7 +527,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
       children: [
         const _Eyebrow('익숙해질 때까지, 천천히'),
         const SizedBox(height: 10),
-        Text('다시 보는 발음', style: _heading(context)),
+        Text('다시 보는 발음', style: pageTitle),
         const SizedBox(height: 10),
         const Text(
           '틀린 문제, 저장한 문제와 내 문장을 한곳에서 다시 봐요.\n다시 맞힌 문제는 틀린 문제 목록에서 빠져요.',
@@ -579,8 +573,9 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
           _Panel(
             color: Colors.white,
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.auto_stories_outlined, color: muted, size: 42),
+                const Icon(Icons.auto_stories_outlined, color: muted, size: 28),
                 const SizedBox(height: 16),
                 Text(
                   switch (_reviewFilter) {
@@ -589,7 +584,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
                     ReviewFilter.guides => '저장한 내 문장이 아직 없어요',
                     ReviewFilter.all => '복습할 내용이 아직 없어요',
                   },
-                  textAlign: TextAlign.center,
+                  textAlign: TextAlign.left,
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
@@ -600,7 +595,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
                   _reviewFilter == ReviewFilter.guides
                       ? '내 문장에서 발음 가이드를 확인하고\n다시 연습할 문장을 저장해 보세요.'
                       : '발음 훈련에서 문제를 풀거나\n다시 볼 문제와 내 문장을 저장해 보세요.',
-                  textAlign: TextAlign.center,
+                  textAlign: TextAlign.left,
                   style: TextStyle(color: muted, height: 1.6),
                 ),
               ],
@@ -629,12 +624,12 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
   Widget _savedGuideTile(SavedGuide guide) => Material(
     color: Colors.white,
     shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(6),
       side: const BorderSide(color: line),
     ),
     child: InkWell(
       key: ValueKey('review-guide-${guide.text}'),
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(6),
       onTap: widget.onOpenGuide == null
           ? null
           : () {
@@ -702,12 +697,12 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
     return Material(
       color: Colors.white,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(6),
         side: const BorderSide(color: line),
       ),
       child: InkWell(
         key: ValueKey('quiz-item-${item.id}'),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(6),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 6, 16),
@@ -754,9 +749,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
                           ? '지난 연습에서 맞혔어요'
                           : '한 번 더 연습해 보세요',
                       style: TextStyle(
-                        color: answered == true
-                            ? const Color(0xff267153)
-                            : muted,
+                        color: answered == true ? blue : muted,
                         fontSize: 14,
                       ),
                     ),
@@ -826,12 +819,12 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
           ),
         ),
         const SizedBox(height: 28),
-        Text('어떻게 읽을까요?', style: _heading(context)),
+        Text('어떻게 읽을까요?', style: pageTitle),
         const SizedBox(height: 10),
         const Text('올바른 발음을 골라 주세요.', style: TextStyle(color: muted)),
         const SizedBox(height: 22),
         _Panel(
-          color: const Color(0xffeef4ff),
+          color: wash,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -845,7 +838,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
                 style: const TextStyle(
                   fontSize: 27,
                   height: 1.5,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
@@ -896,9 +889,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
           Semantics(
             liveRegion: true,
             child: _Panel(
-              color: correct
-                  ? const Color(0xffe7f5ee)
-                  : const Color(0xfffff3e5),
+              color: correct ? wash : const Color(0xffffedf0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -911,15 +902,13 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
                         correct
                             ? Icons.check_circle_outline_rounded
                             : Icons.lightbulb_outline_rounded,
-                        color: correct
-                            ? const Color(0xff267153)
-                            : const Color(0xff925500),
+                        color: correct ? blue : red,
                       ),
                       Text(
                         correct ? '맞았어요!' : '이렇게 읽어요',
                         style: const TextStyle(
                           fontSize: 20,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ],
@@ -929,7 +918,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
                     _reading(item.pronunciation),
                     style: const TextStyle(
                       fontSize: 23,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       height: 1.5,
                     ),
                   ),
@@ -1022,18 +1011,18 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
     final isCorrect = _submitted && option == item.pronunciation;
     final isWrong = _submitted && selected && !isCorrect;
     final border = isCorrect
-        ? const Color(0xff267153)
+        ? blue
         : isWrong
         ? red
         : selected
         ? blue
         : line;
     final fill = isCorrect
-        ? const Color(0xffe7f5ee)
+        ? wash
         : isWrong
         ? const Color(0xffffedf0)
         : selected
-        ? const Color(0xffedf3ff)
+        ? wash
         : Colors.white;
     return Semantics(
       button: true,
@@ -1042,12 +1031,12 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
       child: Material(
         color: fill,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(6),
           side: BorderSide(color: border, width: selected || isCorrect ? 2 : 1),
         ),
         child: InkWell(
           key: ValueKey('quiz-option-$index'),
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(6),
           onTap: _submitted ? null : () => setState(() => _selected = index),
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: 132),
@@ -1112,33 +1101,33 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: 20),
-        const Icon(Icons.celebration_outlined, size: 58, color: blue),
-        const SizedBox(height: 22),
-        Text(
-          '이번 연습을 마쳤어요',
-          textAlign: TextAlign.center,
-          style: _heading(context),
+        const Align(
+          alignment: Alignment.centerLeft,
+          child: Icon(Icons.celebration_outlined, size: 28, color: blue),
         ),
+        const SizedBox(height: 22),
+        Text('이번 연습을 마쳤어요', textAlign: TextAlign.left, style: pageTitle),
         const SizedBox(height: 12),
         const Text(
           '한 번 더 살펴보며 익숙해져도 좋아요.',
-          textAlign: TextAlign.center,
+          textAlign: TextAlign.left,
           style: TextStyle(color: muted, height: 1.6),
         ),
         const SizedBox(height: 26),
         _Panel(
-          color: const Color(0xffedf3ff),
+          color: wash,
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text('이번 연습 결과', style: TextStyle(color: muted)),
               const SizedBox(height: 12),
               Text(
                 '$total문제 중 $_correctCount문제 정답',
-                textAlign: TextAlign.center,
+                textAlign: TextAlign.left,
                 style: const TextStyle(
                   fontSize: 27,
                   height: 1.5,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 12),
@@ -1146,7 +1135,7 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
                 _sessionWrong.isEmpty
                     ? '모든 문제를 맞혔어요!'
                     : '헷갈린 ${_sessionWrong.length}문제는 복습 목록에 담았어요.',
-                textAlign: TextAlign.center,
+                textAlign: TextAlign.left,
                 style: const TextStyle(color: muted, height: 1.6),
               ),
             ],
@@ -1197,15 +1186,6 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
   static String _reading(String value) =>
       value.startsWith('[') ? value : '[$value]';
 
-  static TextStyle _heading(BuildContext context) => Theme.of(context)
-      .textTheme
-      .headlineMedium!
-      .copyWith(color: ink, fontWeight: FontWeight.w800, height: 1.35);
-
-  static TextStyle _sectionHeading(BuildContext context) => Theme.of(
-    context,
-  ).textTheme.titleMedium!.copyWith(color: ink, fontWeight: FontWeight.w700);
-
   static ButtonStyle _compactButtonStyle() => OutlinedButton.styleFrom(
     minimumSize: const Size(0, 48),
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -1223,7 +1203,7 @@ class _TypeTag extends StatelessWidget {
     padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
     decoration: BoxDecoration(
       color: wash,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(6),
     ),
     child: Wrap(
       spacing: 5,
@@ -1272,8 +1252,8 @@ class _Panel extends StatelessWidget {
     padding: const EdgeInsets.all(22),
     decoration: BoxDecoration(
       color: color,
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: line.withValues(alpha: 0.6)),
+      borderRadius: BorderRadius.circular(6),
+      border: Border.all(color: line),
     ),
     child: child,
   );
@@ -1293,7 +1273,7 @@ class _Stat extends StatelessWidget {
       const SizedBox(height: 5),
       Text(
         value,
-        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
       ),
     ],
   );

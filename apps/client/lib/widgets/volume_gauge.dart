@@ -17,7 +17,8 @@ class VolumeGauge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
-    final railHeight = 310.0 * scale;
+    final large = MediaQuery.textScalerOf(context).scale(14) > 20;
+    final railHeight = (large ? 310.0 : 260.0) * scale;
     final low = lower ?? scenario.referenceLower.toDouble();
     final high = upper ?? scenario.referenceUpper.toDouble();
     return SizedBox(
@@ -25,7 +26,6 @@ class VolumeGauge extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, box) {
           const top = 20.0;
-          final large = MediaQuery.textScalerOf(context).scale(14) > 20;
           final railWidth = large ? 52.0 : 72.0;
           final left = large ? 10.0 : (box.maxWidth - railWidth) / 2;
           Widget marker(double value, String name, Key key) {
@@ -70,6 +70,23 @@ class VolumeGauge extends StatelessWidget {
             child: Stack(
               clipBehavior: Clip.none,
               children: [
+                if (!large)
+                  for (final value in [0, 20, 40, 60, 80, 100, 120])
+                    Positioned(
+                      left: left - 44,
+                      top: top + (1 - value / 120) * railHeight,
+                      width: 32,
+                      child: FractionalTranslation(
+                        translation: const Offset(0, -.5),
+                        child: ExcludeSemantics(
+                          child: Text(
+                            '$value',
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(color: muted, fontSize: 11),
+                          ),
+                        ),
+                      ),
+                    ),
                 Positioned(
                   left: left,
                   top: top,
@@ -78,12 +95,8 @@ class VolumeGauge extends StatelessWidget {
                   child: DecoratedBox(
                     key: const Key('gauge-rail'),
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xffe4ecf8), Color(0xfff9fbff)],
-                      ),
-                      borderRadius: BorderRadius.circular(40),
+                      color: const Color(0xffe8ece5),
+                      borderRadius: BorderRadius.circular(4),
                       border: Border.all(color: line),
                     ),
                   ),
@@ -95,7 +108,7 @@ class VolumeGauge extends StatelessWidget {
                     width: railWidth,
                     height: railHeight,
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(40),
+                      borderRadius: BorderRadius.circular(4),
                       child: TweenAnimationBuilder<double>(
                         tween: Tween(
                           // A newly detected syllable must start at its measured level.
@@ -118,13 +131,9 @@ class VolumeGauge extends StatelessWidget {
                         child: const DecoratedBox(
                           decoration: BoxDecoration(
                             border: Border(
-                              top: BorderSide(color: Color(0xff0a1530), width: 3),
+                              top: BorderSide(color: ink, width: 3),
                             ),
-                            gradient: LinearGradient(
-                              begin: Alignment.bottomCenter,
-                              end: Alignment.topCenter,
-                              colors: [blue, Color(0xff82b2ff)],
-                            ),
+                            color: blue,
                           ),
                         ),
                       ),

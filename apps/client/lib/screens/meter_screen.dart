@@ -120,48 +120,20 @@ class MeterScreen extends StatelessWidget {
       (_, _, _, _, 'unsupported') => '자동 조절 지원 범위를 초과했다.',
       _ => '환경 분석 신호를 기다리고 있다.',
     };
-    return Column(
+    final controls = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            IconButton(
-              onPressed: onBack,
-              tooltip: '상황 선택으로 이동',
-              icon: const Icon(Icons.arrow_back_ios_new, size: 19),
-            ),
-            Expanded(
-              child: Text(
-                s.displayTitle,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            const SizedBox(width: 40),
-          ],
-        ),
-        const SizedBox(height: 26),
-        Semantics(
-          liveRegion: true,
+        OutlinedButton(
+          key: const Key('toggle-capture'),
+          onPressed: session.active ? session.stop : session.start,
           child: Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 23,
-              fontWeight: FontWeight.w800,
-              height: 1.4,
-              letterSpacing: -.7,
-            ),
+            session.state == CaptureState.requesting
+                ? '요청 취소'
+                : session.active
+                ? '입력 중지'
+                : '다시 시작',
+            style: const TextStyle(fontWeight: FontWeight.w700),
           ),
-        ),
-        const SizedBox(height: 9),
-        Text(
-          description,
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: muted, fontSize: 14, height: 1.7),
         ),
         const SizedBox(height: 8),
         SwitchListTile(
@@ -182,120 +154,164 @@ class MeterScreen extends StatelessWidget {
         ),
         Text(
           analysisStatus,
-          textAlign: TextAlign.center,
+          textAlign: TextAlign.left,
           style: const TextStyle(color: muted, fontSize: 14),
         ),
         if (a['provenance'] == 'relative_input')
           const Text(
             '실험적 상대 입력 기준 · 실제 음압 아님',
-            textAlign: TextAlign.center,
+            textAlign: TextAlign.left,
             style: TextStyle(color: muted, fontSize: 14),
           ),
-        TweenAnimationBuilder<double>(
-          tween: Tween(end: range.lower - s.referenceLower),
-          duration: MediaQuery.disableAnimationsOf(context) || !range.adjusted
-              ? Duration.zero
-              : const Duration(milliseconds: 400),
-          curve: Curves.easeOut,
-          builder: (context, value, child) {
-            final visualLower = double.parse(
-              (s.referenceLower + value).toStringAsFixed(1),
-            );
-            final visualUpper = double.parse(
-              (s.referenceUpper + value).toStringAsFixed(1),
-            );
-            return Column(
-              children: [
-                VolumeGauge(
+      ],
+    );
+    final measurement = TweenAnimationBuilder<double>(
+      tween: Tween(end: range.lower - s.referenceLower),
+      duration: MediaQuery.disableAnimationsOf(context) || !range.adjusted
+          ? Duration.zero
+          : const Duration(milliseconds: 400),
+      curve: Curves.easeOut,
+      builder: (context, value, child) {
+        final visualLower = double.parse(
+          (s.referenceLower + value).toStringAsFixed(1),
+        );
+        final visualUpper = double.parse(
+          (s.referenceUpper + value).toStringAsFixed(1),
+        );
+        final plot = Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '입력 수준 ${session.displayLevel?.toStringAsFixed(1) ?? '—'}',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w500),
+            ),
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 400),
+                child: VolumeGauge(
                   scenario: s,
                   displayLevel: session.displayLevel,
                   lower: visualLower,
                   upper: visualUpper,
                 ),
-                Text(
-                  '입력 수준 ${session.displayLevel?.toStringAsFixed(1) ?? '—'}',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                if (session.displayLevel != null ||
-                    a['meterState'] != 'nonSpeech')
-                  Text(
-                    session.displayLevel != null
-                        ? '발화로 판정된 입력이다. 다른 사람의 소리도 포함될 수 있다.'
-                        : a['meterState'] == 'confirming'
-                        ? '발화 판정을 연속 확인하고 있다.'
-                        : '발화 판정이 없거나 확인할 수 없어 막대를 비웠다.',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: muted,
-                      fontSize: 14,
-                      height: 1.7,
-                    ),
-                  ),
-                if (a['reason'] == 'processing_settings' && !processingUnknown)
-                  Text(
-                    '전처리 적용 · 막대는 상대 참고값이다.',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: muted,
-                      fontSize: 14,
-                      height: 1.7,
-                    ),
-                  ),
-                const SizedBox(height: 12),
-                Semantics(
-                  liveRegion: true,
-                  child: Text(
-                    [
-                      if (a['state'] == 'ready') ...[
-                        '발화 판정 ${a['speech'] == 'speech'
-                            ? '발화 감지'
-                            : a['speech'] == 'nonSpeech'
-                            ? '비발화'
-                            : '불확실'}',
-                        if (a['provenance'] != 'relative_input') ...[
-                          '주변 잡음 추정 ${noise?.toStringAsFixed(1) ?? '—'} dBFS',
-                          '발화 수준 추정 ${voice == null ? '—' : (voice + SessionController.inputLevelOffset).clamp(0, 120).toStringAsFixed(1)}',
-                        ],
-                        '${a['provenance'] == 'relative_input' ? '상대 입력 참고범위' : '환경 적응 참고범위'} ${visualLower.toStringAsFixed(1)}–${visualUpper.toStringAsFixed(1)}',
-                      ],
-                      if (value == range.lower - s.referenceLower)
-                        if (session.displayLevel case final level?)
-                          '참고 범위 비교 ${double.parse(level.toStringAsFixed(1)) < range.lower
-                              ? '하한 미만'
-                              : double.parse(level.toStringAsFixed(1)) > range.upper
-                              ? '상한 초과'
-                              : '범위 안'} · 척도 정합성 미검증',
-                    ].join('\n'),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: muted,
-                      fontSize: 14,
-                      height: 1.7,
-                    ),
-                  ),
-                ),
+              ),
+            ),
+            if (session.displayLevel != null || a['meterState'] != 'nonSpeech')
+              Text(
+                session.displayLevel != null
+                    ? '발화로 판정된 입력이다. 다른 사람의 소리도 포함될 수 있다.'
+                    : a['meterState'] == 'confirming'
+                    ? '발화 판정을 연속 확인하고 있다.'
+                    : '발화 판정이 없거나 확인할 수 없어 막대를 비웠다.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: muted, fontSize: 14, height: 1.7),
+              ),
+            if (a['reason'] == 'processing_settings' && !processingUnknown)
+              Text(
+                '전처리 적용 · 막대는 상대 참고값이다.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: muted, fontSize: 14, height: 1.7),
+              ),
+            const SizedBox(height: 12),
+          ],
+        );
+        final stats = Semantics(
+          liveRegion: true,
+          child: Text(
+            [
+              if (a['state'] == 'ready') ...[
+                '발화 판정 ${a['speech'] == 'speech'
+                    ? '발화 감지'
+                    : a['speech'] == 'nonSpeech'
+                    ? '비발화'
+                    : '불확실'}',
+                if (a['provenance'] != 'relative_input') ...[
+                  '주변 잡음 추정 ${noise?.toStringAsFixed(1) ?? '—'} dBFS',
+                  '발화 수준 추정 ${voice == null ? '—' : (voice + SessionController.inputLevelOffset).clamp(0, 120).toStringAsFixed(1)}',
+                ],
+                '${a['provenance'] == 'relative_input' ? '상대 입력 참고범위' : '환경 적응 참고범위'} ${visualLower.toStringAsFixed(1)}–${visualUpper.toStringAsFixed(1)}',
               ],
+              if (value == range.lower - s.referenceLower)
+                if (session.displayLevel case final level?)
+                  '참고 범위 비교 ${double.parse(level.toStringAsFixed(1)) < range.lower
+                      ? '하한 미만'
+                      : double.parse(level.toStringAsFixed(1)) > range.upper
+                      ? '상한 초과'
+                      : '범위 안'} · 척도 정합성 미검증',
+            ].join('\n'),
+            textAlign: TextAlign.left,
+            style: const TextStyle(color: muted, fontSize: 14, height: 1.7),
+          ),
+        );
+        return LayoutBuilder(
+          builder: (context, box) {
+            final details = Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [controls, const SizedBox(height: 12), stats],
+            );
+            if (box.maxWidth >= 640 &&
+                MediaQuery.textScalerOf(context).scale(14) <= 20) {
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(flex: 6, child: plot),
+                  const SizedBox(width: 40),
+                  Expanded(flex: 5, child: details),
+                ],
+              );
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [plot, const SizedBox(height: 24), details],
             );
           },
+        );
+      },
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            IconButton(
+              onPressed: onBack,
+              tooltip: '상황 선택으로 이동',
+              icon: const Icon(Icons.arrow_back, size: 20),
+            ),
+            Expanded(
+              child: Text(
+                s.displayTitle,
+                textAlign: TextAlign.left,
+                style: sectionTitle,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 28),
-        OutlinedButton(
-          key: const Key('toggle-capture'),
-          onPressed: session.active ? session.stop : session.start,
+        const SizedBox(height: 26),
+        Semantics(
+          liveRegion: true,
           child: Text(
-            session.state == CaptureState.requesting
-                ? '요청 취소'
-                : session.active
-                ? '입력 중지'
-                : '다시 시작',
-            style: const TextStyle(fontWeight: FontWeight.w700),
+            title,
+            textAlign: TextAlign.left,
+            style: const TextStyle(
+              fontSize: 23,
+              fontWeight: FontWeight.w600,
+              height: 1.4,
+              letterSpacing: -.7,
+            ),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 9),
+        Text(
+          description,
+          textAlign: TextAlign.left,
+          style: const TextStyle(color: muted, fontSize: 14, height: 1.7),
+        ),
+        const SizedBox(height: 28),
+        measurement,
+        const SizedBox(height: 24),
+        const Divider(),
         TextButton(
           onPressed: onBack,
           child: const Text('상황 변경', style: TextStyle(color: muted)),
@@ -411,7 +427,7 @@ class MeterScreen extends StatelessWidget {
           liveRegion: true,
           child: Text(
             '$frameStatus\n오디오 엔진 $contextLabel · 처리 주파수 ${settings['contextSampleRate'] ?? '확인 불가'} Hz\n$analysisStatus\n발화 판별기 $vadLabel\n자동 이득 ${flag('autoGainControl')} · 잡음 억제 ${flag('noiseSuppression')} · 반향 제거 ${flag('echoCancellation')}',
-            textAlign: TextAlign.center,
+            textAlign: TextAlign.left,
             style: const TextStyle(color: muted, fontSize: 14, height: 1.7),
           ),
         ),
