@@ -43,7 +43,7 @@ void main() {
         } else {
           expect(control.top, greaterThan(gauge.bottom));
         }
-        final stats = tester.getRect(find.textContaining('주변 잡음 추정'));
+        final stats = tester.getRect(find.textContaining('기본 참고범위'));
         expect(control.bottom, lessThan(stats.top));
         expect(tester.takeException(), isNull);
       },

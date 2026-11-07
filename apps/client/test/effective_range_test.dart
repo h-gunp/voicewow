@@ -47,6 +47,8 @@ void main() {
       void ready() => port.send(
         const AudioEvent.analysis({
           'state': 'ready',
+          'calibrationValid': true,
+          'provenance': 'verified',
           'offset': 2.5,
           'speech': 'speech',
           'meterState': 'speech',
@@ -98,6 +100,8 @@ void main() {
     };
     session.analysis = {
       'state': 'ready',
+      'calibrationValid': true,
+      'provenance': 'verified',
       'offset': 2.51,
       'speech': 'speech',
       'meterState': 'speech',
@@ -134,12 +138,18 @@ void main() {
     final semantics = tester.ensureSemantics();
     final session = SessionController(FakeAudioPort())
       ..selectScenario(Scenario.values.first);
+    session.state = CaptureState.running;
     session.settings = {
       'autoGainControl': false,
       'noiseSuppression': false,
       'echoCancellation': false,
     };
-    session.analysis = {'state': 'ready', 'offset': 2.5};
+    session.analysis = {
+      'state': 'ready',
+      'calibrationValid': true,
+      'provenance': 'verified',
+      'offset': 2.5,
+    };
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -151,7 +161,7 @@ void main() {
     );
     expect(find.text('하한 55.5'), findsOneWidget);
     expect(find.text('상한 77.5'), findsOneWidget);
-    expect(find.textContaining('환경 적응 참고범위 55.5–77.5'), findsOneWidget);
+    expect(find.textContaining('고정 참고범위 55.5–77.5'), findsOneWidget);
     final rail = tester.getRect(find.byKey(const Key('gauge-rail')));
     final upper = tester.getRect(find.byKey(const Key('reference-line-77.5')));
     final lower = tester.getRect(find.byKey(const Key('reference-line-55.5')));
@@ -167,51 +177,89 @@ void main() {
     semantics.dispose();
     session.dispose();
   });
-  test('effective range applies only a valid ready offset', () {
-    final session = SessionController(FakeAudioPort())
-      ..selectScenario(Scenario.values.first);
-    session.settings = {
-      'autoGainControl': false,
-      'noiseSuppression': false,
-      'echoCancellation': false,
-    };
-    session.analysis = {'state': 'ready', 'offset': 2.5};
-    expect(session.effectiveRange.lower, 55.5);
-    expect(session.effectiveRange.upper, 77.5);
-    expect(session.effectiveRange.adjusted, isTrue);
-    session.settings = {'autoGainControl': false, 'noiseSuppression': false};
-    expect(session.effectiveRange.adjusted, isFalse);
-    session.settings = {
-      'autoGainControl': true,
-      'noiseSuppression': false,
-      'echoCancellation': false,
-    };
-    expect(session.effectiveRange.adjusted, isFalse);
-    session.settings = {
-      'autoGainControl': false,
-      'noiseSuppression': false,
-      'echoCancellation': false,
-    };
-    for (final data in [
-      {'state': 'held', 'offset': 2.5},
-      {'state': 'ready', 'offset': 4.0},
-      {'state': 'ready', 'offset': double.nan},
-      {'state': 'ready', 'offset': double.infinity},
-      {'state': 'ready', 'offset': -0.1},
-      {'state': 'ready'},
-    ]) {
-      session.analysis = data;
-      expect(session.effectiveRange.lower, 53);
-      expect(session.effectiveRange.upper, 75);
+  test(
+    'effective range requires a valid manual offset and matching input provenance',
+    () {
+      final session = SessionController(FakeAudioPort())
+        ..selectScenario(Scenario.values.first);
+      session.state = CaptureState.running;
+      session.settings = {
+        'autoGainControl': false,
+        'noiseSuppression': false,
+        'echoCancellation': false,
+      };
+      session.analysis = {
+        'state': 'ready',
+        'calibrationValid': true,
+        'provenance': 'verified',
+        'offset': 2.5,
+      };
+      expect(session.effectiveRange.lower, 55.5);
+      expect(session.effectiveRange.upper, 77.5);
+      expect(session.effectiveRange.adjusted, isTrue);
+      session.settings = {'autoGainControl': false, 'noiseSuppression': false};
       expect(session.effectiveRange.adjusted, isFalse);
-    }
-    session.analysis = {'state': 'ready', 'offset': 2.0};
-    session.selectScenario(Scenario.values[2]);
-    expect(session.effectiveRange.lower, 70);
-    expect(session.effectiveRange.upper, 80);
-    session.analysis = {'state': 'held', 'reason': 'input_gap', 'offset': 2.0};
-    expect(session.effectiveRange.lower, 68);
-    expect(session.effectiveRange.upper, 78);
-    session.dispose();
-  });
+      session.settings = {
+        'autoGainControl': true,
+        'noiseSuppression': false,
+        'echoCancellation': false,
+      };
+      expect(session.effectiveRange.adjusted, isFalse);
+      session.settings = {
+        'autoGainControl': false,
+        'noiseSuppression': false,
+        'echoCancellation': false,
+      };
+      for (final data in [
+        {'state': 'held', 'offset': 2.5},
+        {
+          'state': 'ready',
+          'calibrationValid': true,
+          'provenance': 'verified',
+          'offset': 4.0,
+        },
+        {
+          'state': 'ready',
+          'calibrationValid': true,
+          'provenance': 'verified',
+          'offset': double.nan,
+        },
+        {
+          'state': 'ready',
+          'calibrationValid': true,
+          'provenance': 'verified',
+          'offset': double.infinity,
+        },
+        {
+          'state': 'ready',
+          'calibrationValid': true,
+          'provenance': 'verified',
+          'offset': -0.1,
+        },
+        {'state': 'ready'},
+      ]) {
+        session.analysis = data;
+        expect(session.effectiveRange.lower, 53);
+        expect(session.effectiveRange.upper, 75);
+        expect(session.effectiveRange.adjusted, isFalse);
+      }
+      session.analysis = {
+        'state': 'ready',
+        'calibrationValid': true,
+        'provenance': 'verified',
+        'offset': 2.0,
+      };
+      session.scenario = Scenario.values[2];
+      expect(session.effectiveRange.lower, 70);
+      expect(session.effectiveRange.upper, 80);
+      session.analysis = {
+        'state': 'held',
+        'reason': 'input_gap',
+        'offset': 2.0,
+      };
+      expect(session.effectiveRange.lower, 68);
+      expect(session.effectiveRange.upper, 78);
+      session.dispose();
+    },
+  );
 }

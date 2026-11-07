@@ -50,6 +50,15 @@ function disposeNode(node) {
 export function createCapture({onEvent, platform = browserPlatform()}) {
   let active = null, nextSession = 0;
   const current = session => active === session && !session.cancelled;
+  function publishEnvironment(s, meterState = 'unavailable') {
+    s.lastAnalysisSignature = null;
+    onEvent({type:'analysis',analysis:{...s.estimator.snapshot(),meterState,meterDbfs:null,provenance:s.provenance,sessionId:s.sessionId,deviceEpoch:s.sessionId,settingsRevision:s.settingsRevision}});
+  }
+  function invalidateEnvironment(s, reason, state = 'unavailable') {
+    s.lastAnalysisAt = undefined; s.speechFrames = 0;
+    s.estimator.hold(reason,state);
+    publishEnvironment(s);
+  }
   async function prepareNoiseNode(s) {
     const loading = new AbortController();
     const cancel = () => loading.abort();
@@ -165,12 +174,14 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
               s.speechFrames = 0;
               s.settingsRevision++;
             }
-            s.estimator = new EnvironmentEstimator({relative:provenance === 'relative_input'});
+            s.estimator = new EnvironmentEstimator();
             lastSettingsKey = settingsKey;
             onEvent({type:'settings',settings});
           }
+          s.provenance = provenance;
           return raw;
         }
+        s.publishSettings = publishSettings;
         if (!noiseReductionEnabled) {
           s.noiseReductionState = 'disabled';
         } else if (typeof platform.createNoiseReductionNode === 'function') {
@@ -202,26 +213,26 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
           if (data?.type === 'analysis_reset') {
             s.lastAnalysisAt = undefined; s.lastAnalysisSignature = null; s.lastAnalysisSeq = undefined;
             s.analysisOrigin = null; s.speechFrames = 0; s.estimator.resetEpoch();
-            onEvent({type:'analysis',analysis:{state:'held',meterState:'unavailable',reason:'input_gap'}}); return;
+            publishEnvironment(s); return;
           }
           if (data?.type === 'analysis_unavailable') {
             s.estimator = new EnvironmentEstimator();
             s.lastAnalysisAt = undefined; s.lastAnalysisSignature = null; s.speechFrames = 0;
             s.node.vadStatus = 'runtime_failed';
             try { publishSettings(); } catch(error) { void end(s,'error',errorReason(error)); return; }
-            onEvent({type:'analysis',analysis:{state:'unavailable',meterState:'unavailable',reason:'vad_runtime_failed'}}); return;
+            invalidateEnvironment(s,'vad_runtime_failed'); return;
           }
           if (data?.type === 'analysis') {
             try {
               const settings = publishSettings();
               if (s.node.vadStatus && s.node.vadStatus !== 'ready') {
                 s.lastAnalysisAt = undefined; s.lastAnalysisSignature = null; s.speechFrames = 0;
-                onEvent({type:'analysis',analysis:{state:'unavailable',meterState:'unavailable',reason:'vad_unavailable'}}); return;
+                invalidateEnvironment(s,'vad_unavailable'); return;
               }
               if (s.noiseReductionState !== 'active') {
                 s.estimator = new EnvironmentEstimator(); s.analysisOrigin = null;
                 s.lastAnalysisAt = undefined; s.lastAnalysisSignature = null; s.speechFrames = 0;
-                onEvent({type:'analysis',analysis:{state:'unavailable',meterState:'unavailable',reason:'noise_reduction_unavailable'}}); return;
+                invalidateEnvironment(s,'noise_reduction_unavailable'); return;
               }
               const provenance = processingProvenance(settings);
               const environmentSupported = provenance !== 'unavailable';
@@ -231,25 +242,27 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
               if (s.analysisOrigin == null) s.analysisOrigin = origin;
               if (Math.abs(s.analysisOrigin-origin) > .001) throw new Error('analysis clock changed');
               const age = (s.context.currentTime-data.sampleTime)*1000;
-              if (age > 1000 || age < -250) { s.lastAnalysisAt = undefined; s.lastAnalysisSignature = null; s.speechFrames = 0; s.estimator.hold(); onEvent({type:'analysis',analysis:{state:'held',meterState:'unavailable',reason:'analysis_stale'}}); return; }
+              if (age > 1000 || age < -250) { invalidateEnvironment(s,'analysis_stale','failed'); return; }
               if (data.meterRms !== undefined && (!Number.isFinite(data.meterRms) || data.meterRms < 0)) throw new Error('invalid meter');
               if (!Number.isFinite(data.power) || data.power < 0 || !['speech','nonSpeech','uncertain'].includes(data.speech)) throw new Error('invalid analysis');
               if (s.lastAnalysisSeq !== undefined && data.seq <= s.lastAnalysisSeq) return;
               if (s.lastAnalysisSeq !== undefined && data.seq !== s.lastAnalysisSeq + 1) s.speechFrames = 0;
               s.lastAnalysisSeq = data.seq; s.lastAnalysisAt = now;
-              if (environmentSupported) s.estimator.add(data);
-              const snapshot = environmentSupported ? {...s.estimator.snapshot(), provenance} : {state:'unavailable',reason:'processing_settings',speech:data.clipped?'uncertain':data.speech,noiseDbfs:null,voiceDbfs:null,offset:null};
+              if (!environmentSupported) s.estimator.hold('processing_settings','unavailable');
+              // Exclude frames already queued before the user requested sampling.
+              s.estimator.add(data,data.sampleTime-.01 >= (s.sampleAfter ?? Infinity)-1e-9);
+              const snapshot = {...s.estimator.snapshot(),provenance};
               const validSpeech = age <= 200 && !data.clipped && snapshot.speech === 'speech' && data.meterRms > 0;
               // Experimental 30 ms onset confirmation.
               s.speechFrames = validSpeech ? Math.min((s.speechFrames || 0) + 1, 3) : 0;
-              const meterState = age > 200 || data.clipped ? 'unavailable' : snapshot.speech !== 'speech' ? snapshot.speech : !validSpeech ? 'unavailable' : s.speechFrames < 3 ? 'confirming' : 'speech';
+              const meterState = snapshot.state === 'collecting' ? 'calibrating' : age > 200 || data.clipped ? 'unavailable' : snapshot.speech !== 'speech' ? snapshot.speech : !validSpeech ? 'unavailable' : s.speechFrames < 3 ? 'confirming' : 'speech';
               const meterDbfs = meterState === 'speech' ? 20*Math.log10(data.meterRms) : null;
               const signature = `${snapshot.state}/${snapshot.speech}/${meterState}`;
               if (signature !== s.lastAnalysisSignature || data.seq%10===0) {
                 s.lastAnalysisSignature = signature;
                 onEvent({type:'analysis',analysis:{...snapshot,meterState,meterDbfs,sessionId:s.sessionId,deviceEpoch:s.sessionId,settingsRevision:s.settingsRevision,seq:data.seq,sampleStart:data.sampleStart,sampleEnd:data.sampleEnd,sampleTime:data.sampleTime,receivedAt:now}});
               }
-            } catch(error) { if (error?.captureReason === 'settings_unavailable') { void end(s,'error','settings_unavailable'); return; } s.lastAnalysisAt = undefined; s.lastAnalysisSignature = null; s.speechFrames = 0; s.estimator.hold(); onEvent({type:'analysis',analysis:{state:'unavailable',meterState:'unavailable',reason:'invalid_analysis'}}); }
+            } catch(error) { if (error?.captureReason === 'settings_unavailable') { void end(s,'error','settings_unavailable'); return; } invalidateEnvironment(s,'invalid_analysis'); }
             return;
           }
           if (data?.type !== 'level') return;
@@ -267,11 +280,11 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
           try { publishSettings(); } catch(error) { void end(s,'error',errorReason(error)); return; }
           if (now - s.lastFrame >= 1500) void end(s,'error','frame_timeout');
           else if (s.lastAnalysisAt !== undefined && now-s.lastAnalysisAt >= 250) {
-            s.lastAnalysisAt = undefined; s.lastAnalysisSignature = null; s.speechFrames = 0; s.estimator.hold();
-            onEvent({type:'analysis',analysis:{state:'held',meterState:'unavailable',reason:'analysis_stale'}});
+            invalidateEnvironment(s,'analysis_stale','failed');
           }
         }, 250);
         publishSettings();
+        s.running = true;
         onEvent({type:'state',state:'running'});
       } catch(error) {
         if (current(s)) await end(s,'error',errorReason(error));
@@ -283,7 +296,26 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
   async function stop() {
     if (active) await end(active,'idle');
   }
-  return {start,stop};
+  async function sampleEnvironment() {
+    const s = active;
+    if (!s || !s.running) return;
+    try { s.publishSettings(); } catch(error) { await end(s,'error',errorReason(error)); return; }
+    const reason = s.provenance === 'unavailable' ? 'processing_settings' : s.noiseReductionState !== 'active' ? 'noise_reduction_unavailable' : s.node.vadStatus && s.node.vadStatus !== 'ready' ? 'vad_unavailable' : s.context.state !== 'running' ? 'context_not_running' : null;
+    if (reason) { invalidateEnvironment(s,reason); return; }
+    if (s.estimator.state === 'collecting') return;
+    s.sampleAfter = s.context.currentTime;
+    s.lastAnalysisAt = platform.now();
+    s.estimator.sample(); s.speechFrames = 0;
+    publishEnvironment(s,'calibrating');
+  }
+  async function cancelEnvironment() {
+    const s = active;
+    if (!s || !s.running || s.estimator.state !== 'collecting') return;
+    try { s.publishSettings(); } catch(error) { await end(s,'error',errorReason(error)); return; }
+    s.estimator.cancel(); s.speechFrames = 0;
+    publishEnvironment(s);
+  }
+  return {start,stop,sampleEnvironment,cancelEnvironment};
 }
 
 if (typeof window !== 'undefined') window.voiceMateAudio = {createCapture};

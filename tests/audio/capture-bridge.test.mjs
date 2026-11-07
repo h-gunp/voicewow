@@ -19,12 +19,12 @@ function harness({permission, moduleGate}={}) {
 }
 async function settle(){for(let i=0;i<8;i++)await Promise.resolve();}
 
-test('successive input epochs use current speech immediately and preserve noise baseline', async () => {
+test('successive input epochs use current speech immediately and invalidate the old guideline', async () => {
   const h=harness(), {node}=addNoiseReduction(h);
   h.track.getSettings=()=>({autoGainControl:false,noiseSuppression:false,echoCancellation:false});
-  await h.capture.start();
+  await h.capture.start(); await h.capture.sampleEnvironment();
   const send=(seq,origin,speech,power=.01)=>node.port.onmessage({data:{type:'analysis',seq,sampleStart:seq*480,sampleEnd:(seq+1)*480,sampleTime:origin+(seq+1)/100,power,clipped:false,speech,meterRms:.5}});
-  for(let i=0;i<400;i++){send(i,0,'nonSpeech');if(i%10===0)h.frame({},node);await h.tick(10);}
+  for(let i=0;i<500;i++){send(i,0,'nonSpeech');if(i%10===0)h.frame({},node);await h.tick(10);}
   assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.state,'ready');
   for(let epoch=0;epoch<2;epoch++) {
     node.port.onmessage({data:{type:'analysis_reset'}});
@@ -37,7 +37,8 @@ test('successive input epochs use current speech immediately and preserve noise 
   node.port.onmessage({data:{type:'analysis_reset'}});
   const origin=h.ctx.currentTime;
   for(let i=0;i<5000;i++){send(i,origin,'nonSpeech',.03);if(i%10===0)h.frame({},node);await h.tick(10);}
-  assert.ok(h.events.findLast(e=>e.type==='analysis').analysis.offset>0);
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.calibrationValid,false);
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.offset,null);
   await h.capture.stop();
 });
 
@@ -74,18 +75,21 @@ test('input gap invalidates meter and accepts a fresh sample-clock epoch', async
   await h.capture.stop();
 });
 
-test('input gap keeps the session noise baseline but requires new evidence', async () => {
+test('input gap discards calibration until the user samples again', async () => {
   const h=harness(), {node}=addNoiseReduction(h);
   h.track.getSettings=()=>({autoGainControl:false,noiseSuppression:false,echoCancellation:false});
-  await h.capture.start();
+  await h.capture.start(); await h.capture.sampleEnvironment();
   const send=(seq,origin,power)=>node.port.onmessage({data:{type:'analysis',seq,sampleStart:seq*480,sampleEnd:(seq+1)*480,sampleTime:origin+(seq+1)/100,power,clipped:false,speech:'nonSpeech',meterRms:.1}});
-  for(let i=0;i<400;i++){send(i,0,.01);if(i%10===0)h.frame({},node);await h.tick(10);}
+  for(let i=0;i<500;i++){send(i,0,.01);if(i%10===0)h.frame({},node);await h.tick(10);}
   assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.state,'ready');
   node.port.onmessage({data:{type:'analysis_reset'}}); h.frame({},node); await h.tick(1000);
   const origin=h.ctx.currentTime;
   for(let i=0;i<5000;i++){send(i,origin,.03);if(i%10===0)h.frame({},node);await h.tick(10);}
   const a=h.events.findLast(e=>e.type==='analysis').analysis;
-  assert.equal(a.state,'ready'); assert.ok(a.offset>0);
+  assert.equal(a.state,'failed'); assert.equal(a.calibrationValid,false); assert.equal(a.offset,null);
+  await h.capture.sampleEnvironment();
+  for(let i=5000;i<5500;i++){send(i,origin,.0001);if(i%10===0)h.frame({},node);await h.tick(10);}
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.offset,2);
   await h.capture.stop();
 });
 
@@ -126,7 +130,7 @@ test('processing setting changes reset relative speech onset evidence', async ()
   await send(4); assert.equal((await send(5)).meterState,'speech');
   settings={autoGainControl:false,noiseSuppression:false,echoCancellation:false};
   const supported=await send(6);
-  assert.equal(supported.state,'collecting'); assert.equal(supported.meterState,'confirming');
+  assert.equal(supported.state,'idle'); assert.equal(supported.meterState,'confirming');
   node.port.onmessage({data:{type:'analysis_unavailable'}});
   assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.meterState,'unavailable');
   await send(7); await send(8);
@@ -136,7 +140,7 @@ test('processing setting changes reset relative speech onset evidence', async ()
   const next=addNoiseReduction(h); await h.capture.start();
   next.node.port.onmessage({data:{type:'analysis',seq:0,sampleStart:0,sampleEnd:480,sampleTime:h.ctx.currentTime+.01,power:.01,clipped:false,speech:'speech',meterRms:.2}});
   const restarted=h.events.findLast(e=>e.type==='analysis').analysis;
-  assert.equal(restarted.meterState,'confirming'); assert.equal(restarted.state,'collecting'); assert.equal(restarted.provenance,'relative_input');
+  assert.equal(restarted.meterState,'confirming'); assert.equal(restarted.state,'idle'); assert.equal(restarted.provenance,'relative_input');
   await h.capture.stop();
 });
 
@@ -281,16 +285,18 @@ test('speech confirmation resets on frame gap, settings change and stale input',
   await h.capture.stop();
 });
 
-for (const initialNoise of [false,true]) test(`continuous speech stays visible with ${initialNoise ? 'stale noise' : 'no initial noise'}`, async () => {
+for (const initialNoise of [false,true]) test(`continuous speech stays visible with ${initialNoise ? 'fixed manual guideline' : 'no initial noise'}`, async () => {
   const h=harness(), {node}=addNoiseReduction(h);
   h.track.getSettings=()=>({autoGainControl:false,noiseSuppression:false,echoCancellation:false});
   await h.capture.start();
   const send=(seq,speech)=>node.port.onmessage({data:{type:'analysis',seq,sampleStart:seq*480,sampleEnd:(seq+1)*480,sampleTime:(seq+1)/100,power:.01,clipped:false,speech,meterRms:.5}});
-  for(let seq=0;seq<(initialNoise?400:0);seq++){send(seq,'nonSpeech');if(seq%10===0)h.frame({},node);await h.tick(10);}
-  const start=initialNoise?400:0;
+  if(initialNoise) await h.capture.sampleEnvironment();
+  for(let seq=0;seq<(initialNoise?500:0);seq++){send(seq,'nonSpeech');if(seq%10===0)h.frame({},node);await h.tick(10);}
+  const start=initialNoise?500:0;
   for(let seq=start;seq<start+3000;seq++){send(seq,'speech');if(seq%10===0)h.frame({},node);await h.tick(10);}
   const a=h.events.findLast(e=>e.type==='analysis').analysis;
-  assert.equal(a.state, initialNoise?'held':'collecting');
+  assert.equal(a.state, initialNoise?'ready':'idle');
+  assert.equal(a.calibrationValid,initialNoise);
   assert.equal(a.meterState,'speech');
   assert.ok(Math.abs(a.meterDbfs-20*Math.log10(.5))<1e-9);
   h.frame({},node); await h.tick(250);
@@ -323,8 +329,8 @@ test('speech meter follows the matching fresh analysis frame and clears immediat
   await h.tick(10); send(407,'speech',.7);
   assert.ok(h.events.findLast(e=>e.type==='analysis').analysis.meterDbfs != null);
   h.frame({},node); await h.tick(250);
-  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.state,'held');
-  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.meterDbfs,undefined);
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.state,'failed');
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.meterDbfs,null);
   await h.capture.stop();
 });
 
@@ -355,32 +361,33 @@ test('capture publishes VAD initialization status without device identity', asyn
 test('analysis only accepts fresh frames when processing settings are known disabled', async () => {
   const h=harness(), noise=addNoiseReduction(h);
   h.track.getSettings=()=>({sampleRate:48000,autoGainControl:false,noiseSuppression:false,echoCancellation:false});
-  await h.capture.start();
+  await h.capture.start(); await h.capture.sampleEnvironment();
   const node=noise.node;
-  for(let seq=0;seq<410;seq++) {
+  for(let seq=0;seq<500;seq++) {
     node.port.onmessage({data:{type:'analysis',seq,sampleStart:seq*480,sampleEnd:(seq+1)*480,sampleTime:(seq+1)/100,power:.01,clipped:false,speech:'nonSpeech'}});
     if (seq%10===0) h.frame({},node);
     await h.tick(10);
   }
   assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.state,'ready');
   h.track.getSettings=()=>({sampleRate:48000,autoGainControl:true,noiseSuppression:false,echoCancellation:false});
-  node.port.onmessage({data:{type:'analysis',seq:410,sampleStart:196800,sampleEnd:197280,sampleTime:4.11,power:.01,clipped:false,speech:'nonSpeech'}});
+  node.port.onmessage({data:{type:'analysis',seq:500,sampleStart:240000,sampleEnd:240480,sampleTime:5.01,power:.01,clipped:false,speech:'nonSpeech'}});
   assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.state,'unavailable');
   assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.reason,'processing_settings');
   await h.capture.stop();
 });
 
-test('backlog stays held until audio clock catches up and preserves initial baseline', async () => {
+test('backlog invalidates calibration and never silently samples a replacement', async () => {
   const h=harness(), {node}=addNoiseReduction(h);
   h.track.getSettings=()=>({autoGainControl:false,noiseSuppression:false,echoCancellation:false});
-  await h.capture.start();
+  await h.capture.start(); await h.capture.sampleEnvironment();
   const send=(seq,power)=>node.port.onmessage({data:{type:'analysis',seq,sampleStart:seq*480,sampleEnd:(seq+1)*480,sampleTime:(seq+1)/100,power,clipped:false,speech:'nonSpeech'}});
-  for(let seq=0;seq<400;seq++){send(seq,.01);if(seq%10===0)h.frame({},node);await h.tick(10);}
+  for(let seq=0;seq<500;seq++){send(seq,.01);if(seq%10===0)h.frame({},node);await h.tick(10);}
   for(let i=0;i<20;i++){h.frame({},node);await h.tick(100);}
-  for(let seq=400;seq<900;seq++){send(seq,.03);if(seq%10===0)h.frame({},node);await h.tick(10);}
-  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.state,'held');
-  for(let seq=1100;seq<4500;seq++){send(seq,.03);if(seq%10===0)h.frame({},node);await h.tick(10);}
-  assert.ok(h.events.findLast(e=>e.type==='analysis').analysis.offset > 0);
+  for(let seq=500;seq<1000;seq++){send(seq,.03);if(seq%10===0)h.frame({},node);await h.tick(10);}
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.state,'failed');
+  for(let seq=1200;seq<4500;seq++){send(seq,.03);if(seq%10===0)h.frame({},node);await h.tick(10);}
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.calibrationValid,false);
+  assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.offset,null);
   await h.capture.stop();
 });
 function assertReleased(h){assert.ok(h.track.stops>=1);assert.equal(h.ctx.state,'closed');assert.equal(h.port.onmessage,null);assert.equal(h.timers.size,0);}
@@ -797,7 +804,7 @@ for(const rejectPreferredRate of [false,true]) test(`browser_context_requests_48
 
 test('unknown settings collect relative input and reset it on gap and settings changes', async () => {
   const h=harness(), {node}=addNoiseReduction(h); let settings={echoCancellation:false};
-  h.track.getSettings=()=>settings; await h.capture.start();
+  h.track.getSettings=()=>settings; await h.capture.start(); await h.capture.sampleEnvironment();
   const send=async(seq,origin,power=.01,speech='nonSpeech')=>{node.port.onmessage({data:{type:'analysis',seq,sampleStart:seq*480,sampleEnd:(seq+1)*480,sampleTime:origin+(seq+1)/100,power,clipped:false,speech,meterRms:.1}});if(seq%10===0)h.frame({},node);await h.tick(10);};
   for(let i=0;i<1000;i++) await send(i,0);
   for(let i=1000;i<6000;i++) await send(i,0,.03);
@@ -806,13 +813,13 @@ test('unknown settings collect relative input and reset it on gap and settings c
   node.port.onmessage({data:{type:'analysis_reset'}}); const origin=h.ctx.currentTime;
   for(let i=0;i<400;i++) await send(i,origin,.03);
   a=h.events.findLast(e=>e.type==='analysis').analysis;
-  assert.equal(a.state,'ready'); assert.equal(a.offset,0);
+  assert.equal(a.state,'failed'); assert.equal(a.calibrationValid,false); assert.equal(a.offset,null);
   settings={echoCancellation:'all'}; await send(400,origin,.03);
   a=h.events.findLast(e=>e.type==='analysis').analysis;
   assert.equal(a.state,'unavailable'); assert.equal(a.offset,null);
   settings={echoCancellation:false}; await send(401,origin,.03);
   a=h.events.findLast(e=>e.type==='analysis').analysis;
-  assert.equal(a.provenance,'relative_input'); assert.equal(a.state,'collecting'); assert.equal(a.offset,null);
+  assert.equal(a.provenance,'relative_input'); assert.equal(a.state,'idle'); assert.equal(a.offset,null);
   await h.capture.stop();
 });
 
@@ -825,5 +832,123 @@ test('analysis provenance uses the same settings snapshot published to Dart', as
   node.port.onmessage({data:{type:'analysis',seq:0,sampleStart:0,sampleEnd:480,sampleTime:.01,power:.01,clipped:false,speech:'nonSpeech',meterRms:.1}});
   assert.deepEqual(h.events.findLast(e=>e.type==='settings').settings.echoCancellation,false);
   assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.provenance,'relative_input');
+  await h.capture.stop();
+});
+
+function manualAnalysis(h,node,seq,overrides={}) {
+  node.port.onmessage({data:{type:'analysis',seq,sampleStart:seq*480,sampleEnd:(seq+1)*480,sampleTime:(seq+1)/100,power:.00001,clipped:false,speech:'speech',meterRms:.2,...overrides}});
+}
+async function manualFrames(h,node,start,count,overrides={}) {
+  for(let seq=start;seq<start+count;seq++) {
+    manualAnalysis(h,node,seq,overrides);
+    if(seq%10===0) h.frame({},node);
+    await h.tick(10);
+  }
+}
+const lastAnalysis = h => h.events.findLast(e=>e.type==='analysis').analysis;
+
+test('manual ambient capture uses current stream, blanks speech and freezes successful result', async () => {
+  const h=harness(), {node}=addNoiseReduction(h); await h.capture.start();
+  await manualFrames(h,node,0,50);
+  assert.equal(lastAnalysis(h).state,'idle'); assert.equal(lastAnalysis(h).calibrationValid,false);
+  assert.equal(typeof h.capture.sampleEnvironment,'function');
+  await h.capture.sampleEnvironment();
+  assert.equal(lastAnalysis(h).state,'collecting'); assert.equal(lastAnalysis(h).meterState,'calibrating'); assert.equal(lastAnalysis(h).meterDbfs,null);
+  await manualFrames(h,node,50,499);
+  assert.equal(lastAnalysis(h).state,'collecting'); assert.equal(lastAnalysis(h).meterState,'calibrating');
+  await manualFrames(h,node,549,1);
+  assert.equal(lastAnalysis(h).state,'ready'); assert.equal(lastAnalysis(h).calibrationValid,true);
+  assert.equal(lastAnalysis(h).offset,1); assert.equal(lastAnalysis(h).noiseDbfs,-50);
+  await manualFrames(h,node,550,1000,{power:.1});
+  assert.equal(lastAnalysis(h).state,'ready'); assert.equal(lastAnalysis(h).offset,1); assert.equal(lastAnalysis(h).meterState,'speech');
+  await manualFrames(h,node,1550,1000,{power:0,speech:'nonSpeech'});
+  assert.equal(lastAnalysis(h).state,'ready'); assert.equal(lastAnalysis(h).offset,1);
+  assert.equal(h.platform.calls,1); assert.equal(h.track.stops,0);
+  await h.capture.stop();
+});
+
+test('manual cancel and failed resampling retain previous calibration while same input survives', async () => {
+  const h=harness(), {node}=addNoiseReduction(h); await h.capture.start(); await h.capture.sampleEnvironment();
+  await manualFrames(h,node,0,500); await h.capture.sampleEnvironment();
+  await manualFrames(h,node,500,100,{power:.001}); await h.capture.cancelEnvironment();
+  assert.equal(lastAnalysis(h).state,'ready'); assert.equal(lastAnalysis(h).offset,1);
+  await h.capture.sampleEnvironment(); await manualFrames(h,node,600,500,{power:0});
+  assert.equal(lastAnalysis(h).state,'failed'); assert.equal(lastAnalysis(h).reason,'insufficient_samples');
+  assert.equal(lastAnalysis(h).calibrationValid,true); assert.equal(lastAnalysis(h).offset,1);
+  assert.equal(h.platform.calls,1); assert.equal(h.track.stops,0); await h.capture.stop();
+});
+
+test('button excludes queued audio recorded before the request', async () => {
+  const h=harness(), {node}=addNoiseReduction(h); await h.capture.start();
+  await manualFrames(h,node,0,5); await h.tick(100); await h.capture.sampleEnvironment();
+  for(let seq=5;seq<15;seq++) manualAnalysis(h,node,seq,{power:.1});
+  assert.equal(lastAnalysis(h).progress,0);
+  await manualFrames(h,node,15,500);
+  assert.equal(lastAnalysis(h).state,'ready'); assert.equal(lastAnalysis(h).noiseDbfs,-50);
+  await h.capture.stop();
+});
+
+test('settings, stale input and gaps invalidate successful manual calibration', async () => {
+  for(const failure of ['settings','stale','gap','reset']) {
+    const h=harness(), {node}=addNoiseReduction(h); let agc=false;
+    h.track.getSettings=()=>({autoGainControl:agc,noiseSuppression:false,echoCancellation:false});
+    await h.capture.start(); await h.capture.sampleEnvironment(); await manualFrames(h,node,0,500);
+    if(failure==='settings') { agc=true; manualAnalysis(h,node,500); }
+    else if(failure==='stale') { h.frame({},node); await h.tick(250); }
+    else if(failure==='gap') manualAnalysis(h,node,501);
+    else node.port.onmessage({data:{type:'analysis_reset'}});
+    assert.equal(lastAnalysis(h).calibrationValid,false,failure); assert.equal(lastAnalysis(h).offset,null,failure);
+    await h.capture.stop();
+  }
+});
+
+test('sampling is explicit about unavailable processing and stopped requests cannot revive capture', async () => {
+  const h=harness(), {node}=addNoiseReduction(h);
+  h.track.getSettings=()=>({autoGainControl:true}); await h.capture.start(); await h.capture.sampleEnvironment();
+  assert.equal(lastAnalysis(h).state,'unavailable'); assert.equal(lastAnalysis(h).reason,'processing_settings');
+  assert.equal(lastAnalysis(h).calibrationValid,false);
+  const stale=node.port.onmessage; await h.capture.stop(); const count=h.events.length;
+  await h.capture.sampleEnvironment(); await h.capture.cancelEnvironment(); stale({data:{type:'analysis_reset'}});
+  assert.equal(h.events.length,count); assert.equal(h.platform.calls,1);
+});
+
+test('repeated sample requests cannot restart progress and cancelling before a result returns idle', async () => {
+  const h=harness(), {node}=addNoiseReduction(h); await h.capture.start(); await h.capture.sampleEnvironment();
+  await manualFrames(h,node,0,100); await h.capture.sampleEnvironment();
+  await manualFrames(h,node,100,399);
+  assert.equal(lastAnalysis(h).state,'collecting'); await h.capture.cancelEnvironment();
+  assert.equal(lastAnalysis(h).state,'idle'); assert.equal(lastAnalysis(h).calibrationValid,false);
+  await manualFrames(h,node,499,501); assert.equal(lastAnalysis(h).state,'idle');
+  assert.equal(h.platform.calls,1); await h.capture.stop();
+});
+
+test('stopped manual sampling and its late frame cannot complete in a new session', async () => {
+  const h=harness(), {node}=addNoiseReduction(h); await h.capture.start(); await h.capture.sampleEnvironment();
+  await manualFrames(h,node,0,499); const old=node.port.onmessage;
+  const sessionId=lastAnalysis(h).sessionId; await h.capture.stop();
+  h.ctx.state='running'; h.track.readyState='live'; const next=addNoiseReduction(h); await h.capture.start();
+  old({data:{type:'analysis',seq:499,sampleStart:239520,sampleEnd:240000,sampleTime:5,power:.01,clipped:false,speech:'speech',meterRms:.2}});
+  manualAnalysis(h,next.node,0,{sampleTime:h.ctx.currentTime+.01});
+  assert.notEqual(lastAnalysis(h).sessionId,sessionId);
+  assert.equal(lastAnalysis(h).state,'idle'); assert.equal(lastAnalysis(h).calibrationValid,false);
+  await h.capture.stop();
+});
+
+for(const unavailable of ['raw','vad','settings_read']) test(`manual sampling reports ${unavailable} unavailable without opening another stream`, async () => {
+  const h=harness(), {node}=addNoiseReduction(h);
+  if(unavailable==='vad') node.vadStatus='init_failed';
+  await h.capture.start(unavailable!=='raw');
+  if(unavailable==='settings_read') h.track.getSettings=()=>{throw new Error('unreadable');};
+  await h.capture.sampleEnvironment();
+  if(unavailable==='settings_read') { assert.equal(h.events.at(-1).reason,'settings_unavailable'); assertReleased(h); }
+  else { assert.equal(lastAnalysis(h).state,'unavailable'); assert.equal(lastAnalysis(h).reason,unavailable==='raw'?'noise_reduction_unavailable':'vad_unavailable'); }
+  assert.equal(h.platform.calls,1); await h.capture.stop();
+});
+
+test('manual sampling without an analysis frame fails promptly even while level frames arrive', async () => {
+  const h=harness(), {node}=addNoiseReduction(h); await h.capture.start(); await h.capture.sampleEnvironment();
+  h.frame({},node); await h.tick(250);
+  assert.equal(lastAnalysis(h).state,'failed'); assert.equal(lastAnalysis(h).reason,'analysis_stale');
+  assert.equal(lastAnalysis(h).calibrationValid,false); assert.equal(h.track.stops,0);
   await h.capture.stop();
 });

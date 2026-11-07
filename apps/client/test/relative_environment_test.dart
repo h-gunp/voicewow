@@ -12,9 +12,11 @@ void main() {
     () {
       final session = SessionController(FakeAudioPort())
         ..selectScenario(Scenario.values.first);
+      session.state = CaptureState.running;
       session.settings = {'echoCancellation': false};
       session.analysis = {
         'state': 'ready',
+        'calibrationValid': true,
         'offset': 2.0,
         'provenance': 'relative_input',
       };
@@ -24,9 +26,11 @@ void main() {
         session.settings = {'echoCancellation': bad};
         expect(session.effectiveRange.adjusted, isFalse);
       }
+      session.state = CaptureState.running;
       session.settings = {'echoCancellation': false};
       session.analysis = {
         'state': 'ready',
+        'calibrationValid': true,
         'offset': 2.0,
         'provenance': 'verified',
       };
@@ -46,6 +50,7 @@ void main() {
       port.send(
         const AudioEvent.analysis({
           'state': 'ready',
+          'calibrationValid': true,
           'offset': 2.0,
           'provenance': 'relative_input',
           'speech': 'nonSpeech',
@@ -63,7 +68,7 @@ void main() {
         ),
       );
       expect(find.text('실험적 상대 입력 기준 · 실제 음압 아님'), findsOneWidget);
-      expect(find.textContaining('상대 입력 참고범위 55.0–77.0'), findsOneWidget);
+      expect(find.textContaining('고정 참고범위 55.0–77.0'), findsOneWidget);
       expect(find.textContaining('발화 수준 추정'), findsNothing);
       expect(find.textContaining('주변 잡음 추정'), findsNothing);
       expect(session.effectiveRange.lower, 55);
@@ -84,6 +89,7 @@ void main() {
     };
     session.analysis = {
       'state': 'ready',
+      'calibrationValid': true,
       'offset': 0.0,
       'provenance': 'relative_input',
     };

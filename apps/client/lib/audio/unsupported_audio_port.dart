@@ -12,6 +12,11 @@ class UnsupportedAudioPort implements AudioPort {
     const AudioEvent.state(CaptureState.error, reason: 'unsupported'),
   );
   @override
+  Future<void> sampleEnvironment() async =>
+      throw UnsupportedError('unsupported');
+  @override
+  Future<void> cancelEnvironment() async {}
+  @override
   Future<void> stop() async {}
   @override
   Future<void> dispose() async => _events.close();

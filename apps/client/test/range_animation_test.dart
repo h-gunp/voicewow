@@ -19,7 +19,12 @@ void main() {
           'noiseSuppression': false,
           'echoCancellation': false,
         };
-        session.analysis = {'state': 'ready', 'offset': 0.0};
+        session.analysis = {
+          'state': 'ready',
+          'calibrationValid': true,
+          'provenance': 'verified',
+          'offset': 0.0,
+        };
         Widget screen() => MaterialApp(
           home: MediaQuery(
             data: MediaQueryData(disableAnimations: reduceMotion),
@@ -31,7 +36,12 @@ void main() {
           ),
         );
         await tester.pumpWidget(screen());
-        session.analysis = {'state': 'ready', 'offset': 3.0};
+        session.analysis = {
+          'state': 'ready',
+          'calibrationValid': true,
+          'provenance': 'verified',
+          'offset': 3.0,
+        };
         await tester.pumpWidget(screen());
         await tester.pump(const Duration(milliseconds: 150));
         final lower = tester
@@ -46,7 +56,12 @@ void main() {
         expect(l, reduceMotion ? 56 : inExclusiveRange(53, 56));
         expect(session.effectiveRange.lower, 56);
         if (!reduceMotion) {
-          session.analysis = {'state': 'ready', 'offset': 2.0};
+          session.analysis = {
+            'state': 'ready',
+            'calibrationValid': true,
+            'provenance': 'verified',
+            'offset': 2.0,
+          };
           await tester.pumpWidget(screen());
           await tester.pump(const Duration(milliseconds: 600));
           expect(
@@ -72,6 +87,8 @@ void main() {
       };
       session.analysis = {
         'state': 'ready',
+        'calibrationValid': true,
+        'provenance': 'verified',
         'offset': 0.0,
         'speech': 'speech',
         'meterState': 'speech',
@@ -102,7 +119,7 @@ void main() {
   );
 
   testWidgets(
-    'reduced motion and held input compare immediately against the current range',
+    'reduced motion and invalidated input compare immediately against the current range',
     (tester) async {
       final session = SessionController(FakeAudioPort())
         ..selectScenario(Scenario.values.first);
@@ -114,6 +131,8 @@ void main() {
       };
       session.analysis = {
         'state': 'ready',
+        'calibrationValid': true,
+        'provenance': 'verified',
         'offset': 0.0,
         'speech': 'speech',
         'meterState': 'speech',
@@ -134,7 +153,12 @@ void main() {
       await tester.pumpWidget(screen());
       await tester.pump();
       expect(find.textContaining('참고 범위 비교 하한 미만'), findsOneWidget);
-      session.analysis = {...session.analysis, 'state': 'held'};
+      session.analysis = {
+        ...session.analysis,
+        'state': 'failed',
+        'calibrationValid': false,
+        'reason': 'input_gap',
+      };
       await tester.pumpWidget(screen());
       await tester.pump();
       expect(session.effectiveRange.lower, 53);

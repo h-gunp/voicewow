@@ -16,6 +16,8 @@ class SessionController extends ChangeNotifier {
   Map<String, Object?> analysis = {};
   bool noiseReductionEnabled = true;
   int frameCount = 0, _epoch = 0;
+  int _environmentRequest = 0;
+  bool _cancellingEnvironment = false;
   bool _acceptEvents = false, _disposed = false;
   SessionController(this._audio) {
     _subscription = _audio.events.listen(_onEvent);
@@ -23,21 +25,44 @@ class SessionController extends ChangeNotifier {
   bool get active =>
       state == CaptureState.requesting || state == CaptureState.running;
 
+  String? get _processingProvenance {
+    const keys = ['autoGainControl', 'noiseSuppression', 'echoCancellation'];
+    if (keys.any(
+      (key) => settings.containsKey(key) && settings[key] != false,
+    )) {
+      return null;
+    }
+    return keys.every(settings.containsKey) ? 'verified' : 'relative_input';
+  }
+
+  bool get environmentCollecting => analysis['state'] == 'collecting';
+  bool get canSampleEnvironment =>
+      !_disposed &&
+      !_cancellingEnvironment &&
+      state == CaptureState.running &&
+      noiseReductionEnabled &&
+      settings['noiseReductionState'] == 'active' &&
+      settings['vadStatus'] == 'ready' &&
+      analysis['reason'] != 'vad_runtime_failed' &&
+      _processingProvenance != null &&
+      !environmentCollecting;
+  bool get canCancelEnvironment =>
+      !_disposed && environmentCollecting && !_cancellingEnvironment;
+  double get environmentProgress {
+    final value = analysis['progress'];
+    return value is num && value.isFinite
+        ? value.clamp(0.0, 1.0).toDouble()
+        : 0.0;
+  }
+
   ({double lower, double upper, bool adjusted}) get effectiveRange {
     final s = scenario!;
     final value = analysis['offset'];
-    const keys = ['autoGainControl', 'noiseSuppression', 'echoCancellation'];
-    final verified = keys.every((key) => settings[key] == false);
-    final relative =
-        keys.every(
-          (key) => !settings.containsKey(key) || settings[key] == false,
-        ) &&
-        keys.any((key) => !settings.containsKey(key));
-    final provenance = analysis['provenance'];
     final valid =
-        analysis['state'] == 'ready' &&
-        ((verified && (provenance == 'verified' || provenance == null)) ||
-            (relative && provenance == 'relative_input')) &&
+        state == CaptureState.running &&
+        analysis['calibrationValid'] == true &&
+        _processingProvenance != null &&
+        analysis['provenance'] == _processingProvenance &&
         value is num &&
         value.isFinite &&
         value >= 0 &&
@@ -56,6 +81,7 @@ class SessionController extends ChangeNotifier {
 
   double? get displayLevel {
     if (state != CaptureState.running ||
+        environmentCollecting ||
         analysis['meterState'] != 'speech' ||
         analysis['speech'] != 'speech')
       return null;
@@ -70,6 +96,74 @@ class SessionController extends ChangeNotifier {
     scenario = value;
     reason = null;
     notifyListeners();
+  }
+
+  Future<void> sampleEnvironment() async {
+    if (!canSampleEnvironment) return;
+    final epoch = _epoch;
+    final request = ++_environmentRequest;
+    analysis = {
+      ...analysis,
+      'state': 'collecting',
+      'progress': 0.0,
+      'reason': null,
+      'meterState': 'calibrating',
+      'meterDbfs': null,
+    };
+    notifyListeners();
+    try {
+      await _audio.sampleEnvironment();
+    } catch (_) {
+      if (!_disposed &&
+          epoch == _epoch &&
+          request == _environmentRequest &&
+          environmentCollecting) {
+        analysis = {
+          ...analysis,
+          'state': 'failed',
+          'reason': 'sample_failed',
+          'meterState': 'unavailable',
+          'meterDbfs': null,
+        };
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> cancelEnvironment() async {
+    if (!canCancelEnvironment) return;
+    final epoch = _epoch;
+    final request = ++_environmentRequest;
+    _cancellingEnvironment = true;
+    notifyListeners();
+    try {
+      await _audio.cancelEnvironment();
+      if (!_disposed &&
+          epoch == _epoch &&
+          request == _environmentRequest &&
+          environmentCollecting) {
+        analysis = {
+          ...analysis,
+          'state': analysis['calibrationValid'] == true ? 'ready' : 'idle',
+          'reason': 'cancelled',
+          'progress': 0.0,
+          'meterState': 'unavailable',
+          'meterDbfs': null,
+        };
+      }
+    } catch (_) {
+      if (!_disposed &&
+          epoch == _epoch &&
+          request == _environmentRequest &&
+          environmentCollecting) {
+        analysis = {...analysis, 'reason': 'cancel_failed'};
+      }
+    } finally {
+      if (!_disposed && epoch == _epoch && request == _environmentRequest) {
+        _cancellingEnvironment = false;
+        notifyListeners();
+      }
+    }
   }
 
   Future<void> setNoiseReductionEnabled(bool value) async {
@@ -91,6 +185,7 @@ class SessionController extends ChangeNotifier {
   Future<void> start() async {
     if (scenario == null || active || _disposed) return;
     final epoch = ++_epoch;
+    _cancellingEnvironment = false;
     _acceptEvents = true;
     state = CaptureState.requesting;
     level = null;
@@ -115,6 +210,7 @@ class SessionController extends ChangeNotifier {
   Future<void> stop() async {
     if (_disposed) return;
     ++_epoch;
+    _cancellingEnvironment = false;
     _acceptEvents = false;
     state = CaptureState.idle;
     level = null;
@@ -142,6 +238,8 @@ class SessionController extends ChangeNotifier {
         level = event;
         frameCount++;
       case 'settings':
+        ++_environmentRequest;
+        _cancellingEnvironment = false;
         settings = event.settings!;
         analysis = {};
       case 'analysis':

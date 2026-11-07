@@ -68,29 +68,19 @@ class MeterScreen extends StatelessWidget {
     };
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final s = session.scenario!;
-    final a = session.analysis;
-    final range = session.effectiveRange;
-    final voice = a['voiceDbfs'] as num?;
-    final noise = a['noiseDbfs'] as num?;
+  String get _analysisStatus {
     final settings = session.settings;
-    final processingUnknown = [
-      'autoGainControl',
-      'noiseSuppression',
-      'echoCancellation',
-    ].any((key) => settings[key] != true && settings[key] != false);
-    final analysisStatus = switch ((
+    final a = session.analysis;
+    return switch ((
       session.state,
       settings['noiseReductionState'],
       settings['vadStatus'],
       a['reason'],
       a['state'],
     )) {
-      (CaptureState.requesting, _, _, _, _) => '환경 분석을 준비하고 있다.',
-      (CaptureState.idle || CaptureState.error, _, _, _, _) => '환경 분석이 중지됐다.',
-      (_, 'disabled', _, _, _) => '소음 억제가 꺼져 환경 분석을 보류했다.',
+      (CaptureState.requesting, _, _, _, _) => '환경음 수집을 준비하고 있다.',
+      (CaptureState.idle || CaptureState.error, _, _, _, _) => '환경음 수집이 중지됐다.',
+      (_, 'disabled', _, _, _) => '소음 억제가 꺼져 환경음을 수집할 수 없다.',
       (_, 'unavailable', _, _, _)
           when settings['noiseReductionReason'] == 'unsupported_sample_rate' =>
         '오디오 처리 주파수 ${settings['contextSampleRate'] ?? '확인 불가'} Hz는 소음 억제를 지원하지 않는다.',
@@ -104,22 +94,36 @@ class MeterScreen extends StatelessWidget {
       (_, _, 'load_timeout', _, _) => '발화 판별 파일을 불러오는 시간이 초과됐다.',
       (_, _, 'load_failed', _, _) => '발화 판별 파일을 불러오지 못했다.',
       (_, _, 'init_failed', _, _) => '발화 판별기를 준비하지 못했다.',
-      (_, _, 'runtime_failed', _, _) => '발화 판별 중 오류가 발생했다.',
+      (_, _, 'runtime_failed', _, _) ||
       (_, _, _, 'vad_runtime_failed', _) => '발화 판별 중 오류가 발생했다.',
       (_, _, _, 'invalid_analysis', _) => '분석 신호를 확인하지 못했다.',
-      (_, _, _, 'input_gap', _) => '입력 프레임이 끊겨 분석을 다시 준비한다.',
-      (_, _, _, 'processing_settings', _) when processingUnknown =>
-        '브라우저 처리 설정을 확인할 수 없어 환경 잡음 추정과 자동 범위를 보류했다.',
-      (_, _, _, 'processing_settings', _) =>
-        '브라우저 처리가 켜져 있어 환경 잡음 추정과 자동 범위를 보류했다.',
-      (_, _, _, _, 'ready') when a['provenance'] == 'relative_input' =>
-        '상대 입력 분석 중',
-      (_, _, _, _, 'ready') => '환경 분석 중',
-      (_, _, _, _, 'collecting') => '비발화 증거를 수집하고 있다.',
-      (_, _, _, _, 'held') => '잡음 정보가 오래됐거나 불확실해 보류했다.',
-      (_, _, _, _, 'unsupported') => '자동 조절 지원 범위를 초과했다.',
-      _ => '환경 분석 신호를 기다리고 있다.',
+      (_, _, _, 'input_gap', _) => '입력 프레임이 끊겨 환경 기준을 해제했다. 다시 측정한다.',
+      (_, _, _, 'processing_settings', _) => '브라우저 처리 설정으로 환경음 수집을 보류했다.',
+      (_, _, _, 'cancel_failed', 'collecting') =>
+        '취소 요청을 처리하지 못했다. 다시 취소하거나 입력을 중지한다.',
+      (_, _, _, _, 'collecting') => '5초 동안 말하지 않고 주변 소리를 수집한다. 주변 대화도 포함한다.',
+      (_, _, _, _, 'failed') => switch (a['reason']) {
+        'clipping' => '입력 신호가 너무 커서 환경음을 수집하지 못했다.',
+        'insufficient_samples' => '무음이거나 유효한 입력이 부족해 수집하지 못했다.',
+        'unstable_environment' => '주변 소리 변화가 커서 환경 기준을 정하지 못했다.',
+        _ => '환경음을 수집하지 못했다. 다시 측정한다.',
+      },
+      (_, _, _, _, 'ready') when session.effectiveRange.adjusted =>
+        '환경 기준을 고정했다. 다시 측정하기 전까지 유지한다.',
+      (_, _, _, _, 'unavailable') => '현재 입력에서는 환경음을 수집할 수 없다.',
+      _ =>
+        session.canSampleEnvironment
+            ? '주변 환경음 듣기를 누른 뒤 5초 동안 말하지 않는다. 주변 대화도 포함한다.'
+            : '환경음 수집에 필요한 입력을 기다리고 있다.',
     };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = session.scenario!;
+    final a = session.analysis;
+    final range = session.effectiveRange;
+    final analysisStatus = _analysisStatus;
     final controls = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -152,10 +156,49 @@ class MeterScreen extends StatelessWidget {
               ? null
               : session.setNoiseReductionEnabled,
         ),
+        OutlinedButton(
+          key: const Key('sample-environment'),
+          onPressed: session.canSampleEnvironment
+              ? session.sampleEnvironment
+              : null,
+          child: Text(
+            range.adjusted || a['state'] == 'failed' ? '다시 측정' : '주변 환경음 듣기',
+          ),
+        ),
+        if (session.environmentCollecting) ...[
+          const SizedBox(height: 8),
+          LinearProgressIndicator(
+            key: const Key('environment-progress'),
+            value: session.environmentProgress,
+            semanticsLabel: '환경음 수집 진행률',
+          ),
+          Text(
+            '환경음 수집 ${(session.environmentProgress * 100).round()}%',
+            style: const TextStyle(color: muted, fontSize: 14),
+          ),
+          TextButton(
+            key: const Key('cancel-environment'),
+            onPressed: session.canCancelEnvironment
+                ? session.cancelEnvironment
+                : null,
+            child: const Text('수집 취소'),
+          ),
+        ],
+        const SizedBox(height: 8),
         Text(
           analysisStatus,
           textAlign: TextAlign.left,
           style: const TextStyle(color: muted, fontSize: 14),
+        ),
+        if (range.adjusted &&
+            (session.environmentCollecting || a['state'] == 'failed'))
+          const Text(
+            '이전에 측정한 환경 기준을 유지한다.',
+            style: TextStyle(color: muted, fontSize: 14),
+          ),
+        const Text(
+          '환경 참고범위는 실험적 기준이다. 실제 음압이나 검증된 발성 목표가 아니다.',
+          style: TextStyle(color: muted, fontSize: 14),
         ),
         if (a['provenance'] == 'relative_input')
           const Text(
@@ -201,13 +244,20 @@ class MeterScreen extends StatelessWidget {
               Text(
                 session.displayLevel != null
                     ? '발화로 판정된 입력이다. 다른 사람의 소리도 포함될 수 있다.'
+                    : session.environmentCollecting
+                    ? '환경음을 수집하는 동안 발화 막대를 비운다.'
                     : a['meterState'] == 'confirming'
                     ? '발화 판정을 연속 확인하고 있다.'
                     : '발화 판정이 없거나 확인할 수 없어 막대를 비웠다.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: muted, fontSize: 14, height: 1.7),
               ),
-            if (a['reason'] == 'processing_settings' && !processingUnknown)
+            if (a['reason'] == 'processing_settings' &&
+                [
+                  'autoGainControl',
+                  'noiseSuppression',
+                  'echoCancellation',
+                ].any((key) => session.settings[key] == true))
               Text(
                 '전처리 적용 · 막대는 상대 참고값이다.',
                 textAlign: TextAlign.center,
@@ -220,18 +270,13 @@ class MeterScreen extends StatelessWidget {
           liveRegion: true,
           child: Text(
             [
-              if (a['state'] == 'ready') ...[
+              if (!session.environmentCollecting && a['speech'] != null)
                 '발화 판정 ${a['speech'] == 'speech'
                     ? '발화 감지'
                     : a['speech'] == 'nonSpeech'
                     ? '비발화'
                     : '불확실'}',
-                if (a['provenance'] != 'relative_input') ...[
-                  '주변 잡음 추정 ${noise?.toStringAsFixed(1) ?? '—'} dBFS',
-                  '발화 수준 추정 ${voice == null ? '—' : (voice + SessionController.inputLevelOffset).clamp(0, 120).toStringAsFixed(1)}',
-                ],
-                '${a['provenance'] == 'relative_input' ? '상대 입력 참고범위' : '환경 적응 참고범위'} ${visualLower.toStringAsFixed(1)}–${visualUpper.toStringAsFixed(1)}',
-              ],
+              '${range.adjusted ? '고정 참고범위' : '기본 참고범위'} ${visualLower.toStringAsFixed(1)}–${visualUpper.toStringAsFixed(1)}',
               if (value == range.lower - s.referenceLower)
                 if (session.displayLevel case final level?)
                   '참고 범위 비교 ${double.parse(level.toStringAsFixed(1)) < range.lower
@@ -371,50 +416,7 @@ class MeterScreen extends StatelessWidget {
             'runtime_failed' => '실행 오류',
             _ => '확인 불가',
           };
-    final processingUnknown = [
-      'autoGainControl',
-      'noiseSuppression',
-      'echoCancellation',
-    ].any((key) => settings[key] != true && settings[key] != false);
-    final analysisStatus = switch ((
-      session.state,
-      settings['noiseReductionState'],
-      settings['vadStatus'],
-      a['reason'],
-      a['state'],
-    )) {
-      (CaptureState.requesting, _, _, _, _) => '환경 분석을 준비하고 있다.',
-      (CaptureState.idle || CaptureState.error, _, _, _, _) => '환경 분석이 중지됐다.',
-      (_, 'disabled', _, _, _) => '소음 억제가 꺼져 환경 분석을 보류했다.',
-      (_, 'unavailable', _, _, _)
-          when settings['noiseReductionReason'] == 'unsupported_sample_rate' =>
-        '오디오 처리 주파수 ${settings['contextSampleRate'] ?? '확인 불가'} Hz는 소음 억제를 지원하지 않는다.',
-      (_, 'unavailable', _, _, _)
-          when settings['noiseReductionReason'] == 'load_timeout' =>
-        '소음 억제 준비 시간이 초과됐다.',
-      (_, 'unavailable', _, _, _)
-          when settings['noiseReductionReason'] == 'load_failed' =>
-        '소음 억제 파일을 불러오거나 준비하지 못했다.',
-      (_, 'unavailable', _, _, _) => '이 브라우저에서 소음 억제를 준비하지 못했다.',
-      (_, _, 'load_timeout', _, _) => '발화 판별 파일을 불러오는 시간이 초과됐다.',
-      (_, _, 'load_failed', _, _) => '발화 판별 파일을 불러오지 못했다.',
-      (_, _, 'init_failed', _, _) => '발화 판별기를 준비하지 못했다.',
-      (_, _, 'runtime_failed', _, _) => '발화 판별 중 오류가 발생했다.',
-      (_, _, _, 'vad_runtime_failed', _) => '발화 판별 중 오류가 발생했다.',
-      (_, _, _, 'invalid_analysis', _) => '분석 신호를 확인하지 못했다.',
-      (_, _, _, 'input_gap', _) => '입력 프레임이 끊겨 분석을 다시 준비한다.',
-      (_, _, _, 'processing_settings', _) when processingUnknown =>
-        '브라우저 처리 설정을 확인할 수 없어 환경 잡음 추정과 자동 범위를 보류했다.',
-      (_, _, _, 'processing_settings', _) =>
-        '브라우저 처리가 켜져 있어 환경 잡음 추정과 자동 범위를 보류했다.',
-      (_, _, _, _, 'ready') when a['provenance'] == 'relative_input' =>
-        '상대 입력 분석 중',
-      (_, _, _, _, 'ready') => '환경 분석 중',
-      (_, _, _, _, 'collecting') => '비발화 증거를 수집하고 있다.',
-      (_, _, _, _, 'held') => '잡음 정보가 오래됐거나 불확실해 보류했다.',
-      (_, _, _, _, 'unsupported') => '자동 조절 지원 범위를 초과했다.',
-      _ => '환경 분석 신호를 기다리고 있다.',
-    };
+    final analysisStatus = _analysisStatus;
     final inputLabel =
         session.state == CaptureState.running &&
             session.settings['noiseReductionState'] == 'active'

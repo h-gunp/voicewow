@@ -125,7 +125,10 @@ void main() {
         ),
       ),
     );
-    expect(find.textContaining('입력 프레임이 끊겨 분석을 다시 준비한다.'), findsOneWidget);
+    expect(
+      find.textContaining('입력 프레임이 끊겨 환경 기준을 해제했다. 다시 측정한다.'),
+      findsOneWidget,
+    );
     expect(find.byKey(const Key('input-fill')), findsNothing);
     session.dispose();
   });
@@ -163,7 +166,7 @@ void main() {
         ),
       );
       expect(find.byKey(const Key('input-fill')), findsOneWidget);
-      expect(find.textContaining('환경 잡음 추정과 자동 범위를 보류했다.'), findsOneWidget);
+      expect(find.textContaining('브라우저 처리 설정으로 환경음 수집을 보류했다.'), findsOneWidget);
       expect(find.textContaining('전처리 미확인 · 막대는 상대 참고값이다.'), findsNothing);
       session.dispose();
     },
@@ -291,6 +294,8 @@ void main() {
         port.send(
           const AudioEvent.analysis({
             'state': 'ready',
+            'calibrationValid': true,
+            'provenance': 'verified',
             'speech': 'speech',
             'meterState': 'speech',
             'meterDbfs': -40.0,
@@ -318,7 +323,6 @@ void main() {
       );
       await tester.pump();
       expect(find.byKey(const Key('input-fill')), findsOneWidget);
-      expect(find.textContaining('잡음 정보가 오래됐거나 불확실해 보류했다.'), findsOneWidget);
       port.send(
         const AudioEvent.analysis({
           'state': 'collecting',
@@ -328,7 +332,7 @@ void main() {
       );
       await tester.pump();
       expect(find.byKey(const Key('input-fill')), findsNothing);
-      expect(find.text('발화 판정을 연속 확인하고 있다.'), findsOneWidget);
+      expect(find.text('환경음을 수집하는 동안 발화 막대를 비운다.'), findsOneWidget);
       session.dispose();
     },
   );
@@ -404,10 +408,7 @@ void main() {
         ),
       ),
     );
-    expect(
-      find.textContaining('브라우저 처리 설정을 확인할 수 없어 환경 잡음 추정과 자동 범위를 보류했다.'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('브라우저 처리 설정으로 환경음 수집을 보류했다.'), findsOneWidget);
     await tester.ensureVisible(find.text('앱 정보 · 진단'));
     await tester.tap(find.text('앱 정보 · 진단'));
     await tester.pumpAndSettle();
@@ -493,6 +494,8 @@ void main() {
     port.send(
       const AudioEvent.analysis({
         'state': 'ready',
+        'calibrationValid': true,
+        'provenance': 'verified',
         'voiceDbfs': -44.0,
         'noiseDbfs': -60.0,
         'offset': 1.0,
@@ -502,10 +505,10 @@ void main() {
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
-    expect(find.textContaining('환경 적응 참고범위 54.0–76.0'), findsOneWidget);
+    expect(find.textContaining('고정 참고범위 54.0–76.0'), findsOneWidget);
     port.send(const AudioEvent.analysis({'state': 'held'}));
     await tester.pump();
-    expect(find.textContaining('환경 적응 참고범위 54.0–76.0'), findsNothing);
+    expect(find.textContaining('고정 참고범위 54.0–76.0'), findsNothing);
     session.dispose();
   });
 }

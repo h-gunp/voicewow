@@ -1,91 +1,54 @@
-// All thresholds below are experimental; samples are contiguous 10 ms frames.
-const db = p => 10 * Math.log10(p);
-const median = a => { const s = [...a].sort((x,y)=>x-y); return s[Math.floor(s.length/2)]; };
+// Experimental sampling thresholds; each accepted frame contains disjoint 10 ms input.
+const db = power => 10 * Math.log10(power);
 
 export class EnvironmentEstimator {
-  constructor({relative=false} = {}) {
-    this.relative = relative;
-    this.seq = -1; this.pending = []; this.noise = []; this.lastEvidence = -Infinity;
-    this.initial = null; this.smooth = null; this.offset = 0; this.candidate = null;
-    this.post = 0; this.voice = null; this.state = 'collecting';
-    this.evidenceSinceStats = 0;
-    this.transition = false;
+  constructor() {
+    this.seq = -1; this.speech = undefined; this.result = null;
+    this.state = 'idle'; this.reason = null; this.count = 0; this.clipped = 0; this.powers = [];
   }
-  hold() {
-    if (this.relative) { this.initial = null; this.offset = 0; }
-    this.pending = []; this.noise = []; this.smooth = null; this.candidate = null;
-    this.evidenceSinceStats = 0; this.post = 50; this.voice = null; this.state = 'held'; this.transition = false;
+  sample() {
+    if (this.state === 'collecting') return;
+    this.state = 'collecting'; this.reason = null;
+    this.count = 0; this.clipped = 0; this.powers = [];
+  }
+  cancel() {
+    if (this.state !== 'collecting') return;
+    this.state = this.result ? 'ready' : 'idle'; this.reason = null;
+    this.count = 0; this.clipped = 0; this.powers = [];
+  }
+  hold(reason = 'input_gap', state = 'failed') {
+    this.result = null; this.state = state; this.reason = reason;
+    this.count = 0; this.clipped = 0; this.powers = [];
   }
   resetEpoch() {
-    this.hold();
-    this.seq = -1; this.lastEvidence = -Infinity; this.speech = undefined;
+    this.hold(); this.seq = -1; this.speech = undefined;
   }
-  add(frame) {
-    const {seq,power,speech,clipped} = frame;
-    if (!Number.isSafeInteger(seq) || seq <= this.seq) return;
-    if (!Number.isFinite(power) || power < 0 || !['speech','nonSpeech','uncertain'].includes(speech)) throw new RangeError('invalid analysis frame');
-    if (this.seq >= 0 && seq !== this.seq + 1) {
-      if (this.relative) { this.initial = null; this.offset = 0; }
-      this.pending = []; this.noise = []; this.smooth = null; this.candidate = null;
-      this.state = 'held'; this.post = 50; this.transition = false;
+  add({seq,power,speech,clipped}, collect = true) {
+    if (!Number.isSafeInteger(seq) || seq < 0) throw new RangeError('invalid analysis frame');
+    if (seq <= this.seq) return;
+    if (!Number.isFinite(power) || power < 0 || !['speech','nonSpeech','uncertain'].includes(speech) || typeof clipped !== 'boolean') throw new RangeError('invalid analysis frame');
+    if (this.seq >= 0 && seq !== this.seq + 1) this.hold();
+    this.seq = seq; this.speech = clipped ? 'uncertain' : speech;
+    if (this.state !== 'collecting' || !collect) return;
+    this.count++;
+    if (clipped) this.clipped++;
+    else if (power > 0) this.powers.push(power);
+    if (this.count < 500) return;
+    this.powers.sort((a,b)=>a-b);
+    const n = this.powers.length;
+    if (this.clipped >= 50) this.reason = 'clipping';
+    else if (n < 400) this.reason = 'insufficient_samples';
+    else if (db(this.powers[Math.floor(n*.75)]/this.powers[Math.floor(n*.25)]) > 12 + 1e-9) this.reason = 'unstable_environment';
+    else {
+      const lower = this.powers[Math.floor((n-1)/2)], upper = this.powers[Math.floor(n/2)];
+      const power = lower + (upper-lower)/2;
+      const noiseDbfs = db(power);
+      this.result = {noiseDbfs, offset:Math.round(Math.min(3,Math.max(0,(noiseDbfs+60)/10))*10)/10};
     }
-    this.seq = seq;
-    this.speech = clipped ? 'uncertain' : speech;
-    if (speech !== 'nonSpeech' || clipped) {
-      this.pending = []; this.post = 50;
-    } else if (this.post > 0) {
-      this.post--;
-    } else if (seq >= 50) {
-      this.pending.push(frame);
-      if (this.pending.length > 20) this.accept(this.pending.shift());
-    }
-    if (seq - this.lastEvidence > 500 && this.initial !== null) {
-      if (this.relative) { this.initial = null; this.offset = 0; }
-      this.state = 'held'; this.noise = []; this.smooth = null; this.candidate = null; this.transition = false;
-    }
-    this.voice = null;
-    if (!this.relative && speech === 'speech' && !clipped && this.state === 'ready' && this.smooth > 0) {
-      const voice = power - this.smooth;
-      if (voice > 0 && voice / this.smooth >= 2) this.voice = db(voice);
-    }
+    this.state = this.reason ? 'failed' : 'ready';
+    this.powers = [];
   }
-  accept(frame) {
-    this.lastEvidence = frame.seq;
-    this.noise.push(frame);
-    this.evidenceSinceStats++;
-    // One second of eligible silence fits normal pauses; a three-second window
-    // forgets old ambience without mixing speech into the baseline.
-    this.noise = this.noise.filter(x=>frame.seq-x.seq<300);
-    if (this.noise.length < 100 || frame.seq % 10 !== 0) return;
-    const fresh = this.evidenceSinceStats;
-    this.evidenceSinceStats = 0;
-    // Zero input is not measured ambience; never fabricate a dBFS baseline.
-    const values = this.noise.map(x=>x.power).sort((a,b)=>a-b);
-    const q1 = values[Math.floor(values.length*.25)], q3 = values[Math.floor(values.length*.75)];
-    if (q1 <= 0 || db(q3/q1) > 3) { this.state = 'held'; this.candidate = null; this.transition = false; return; }
-    const value = median(values);
-    this.smooth = this.smooth === null ? value : this.smooth + (1-Math.exp(-.1/2))*(value-this.smooth);
-    if (this.initial === null) this.initial = this.smooth;
-    this.state = 'ready';
-    // Saturate at the existing safe adjustment cap instead of reverting to zero.
-    const change = db(this.smooth/this.initial), desired = Math.min(3, Math.max(0, change*.5));
-    // Return to the baseline in steps even when one step is smaller than entry hysteresis.
-    const target = desired <= .25 ? 0 : desired;
-    const difference = target-this.offset;
-    if (Math.abs(difference) <= .25 && !(target === 0 && this.offset > 0)) { this.candidate = null; this.transition = false; return; }
-    if (difference > 0 && difference < .5 && !this.transition) return;
-    const direction = Math.sign(difference);
-    if (!this.candidate || this.candidate.direction !== direction || frame.seq-this.candidate.last > 200) {
-      this.candidate = {direction,start:frame.seq,last:frame.seq,count:1};
-    } else {
-      this.candidate.count += Math.min(fresh, 10);
-    }
-    this.candidate.last = frame.seq;
-    if (this.candidate.count >= 100 && frame.seq-this.candidate.start >= 200) {
-      this.offset = Math.max(0,Math.min(3,this.offset + direction*Math.min(1,Math.abs(difference))));
-      this.transition = true;
-      this.candidate = null;
-    }
+  snapshot() {
+    return {state:this.state,calibrationValid:this.result !== null,progress:this.count/500,noiseDbfs:this.result?.noiseDbfs ?? null,offset:this.result?.offset ?? null,reason:this.reason,speech:this.speech,voiceDbfs:null};
   }
-  snapshot() { return {state:this.state, speech:this.speech, noiseDbfs:this.state === 'ready' && this.smooth > 0 ? db(this.smooth) : null, voiceDbfs:this.voice, offset:this.state === 'ready' ? this.offset : null}; }
 }

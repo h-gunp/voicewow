@@ -1,7 +1,7 @@
 # 단일 소스와 Sites 배포
 
 개발 원본: https://github.com/h-gunp/voicewow
-기존 서비스: https://voicemate-microphone.hongskrr.chatgpt.site
+현재 서비스: https://voicemate-main-20261103.hongskrr.chatgpt.site
 
 GitHub의 소스를 수정하고 검증한 뒤 그 커밋에서 Flutter Web을 빌드한다. Sites 저장소는 배포 산출물을 전달하는 목적이며 별도 기능 개발 원본으로 사용하지 않는다. 양방향 자동 동기화는 아니다.
 
@@ -12,6 +12,8 @@ GitHub의 소스를 수정하고 검증한 뒤 그 커밋에서 Flutter Web을 �
 5. Sites 저장소 루트의 `github-source.json`에 GitHub repository, commit, Flutter version, 그리고 dist의 파일별 SHA-256을 기록한다. 이것은 배포 출처이며 토큰이나 사용자 데이터를 포함하지 않는다.
 6. source helper로 정확한 정적 저장소 상태를 커밋·푸시·패키징한다. 반환된 Sites commit SHA와 archive로 버전을 저장하고 기존 사이트에 배포한다.
 7. GitHub SHA / Sites SHA / Sites 버전·배포 ID / URL / 검증 범위를 로컬 배포 영수증으로 기록한다. 배포 성공 응답과 기존 UI를 확인한다. 실제 마이크·iPhone 검증은 자동·합성 테스트와 구분한다.
+
+Sites의 전체 배포 입력 아카이브 상한은 256MiB다. 발음 ORT 모델은 GitHub의 고정 자산 커밋에서 따로 내려받으므로 `build/web`이나 Sites `dist`에 모델 조각을 포함하지 않는다. 현재 모델 출처와 검증 절차는 [모바일 안정성 기록](mobile-pronunciation-stability.md)에 있다. 사이트 접근 검사에 Cloudflare 403/1010이 반환되면 이를 실기기 실패로 단정하거나 인증 우회로 통과시키지 않고 자동 접속 검증의 제한으로 기록한다.
 
 ## 2026-10-31 통합 범위
 

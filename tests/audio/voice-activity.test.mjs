@@ -5,12 +5,13 @@ import {createVoiceActivity} from '../../apps/client/web/audio/voice-activity.mj
 import {createNoiseMeter} from '../../apps/client/web/audio/noise-reducer.mjs';
 import {EnvironmentEstimator} from '../../apps/client/web/audio/environment-estimator.mjs';
 
-for (const vadPositive of [true, false]) test(`low RNNoise scores with VAD=${vadPositive} only calibrate agreed background`, async () => {
-  const estimators = [new EnvironmentEstimator(), new EnvironmentEstimator({relative:true})];
+for (const vadPositive of [true, false]) test(`low RNNoise scores with VAD=${vadPositive} preserve speech decisions while manual sampling includes ambient conversation`, async () => {
+  const estimator = new EnvironmentEstimator();
+  estimator.sample();
   const frames = [];
   const meter = await createNoiseMeter(await readFile(new URL('../../apps/client/web/audio/vendor/rnnoise/rnnoise.wasm', import.meta.url)), 48000, {
     vad: {process:()=>vadPositive, dispose(){}},
-    onAnalysis: frame => { frames.push(frame); for (const estimator of estimators) estimator.add(frame); },
+    onAnalysis: frame => { frames.push(frame); estimator.add(frame); },
   });
   let seed = 12345;
   const noise = Float32Array.from({length:48000*8}, () => {
@@ -19,16 +20,11 @@ for (const vadPositive of [true, false]) test(`low RNNoise scores with VAD=${vad
   });
   try { meter.push(noise); } finally { meter.dispose(); }
   assert.ok(frames.some(frame=>frame.score<.2),'real RNNoise must exercise low-score frames');
-  for (const estimator of estimators) {
-    if (vadPositive) {
-      assert.equal(frames.filter(frame=>frame.speech==='nonSpeech').length,0,'model disagreement is not background evidence');
-      assert.equal(estimator.initial,null);
-      assert.equal(estimator.noise.length,0);
-    } else {
-      assert.ok(estimator.initial>0,'agreed stable background still establishes a baseline');
-      assert.equal(estimator.snapshot().state,'ready');
-    }
-  }
+  if (vadPositive) assert.equal(frames.filter(frame=>frame.speech==='nonSpeech').length,0,'model disagreement remains uncertain');
+  else assert.ok(frames.some(frame=>frame.speech==='nonSpeech'));
+  assert.equal(estimator.snapshot().state,'ready');
+  assert.equal(estimator.snapshot().calibrationValid,true);
+  assert.ok(Number.isFinite(estimator.snapshot().noiseDbfs));
 });
 
 test('real VAD accepts 10ms silence and rejects invalid input and use after disposal', async () => {

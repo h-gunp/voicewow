@@ -19,33 +19,30 @@ void main() {
     await session.start();
     expect(port.starts, 0);
   });
-  test(
-    'fresh speech remains visible while noise is collecting or held',
-    () async {
-      session.selectScenario(Scenario.values.first);
-      await session.start();
-      port.send(const AudioEvent.state(CaptureState.running));
-      for (final noiseState in ['collecting', 'held', 'unsupported']) {
-        port.send(
-          AudioEvent.analysis({
-            'state': noiseState,
-            'speech': 'speech',
-            'meterState': 'speech',
-            'meterDbfs': -40.0,
-          }),
-        );
-        expect(session.displayLevel, 74.0);
-      }
+  test('fresh speech remains visible outside manual sampling', () async {
+    session.selectScenario(Scenario.values.first);
+    await session.start();
+    port.send(const AudioEvent.state(CaptureState.running));
+    for (final noiseState in ['idle', 'failed', 'unavailable']) {
       port.send(
-        const AudioEvent.analysis({
-          'state': 'held',
-          'reason': 'analysis_stale',
-          'meterState': 'unavailable',
+        AudioEvent.analysis({
+          'state': noiseState,
+          'speech': 'speech',
+          'meterState': 'speech',
+          'meterDbfs': -40.0,
         }),
       );
-      expect(session.displayLevel, isNull);
-    },
-  );
+      expect(session.displayLevel, 74.0);
+    }
+    port.send(
+      const AudioEvent.analysis({
+        'state': 'held',
+        'reason': 'analysis_stale',
+        'meterState': 'unavailable',
+      }),
+    );
+    expect(session.displayLevel, isNull);
+  });
   test(
     'meter uses only a ready speech frame and clears on every unsafe state',
     () async {

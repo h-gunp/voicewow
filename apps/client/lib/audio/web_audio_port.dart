@@ -12,6 +12,8 @@ extension type _Options._(JSObject _) implements JSObject {
 }
 extension type _Capture(JSObject _) implements JSObject {
   external JSPromise<JSAny?> start(JSBoolean noiseReductionEnabled);
+  external JSPromise<JSAny?> sampleEnvironment();
+  external JSPromise<JSAny?> cancelEnvironment();
   external JSPromise<JSAny?> stop();
 }
 
@@ -78,6 +80,17 @@ class WebAudioPort implements AudioPort {
       return;
     }
     await _capture!.start(noiseReductionEnabled.toJS).toDart;
+  }
+
+  @override
+  Future<void> sampleEnvironment() async {
+    if (_capture == null) throw StateError('unsupported');
+    await _capture!.sampleEnvironment().toDart;
+  }
+
+  @override
+  Future<void> cancelEnvironment() async {
+    await _capture?.cancelEnvironment().toDart;
   }
 
   @override
