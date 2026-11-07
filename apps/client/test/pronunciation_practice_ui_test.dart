@@ -16,6 +16,7 @@ class FakePronunciationRecorder implements PronunciationRecorder {
   Completer<List<String>>? pending;
   Completer<void>? startPending;
   String? failure;
+  String? playbackFailure;
   void Function()? limit;
   List<String> phones = [
     'M',
@@ -58,6 +59,7 @@ class FakePronunciationRecorder implements PronunciationRecorder {
   @override
   Future<void> play() async {
     plays++;
+    if (playbackFailure != null) throw StateError(playbackFailure!);
   }
 
   @override
@@ -232,6 +234,34 @@ void main() {
       await tap(tester, 'pronunciation-replay');
       await tester.pumpAndSettle();
       expect(recorder.plays, 1);
+    },
+  );
+
+  testWidgets(
+    'playback failure clears discarded recording before model preparation retry',
+    (tester) async {
+      final recorder = FakePronunciationRecorder()
+        ..playbackFailure = '녹음을 재생하지 못했다.';
+      await pumpPractice(tester, recorder);
+      await tap(tester, 'pronunciation-prepare');
+      await tester.pumpAndSettle();
+      await tap(tester, 'pronunciation-mic');
+      await tap(tester, 'pronunciation-mic');
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('pronunciation-replay')),
+        180,
+      );
+      await tap(tester, 'pronunciation-replay');
+      await tester.pumpAndSettle();
+      expect(recorder.cancels, 1);
+      expect(find.byKey(const Key('pronunciation-replay')), findsNothing);
+      expect(find.byKey(const Key('pronunciation-observed')), findsNothing);
+      await tap(tester, 'pronunciation-prepare');
+      await tester.pumpAndSettle();
+      expect(recorder.prepares, 2);
+      expect(find.byKey(const Key('pronunciation-replay')), findsNothing);
+      expect(tester.takeException(), isNull);
     },
   );
 

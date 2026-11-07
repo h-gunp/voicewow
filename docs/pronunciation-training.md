@@ -10,6 +10,11 @@
 표현하지 않는다. 실제 브라우저·Android 기기의 마이크 동작과 음향 정확도는
 아직 검증되지 않았다.
 
+2026-11-07 사용자는 iPhone 16 Pro의 Safari에서 모델 다운로드 완료 뒤 마이크를
+누르면 페이지가 새로고침된다고 보고했다. 메모리 중복을 줄이는 변경과 로컬 측정,
+배포 파일 요구사항은 [모바일 발음 안정성 기록](mobile-pronunciation-stability.md)에 있다.
+OS 종료 로그나 변경 후 실기기 재현 결과는 확보하지 않았으므로 원인과 해결을 확정하지 않는다.
+
 ## 사용자 흐름
 
 - **발음 연습:** 단어 / 기초 문장 / 확장 문장 / 비즈니스 문장에서 하위 분류와
@@ -24,6 +29,8 @@
 최초 약 356MB 다운로드 안내와 준비 진행 상태를 표시한다. 준비가 끝난 뒤
 마이크를 누르면 녹음을 시작하고, 다시 누르거나 20초가 지나면 마지막 PCM
 샘플까지 받아 기기 안에서 분석한다. 준비나 화면 진입만으로 마이크를 열지 않는다.
+다운로드 100% 뒤에도 무결성 검사와 런타임 초기화가 남을 수 있다. 이 단계는
+‘기기 안에서 발음 모델을 여는 중’으로 표시하며 엔진 준비가 끝난 뒤에만 녹음을 허용한다.
 
 결과는 ‘인식된 내 발음’과 참고 발음을 함께 표시한다. 녹색은 비교 가능한
 음소의 일치, 빨간색과 밑줄은 차이, 회색은 비교 보류다. ‘기준 께 → 인식 떼’,
@@ -33,6 +40,8 @@
 중지·뒤로가기·탭 및 기능 이동·앱 이탈은 녹음과 분석을 취소하고 늦은 응답을
 무시한다. 새 녹음·화면 종료 때 이전 음성·음소·비교 결과를 정리한다. 북마크와
 개인 문장은 기기 또는 해당 브라우저에 저장하며 로그인·서버 동기화는 없다.
+녹음 재생 등에서 오류가 나 취소 단계로 들어가면 이전 결과도 비운다. 취소로
+폐기된 녹음을 이전 결과 화면에서 다시 재생할 수 있는 상태로 남기지 않는다.
 
 ## 콘텐츠와 발음 변환 범위
 
@@ -87,7 +96,17 @@ Web 경로를 사용한다. Android는 기존 16kHz 모노 녹음과 Kotlin ONNX
 모델은 Hugging Face의 공개 `chegrowk/ko-phone-int8` revision
 `dbb9c196f3e5e72d41c8ce2b63e6d0c91a011b70`이다. ONNX 가중치는 356,129,122바이트이며
 SHA-256은 `c1ef511e4bac127e884edb013b16fae9e0d3d54d792039417aa3cf4b48e8a134`다.
-최초 준비 때 공개 모델과 설정을 다운로드하고 크기·해시를 확인한 뒤 캐시한다.
+Android와 기본 spike는 이 ONNX 파일을 사용한다. 제품 웹은 같은 가중치의 고정 ORT
+포맷을 사용한다. ORT 파일은 356,216,776바이트이며 SHA-256은
+`a280f2679f08c809ae3c5ad55abe15dc78803e06143cc9b485c143612652765e`다.
+추가 양자화·학습·텍스트 ASR 교체는 하지 않았다.
+
+제품 웹은 설정·음소 사전을 고정 Hugging Face revision에서 받고, ORT 모델은 같은
+사이트의 `/pronunciation/models/ko-phone-int8.ort.part00`부터 `.part21`까지 22개
+정적 파일로 받는다. 조각별 최대 크기는 16MiB다. 전체 크기·SHA-256을 확인한 뒤
+캐시하며 캐시 재사용 때도 다시 검증한다. 해시 계산과 캐시 쓰기는 256KiB 단위로
+처리한다. 발음 전용 ONNX Runtime Web 1.23.2 JS는 직접 참조하는 모델 버퍼를
+세션 수명 동안 보존하며, 소유권을 넘긴 입력 버퍼는 지원 환경에서 WASM 복사 뒤 해제한다.
 웹 캐시를 쓸 수 없으면 이번 실행에 내려받고 다음 실행에 다시 받을 수 있음을 안내한다.
 원모델·변환본·라이선스는 `web/pronunciation/THIRD-PARTY-NOTICES.md`에 기록했다.
 
@@ -139,6 +158,8 @@ SpeechSynthesis의 로컬 한국어 음성, Android는 설치된 오프라인 �
 저장소의 .flutter-version에 맞는 Flutter 3.47.7을 사용한다.
 설치된 Flutter가 PATH에 없다면 아래 flutter를 SDK의 절대 경로로 바꾼다.
 
+    python tools/pronunciation-spike/prepare-web-model.py
+    python tools/pronunciation-spike/prepare-web-model.py --check
     cd apps/client
     flutter pub get
     flutter analyze
@@ -146,9 +167,23 @@ SpeechSynthesis의 로컬 한국어 음성, Android는 설치된 오프라인 �
     flutter build web --release --no-web-resources-cdn
     flutter run -d chrome
 
-웹 배포 산출물은 apps/client/build/web 전체다. 현재 사용하는 TTS 플러그인은
+저장소 루트에서 모델 준비를 먼저 실행한다. 준비 도구는 고정 ORT 원본을 검증해
+22개 조각으로 배치한다. 로컬 원본이 없으면 공개 사이트의 같은 고정 조각을 받는다.
+자동 포맷 재변환은 하지 않는다. 고정 조각이 최초 게시되기 전에는 검증된 로컬 ORT
+원본이 필요하다. `scripts/start-web.ps1 -Build`도 Flutter 빌드 전에 이 준비를 수행한다.
+
+웹 배포 산출물은 `apps/client/build/web` 전체다. 모델 조각은 Git에서 제외되지만
+**정적 배포에는 22개 모두 포함해야 한다.** 소스 파일만 배포하거나 모델 준비 없이
+빌드한 산출물을 배포하면 웹 모델을 준비할 수 없다. 세부 검증 절차는
+[모바일 발음 안정성 기록](mobile-pronunciation-stability.md)에 있다. 현재 사용하는 TTS 플러그인은
 Wasm dry-run 경고가 있어, 검증 대상은 기본 JavaScript 웹 빌드다.
-위 명령은 재현 절차다. 제품 연결 뒤 Flutter 검사 303개, Node 제품 회귀 339개와
+위 명령은 재현 절차다. 2026-11-07 모바일 안정성 변경 후 Node 검사 407개와 Flutter 검사
+304개가 통과했으며 `flutter analyze`에서 문제가 없었다. JavaScript release 웹 빌드도
+성공했다. 메모리 측정과 실제 기기 검증 범위는 [모바일 발음 안정성 기록](mobile-pronunciation-stability.md)에 있다.
+이 결과는 공개 배포나 iPhone Safari의 재로딩 해결을 확인한 기록이 아니다.
+
+아래 수치는 모바일 안정성 변경 전 제품 연결 당시 기록이다.
+당시 Flutter 검사 303개, Node 제품 회귀 339개와
 spike 회귀 36개 통과를 확인했으며 `flutter analyze`에서 문제가 없었다.
 390px, 320px·글자 200%, 1280px의 합성 위젯 렌더링 3개를 통과하고 이미지도
 확인했다. 합성 녹음기를 사용한 화면 검증이며 실제 브라우저 마이크 검증이 아니다.

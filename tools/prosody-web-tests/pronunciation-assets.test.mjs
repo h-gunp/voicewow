@@ -66,3 +66,45 @@ test('transfer Content-Length does not override validated decompressed artifact 
   assert.deepEqual(await f.load(asset), bytes);
   assert.equal(f.saved.length, 1);
 });
+
+test('cache writes use pull streams instead of copying the complete model buffer', async t => {
+  const BaseResponse = globalThis.Response;
+  const bodies = [];
+  t.mock.method(globalThis, 'Response', class extends BaseResponse {
+    constructor(body, options) { super(body, options); bodies.push(body); }
+  });
+  t.mock.method(crypto.subtle, 'digest', () => { throw new Error('Whole-buffer digest is forbidden'); });
+  const f = fixture(t);
+  assert.deepEqual(await f.load(asset), bytes);
+  assert.ok(bodies.at(-1) instanceof ReadableStream);
+});
+
+test('web ORT parts load sequentially from the same site and retain whole-model verification', async t => {
+  const f = fixture(t);
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push({ url: String(url), options });
+    return new Response(calls.length === 1 ? bytes.subarray(0,2) : bytes.subarray(2));
+  });
+  const model = { ...asset, path: 'ko-phone-int8.ort', partBytes: 2 };
+  assert.deepEqual(await f.load(model), bytes);
+  assert.ok(calls[0].url.endsWith('/pronunciation/models/ko-phone-int8.ort.part00'));
+  assert.ok(calls[1].url.endsWith('/pronunciation/models/ko-phone-int8.ort.part01'));
+  assert.equal(calls[0].options.body, undefined);
+  assert.deepEqual(await f.load(model), bytes);
+  assert.equal(calls.length, 2);
+});
+
+test('a missing web model part fails clearly without falling back to the large ONNX runtime', async t => {
+  const f = fixture(t);
+  t.mock.method(globalThis, 'fetch', async () => new Response('missing', { status: 404 }));
+  await assert.rejects(f.load({ ...asset, path: 'ko-phone-int8.ort', partBytes: 2 }), /모델.*배포/);
+  assert.equal(f.saved.length, 0);
+});
+
+test('incorrect part contents never enter the verified model cache', async t => {
+  const f = fixture(t);
+  t.mock.method(globalThis, 'fetch', async () => new Response(Uint8Array.of(9)));
+  await assert.rejects(f.load({ ...asset, path: 'ko-phone-int8.ort', partBytes: 1 }), /해시/);
+  assert.equal(f.saved.length, 0);
+});

@@ -1,0 +1,17 @@
+{
+  "package": "onnxruntime-web",
+  "version": "1.23.2",
+  "upstreamDistUrl": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.2/dist/ort.wasm.min.mjs",
+  "upstreamSourceUrl": "https://github.com/microsoft/onnxruntime/blob/v1.23.2/js/web/lib/wasm/wasm-core-impl.ts",
+  "upstreamLocalFile": "apps/client/web/prosody/vendor/onnx/ort.wasm.min.mjs",
+  "upstreamSha256": "69751720f611e37d1ce2fa3c6ebaa80f949014752636c5f8887a63d40feadcc7",
+  "patchedSha256": "583c6a7bae7abc378c8c74087e84017f36d59a537dc572769ac34af0fb122d63",
+  "generator": "tools/pronunciation-spike/patch-runtime.mjs",
+  "patchScope": "Retain WASM model bytes for successful direct-initializer sessions; free once on release, including failed cleanup; optionally consume an exclusively owned whole input after copying to WASM; ordinary sessions keep immediate-free behavior.",
+  "consumeModelBytesContract": "extra.session.voicemate_consume_model_bytes=\"1\" promises sole ownership of the supplied model buffer after validation and completed cache writes. Consumption also requires use_ort_model_bytes_for_initializers=\"1\", an entire nonshared ArrayBuffer view, and working ArrayBuffer.transfer. The input may be detached even if later session creation fails. Shared/subarray inputs and unsupported transfer retain the existing path.",
+  "license": "MIT",
+  "licenseSha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c",
+  "sharedWasmAssets": "../../../prosody/vendor/onnx/",
+  "thirdPartyNotices": "../../../prosody/vendor/onnx/ThirdPartyNotices.txt",
+  "notes": "Pronunciation-only JavaScript runtime. Set env.wasm.wasmPaths explicitly to the shared upstream WASM directory. No WASM binary changes or duplicated weights."
+}

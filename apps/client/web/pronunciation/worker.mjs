@@ -1,4 +1,4 @@
-import { createPhoneEngine } from './phone-engine.mjs';
+import { createPhoneEngine, WEB_MODEL_ASSET } from './phone-engine.mjs';
 import { createModelLoader } from './model-loader.mjs';
 
 let engine = null, busy = false;
@@ -9,7 +9,8 @@ self.onmessage = async event => {
   busy = true;
   try {
     if (type === 'prepare') {
-      engine ??= await createPhoneEngine({ loadAsset: createModelLoader(message => self.postMessage({ type: 'progress', id, message })) });
+      const onProgress = message => self.postMessage({ type: 'progress', id, message });
+      engine ??= await createPhoneEngine({ loadAsset: createModelLoader(onProgress), modelAsset: WEB_MODEL_ASSET, onProgress });
       self.postMessage({ type: 'ready', id });
     } else {
       if (!engine) throw new Error('발음 모델을 먼저 준비해야 한다.');

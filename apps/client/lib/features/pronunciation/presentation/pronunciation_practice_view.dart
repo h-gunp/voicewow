@@ -100,6 +100,7 @@ class _PronunciationPracticeViewState extends State<PronunciationPracticeView>
       RegExp(r'^(Bad state: |Exception: |StateError: )'),
       '',
     );
+    result = null;
     _set(_Phase.cancelling, message);
     unawaited(
       widget.recorder.cancel().whenComplete(() {

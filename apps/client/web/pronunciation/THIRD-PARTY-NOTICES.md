@@ -7,8 +7,22 @@ The application downloads public model assets; microphone audio and recognition 
 - Both pinned model cards declare Apache-2.0. The downloaded conversion's license is included in `LICENSE-model.txt`.
 - The conversion author describes ONNX opset 17 and dynamic per-channel int8 quantization of MatMul. This application uses the converted assets without modifying model weights.
 - Weight file: 356,129,122 bytes; SHA-256 `c1ef511e4bac127e884edb013b16fae9e0d3d54d792039417aa3cf4b48e8a134`. Configuration and vocabulary hashes are fixed in `phone-engine.mjs`.
-- ONNX Runtime Web is reused from `../prosody/vendor/onnx/`; its existing license and third-party notices remain there.
+- 발음 기능은 ONNX Runtime Web 1.23.2의 전용 JS 런타임인 `vendor/onnx/ort.wasm.min.mjs`를 사용한다. 수정하지 않은 WASM 모듈·바이너리는 `../prosody/vendor/onnx/`에서 공유하며 기존 라이선스와 제3자 고지는 해당 디렉터리에 남아 있다.
 
 Original-work citation from the conversion card: Yeo, E., Ryu, H., Lee, J., Kim, S., & Chung, M. (2023). Comparison of L2 Korean pronunciation error patterns from five L1 backgrounds by using automatic phonetic transcription. Proceedings of the 20th International Congress of Phonetic Sciences, pp. 2696–2700.
 
 The original model's reported metric is not VoiceMate accuracy. Browser/device performance and pronunciation accuracy require separate validation.
+
+## 웹 ORT 산출물과 런타임 출처
+
+제품 웹의 `ko-phone-int8.ort`는 위 고정 ONNX 가중치를 Python ONNX Runtime 1.31.0의 extended 최적화로 직렬화한 파일이다. 추가 양자화나 학습은 하지 않았다. 크기는 356,216,776바이트이고 SHA-256은 `a280f2679f08c809ae3c5ad55abe15dc78803e06143cc9b485c143612652765e`다. 기존 모델의 Apache-2.0 고지와 원저자 표기를 유지한다.
+
+이 고정 파일은 `models/ko-phone-int8.ort.part00`부터 `.part21`까지 16MiB 이하의 22개 조각으로 같은 사이트에 배포한다. 준비 도구는 `tools/pronunciation-spike/prepare-web-model.py`이며 전체 크기·결합 해시를 검증한다. 기본 spike와 Android는 기존 ONNX 파일을 사용한다.
+
+발음 전용 JS 런타임의 upstream은 [onnxruntime-web 1.23.2 배포 파일](https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.2/dist/ort.wasm.min.mjs)과 [WASM 세션 구현](https://github.com/microsoft/onnxruntime/blob/v1.23.2/js/web/lib/wasm/wasm-core-impl.ts)이다. MIT 라이선스는 `vendor/onnx/LICENSE.txt`, 원본·수정본 해시와 패치 범위는 `vendor/onnx/source.json`에 있다. 원본 JS의 SHA-256은 `69751720f611e37d1ce2fa3c6ebaa80f949014752636c5f8887a63d40feadcc7`, 수정본은 `583c6a7bae7abc378c8c74087e84017f36d59a537dc572769ac34af0fb122d63`다.
+
+`tools/pronunciation-spike/patch-runtime.mjs`가 이 전용 런타임을 재현한다. 패치는 직접 참조하는 WASM 모델 버퍼를 세션 종료까지 보존하고 한 번만 해제하며, 명시적으로 소유권을 넘긴 전체 입력 버퍼는 지원 환경에서 WASM 복사 뒤 detach한다. 일반 세션의 즉시 해제 경로와 공유 WASM 바이너리는 유지한다. 부분 뷰·공유 버퍼·미지원 환경에는 입력 해제를 적용하지 않는다. 로컬 공개 WAV 결과 일치와 메모리 측정은 실제 브라우저·기기·발음 정확도 검증과 구분한다.
+
+## Bounded-memory integrity checks
+
+`vendor/hash-wasm/sha256.umd.min.js` is the unmodified SHA-256 bundle from hash-wasm 4.12.0 (MIT), https://github.com/Daninet/hash-wasm. The npm tarball integrity and vendored file SHA-256 values are recorded in `vendor/hash-wasm/source.json`; the license is adjacent. It replaces whole-buffer WebCrypto hashing with incremental hashing and requires no external script request at runtime.

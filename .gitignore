@@ -11,3 +11,4 @@
 node_modules/
 __pycache__/
 *.log
+/apps/client/web/pronunciation/models/*.part[0-9][0-9]

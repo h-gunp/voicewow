@@ -1,0 +1,19 @@
+{
+  "package": "hash-wasm",
+  "version": "4.12.0",
+  "license": "MIT",
+  "tarball": "https://registry.npmjs.org/hash-wasm/-/hash-wasm-4.12.0.tgz",
+  "integrity": "sha512-+/2B2rYLb48I/evdOIhP+K/DD2ca2fgBjp6O+GBEnCDk2e4rpeXIK8GvIyRPjTezgmWn9gmKwkQjjx6BtqDHVQ==",
+  "files": [
+    {
+      "file": "sha256.umd.min.js",
+      "bytes": 18616,
+      "sha256": "ed7f5896b41aba98909ab143264c5b2ae5c81abf2e47f08dd2d1c0d02ce623de"
+    },
+    {
+      "file": "LICENSE",
+      "bytes": 1630,
+      "sha256": "c14dea172f72f2714284a0ac2ab1b00b5352a01409d58255a46227ffc541debd"
+    }
+  ]
+}

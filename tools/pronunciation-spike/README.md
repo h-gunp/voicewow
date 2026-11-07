@@ -10,7 +10,9 @@
 
 제품 웹 구현은 `apps/client/web/pronunciation/`에 있다. 이 도구의 `phone-engine.mjs`, `phones.mjs`, `recording.mjs`, `audio.mjs`는 제품 모듈을 재수출하고 `client.mjs`는 제품 클라이언트에 spike의 로컬 Worker를 연결하여 같은 코드를 검사한다. Android는 같은 고정 모델·사전·CTC 규칙의 Kotlin ONNX 엔진으로 같은 음소 계약을 반환한다. 네이티브 구현은 Android 전용이며 다른 네이티브 플랫폼은 미지원 처리한다.
 
-제품 웹의 첫 준비는 공개 Hugging Face의 고정 revision 파일을 내려받아 크기·해시를 검사하고 캐시한다. 아래 spike 서버는 미리 받은 로컬 파일을 제공하므로 네트워크 경로가 다르다. 어느 경로도 사용자 음성·선택 문장·인식 결과를 외부 분석 서버에 업로드하는 API를 사용하지 않는다. 제품 예시 듣기는 로컬로 확인된 한국어 TTS만 선택하며 원격 음성으로 대체하지 않는다. 실제 기기에서 네트워크 차단 후 흐름과 외부 요청 부재를 관찰하는 검증은 남아 있다.
+제품 웹의 첫 준비는 고정 Hugging Face revision의 설정·음소 사전과 같은 사이트에 배포한 ORT 모델 조각 22개를 내려받아 크기·해시를 검사하고 캐시한다. ORT는 기존 ONNX와 같은 가중치의 포맷 변환이며 추가 양자화나 텍스트 ASR 교체가 아니다. 아래 spike 서버와 기본 `measure.mjs`는 미리 받은 기존 ONNX 파일을 사용한다. 따라서 기본 spike 측정만으로 제품 웹의 ORT 로더·메모리 경로를 검증했다고 판단하지 않는다. 어느 경로도 사용자 음성·선택 문장·인식 결과를 외부 분석 서버에 업로드하는 API를 사용하지 않는다. 제품 예시 듣기는 로컬로 확인된 한국어 TTS만 선택하며 원격 음성으로 대체하지 않는다. 실제 기기에서 네트워크 차단 후 흐름과 외부 요청 부재를 관찰하는 검증은 남아 있다.
+
+제품 웹 빌드 전에는 저장소 루트에서 `python tools/pronunciation-spike/prepare-web-model.py`를 실행하고 `--check`로 검증한다. 도구는 검증된 고정 ORT 원본을 16MiB 이하의 조각으로 배치하며, 원본이 없으면 공개 사이트의 고정 조각을 받는다. 조각은 Git에서 제외되지만 `apps/client/build/web/pronunciation/models/`에 복사된 22개 파일을 정적 배포에 모두 포함해야 한다. 모델 준비를 생략한 소스 전용 배포는 지원하지 않는다. 고정 해시와 최초 게시 조건은 [모바일 발음 안정성 기록](../../docs/mobile-pronunciation-stability.md)에 있다.
 
 ## 실행
 
@@ -55,6 +57,8 @@ python tools/pronunciation-spike/serve.py --port 8093
 
 ## 검사와 산출물
 
+2026-11-07 모바일 안정성 변경 후 Node 검사 407개와 Flutter 검사 304개가 통과했고 `flutter analyze`에서 문제가 없었다. JavaScript release 웹 빌드도 성공했다. 공개 WAV 2개를 새 세션 2개에서 총 5회 추론한 ORT·입력 해제 경로는 최대 RSS 912.45MiB였으며 기준 ONNX 경로의 1221.52MiB와 비교했다. logits 해시·음소·표시·프레임이 일치했다. 20초 반복 연결 입력은 최대 RSS 852.82MiB·추론 31.955초였다. 이는 로컬 Node 자원 검사이며 모바일 마이크나 자연 발화 정확도 검증이 아니다. 상세 근거는 [모바일 발음 안정성 기록](../../docs/mobile-pronunciation-stability.md)에 있다.
+
 ```powershell
 node --test tools/pronunciation-spike/*.test.mjs
 python tools/pronunciation-spike/serve_test.py
@@ -67,7 +71,7 @@ node tools/pronunciation-spike/measure.mjs
 
 초기 spike 당시 기록은 새 Node 검사 36개, 당시 기존 검사를 포함한 355개, Python 서버 검사 10개 통과다. 다운로드·측정 self-check와 실제 엔진의 동시 요청·종료 경계 4개도 확인했다. 이 수치는 현재 제품 회귀 검사 총계가 아니다.
 
-제품 연결 뒤 Flutter 검사 303개, Node 제품 회귀 339개와 spike 회귀 36개 통과를 확인했으며 `flutter analyze`에서 문제가 없었다. 390px, 320px·글자 200%, 1280px의 합성 위젯 렌더링 3개도 통과하고 이미지를 확인했다. Kotlin 격리 컴파일과 PCM·CTC 관련 JVM 검사 4개를 통과했지만 전체 APK 빌드는 `No Android SDK found`로 완료하지 못했다. JavaScript release 웹 빌드는 54.9초에 성공했으며 기존 `flutter_tts`의 Wasm dry-run 경고만 남았다.
+모바일 안정성 변경 전 제품 연결 당시에는 Flutter 검사 303개, Node 제품 회귀 339개와 spike 회귀 36개 통과를 확인했으며 `flutter analyze`에서 문제가 없었다. 390px, 320px·글자 200%, 1280px의 합성 위젯 렌더링 3개도 통과하고 이미지를 확인했다. Kotlin 격리 컴파일과 PCM·CTC 관련 JVM 검사 4개를 통과했지만 전체 APK 빌드는 `No Android SDK found`로 완료하지 못했다. JavaScript release 웹 빌드는 54.9초에 성공했으며 기존 `flutter_tts`의 Wasm dry-run 경고만 남았다. 이 수치는 현재 변경의 최종 검사 총계가 아니다.
 
 기존 제품 8092 서버의 `/?feature=pronunciation`, `/pronunciation/bridge.mjs`, `/main.dart.js`가 HTTP 200을 반환했고 `main.dart.js`의 응답 해시는 새 로컬 빌드와 일치했다. 새 서버를 시작하지 않았으며 이 HTTP 확인은 브라우저 마이크 실행이나 음향 검증이 아니다.
 
@@ -78,5 +82,7 @@ node tools/pronunciation-spike/measure.mjs
 ## 남은 검증
 
 현재 상태는 **로컬 모델 추론과 제품의 녹음·비교 흐름 구현, 실제 음향 정확도 미검증**이다. Flutter 목록·개인 문장·복습의 상세 화면 연결과 Android 구현은 이미 진행했으므로 향후 구현으로 나열하지 않는다.
+
+사용자는 iPhone 16 Pro Safari에서 모델 다운로드 완료 뒤 마이크를 누르면 페이지가 새로고침된다고 보고했다. 로더 중복 버퍼와 런타임 모델 보관을 줄인 로컬 측정은 [모바일 발음 안정성 기록](../../docs/mobile-pronunciation-stability.md)에 분리했다. OS 종료 로그와 변경 후 실기기 검증이 없어 메모리 문제를 확정 원인으로 쓰거나 Safari 문제가 해결됐다고 기록하지 않는다.
 
 사용자가 완성된 화면에서 `께/떼`, `써/떠`, 받침·연음, 허용 변이, 삽입·누락을 실제로 읽은 표본과 잡음을 구별하는 평가를 수행해야 한다. 실제 기기의 권한·마이크·녹음 재생, 5초·20초 추론 시간과 메모리, 취소·이탈·캐시 재사용, 네트워크 차단 후 동작도 별도 확인 대상이다. Android의 APK 빌드와 실제 기기 검증은 웹 또는 Node 실행 성공과 구분한다.
