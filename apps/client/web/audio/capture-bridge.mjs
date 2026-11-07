@@ -59,6 +59,26 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
     s.estimator.hold(reason,state);
     publishEnvironment(s);
   }
+  async function waitForRunningContext(s, resumed) {
+    if (s.context.state !== 'running') {
+      onEvent({type:'state',state:'requesting',reason:'context_resuming'});
+      // Permission and audio-session changes can interrupt an earlier successful resume.
+      try { resumed = Promise.resolve(s.context.resume()).then(() => null, error => error); }
+      catch { throw failure('context_resume_failed'); }
+    }
+    const schedule = platform.setTimeout || globalThis.setTimeout;
+    const clear = platform.clearTimeout || globalThis.clearTimeout;
+    let resumeTimer, cancelResume;
+    const timeout = new Promise(resolve => { resumeTimer = schedule(() => resolve(failure('context_resume_timeout')), 5000); });
+    const cancelled = new Promise(resolve => { cancelResume = () => resolve(failure('cancelled')); s.abort.signal.addEventListener('abort',cancelResume,{once:true}); });
+    if (s.abort.signal.aborted) cancelResume();
+    let resumeError;
+    try { resumeError = await Promise.race([resumed, timeout, cancelled]); }
+    finally { clear(resumeTimer); s.abort.signal.removeEventListener('abort',cancelResume); }
+    if (!current(s)) return;
+    if (resumeError) throw failure(resumeError.captureReason === 'context_resume_timeout' ? 'context_resume_timeout' : 'context_resume_failed');
+    if (s.context.state !== 'running') throw failure('context_not_running');
+  }
   async function prepareNoiseNode(s) {
     const loading = new AbortController();
     const cancel = () => loading.abort();
@@ -144,19 +164,8 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
         s.deviceId = readTrackSettings(track).deviceId || null;
         listen(s,track,'mute',()=>void end(s,'error','input_muted'));
         listen(s,track,'ended',()=>void end(s,'error','input_ended'));
-        if (s.context.state !== 'running') onEvent({type:'state',state:'requesting',reason:'context_resuming'});
-        const schedule = platform.setTimeout || globalThis.setTimeout;
-        const clear = platform.clearTimeout || globalThis.clearTimeout;
-        let resumeTimer, cancelResume;
-        const timeout = new Promise(resolve => { resumeTimer = schedule(() => resolve(failure('context_resume_timeout')), 5000); });
-        const cancelled = new Promise(resolve => { cancelResume = () => resolve(failure('cancelled')); s.abort.signal.addEventListener('abort',cancelResume,{once:true}); });
-        if (s.abort.signal.aborted) cancelResume();
-        let resumeError;
-        try { resumeError = await Promise.race([resumed, timeout, cancelled]); }
-        finally { clear(resumeTimer); s.abort.signal.removeEventListener('abort',cancelResume); }
+        await waitForRunningContext(s,resumed);
         if (!current(s)) { await release(s); return; }
-        if (resumeError) throw failure(resumeError.captureReason === 'context_resume_timeout' ? 'context_resume_timeout' : 'context_resume_failed');
-        if (s.context.state !== 'running') throw failure('context_not_running');
         if (!s.context.audioWorklet) throw failure('unsupported');
         let lastSettingsKey;
         function publishSettings() {
@@ -204,6 +213,8 @@ export function createCapture({onEvent, platform = browserPlatform()}) {
           if (!current(s)) { await release(s); return; }
           s.node = platform.createWorkletNode(s.context);
         }
+        if (s.context.state !== 'running') await waitForRunningContext(s);
+        if (!current(s)) { await release(s); return; }
         s.source = s.context.createMediaStreamSource(s.stream);
         s.gain = s.context.createGain(); s.gain.gain.value = 0;
         s.lastFrame = platform.now();

@@ -62,7 +62,7 @@ function assertDisposed(node) {
   assert.equal(node.onprocessorerror, null);
 }
 
-for (const stage of ['response','body']) test(`stalled VAD ${stage} times out without disabling RNNoise`, async t => {
+for (const stage of ['response','body']) test(`cold VAD ${stage} finishing after 1500 ms remains available`, async t => {
   const h=harness(t), gate=deferred(); let calls=0, vadSignal;
   h.replace('fetch', async (_url, options) => {
     if (++calls === 1) return {ok:true,arrayBuffer:async()=>new Uint8Array([0,97,115,109]).buffer};
@@ -71,17 +71,62 @@ for (const stage of ['response','body']) test(`stalled VAD ${stage} times out wi
   });
   const pending=createNoiseReductionNode(h.context, new AbortController().signal);
   await settle();
-  const vadTimer=[...h.timers.values()].find(timer=>timer.ms === 1500);
-  assert.ok(vadTimer);
-  vadTimer.fn();
+  for (const timer of [...h.timers.values()]) if (timer.ms <= 2000) timer.fn();
   await settle();
-  assert.equal(vadSignal.aborted,true);
-  assert.equal(h.nodes.length,1);
-  assert.equal(h.nodes[0].options.processorOptions.vadBinary,null);
+  assert.equal(vadSignal.aborted,false);
+  assert.equal(h.nodes.length,0);
+  gate.resolve(stage === 'response' ? {ok:true,arrayBuffer:async()=>new ArrayBuffer(4)} : new ArrayBuffer(4));
+  await settle();
+  assert.deepEqual(h.nodes[0].options.processorOptions.vadBinary,new Uint8Array(4));
+  h.nodes[0].port.onmessage({data:{type:'ready',vadStatus:'ready'}});
+  assert.equal((await pending).vadStatus,'ready');
+});
+
+test('RNNoise, VAD and worklet prepare concurrently before creating a node', async t => {
+  const fetchGate=deferred(), moduleGate=deferred(), h=harness(t,{fetchGate,moduleGate});
+  const pending=createNoiseReductionNode(h.context,new AbortController().signal);
+  await settle();
+  assert.equal(h.requests.length,2);
+  assert.equal(h.modules.length,1);
+  assert.equal(h.nodes.length,0);
+  fetchGate.resolve({ok:true,arrayBuffer:async()=>new ArrayBuffer(4)});
+  await settle();
+  assert.equal(h.nodes.length,0);
+  moduleGate.resolve(); await settle();
   h.ready();
   assert.equal(await pending,h.nodes[0]);
-  assert.equal(h.nodes[0].vadStatus,'load_timeout');
+});
+
+for (const stage of ['response','body']) test(`stalled VAD ${stage} uses the whole initialization deadline and blocks late completion`, async t => {
+  const h=harness(t), gate=deferred(); let calls=0, vadSignal;
+  h.replace('fetch',async (_url,options)=>{
+    if (++calls === 1) return {ok:true,arrayBuffer:async()=>new ArrayBuffer(4)};
+    vadSignal=options.signal;
+    return stage === 'response' ? gate.promise : {ok:true,arrayBuffer:()=>gate.promise};
+  });
+  const pending=createNoiseReductionNode(h.context,new AbortController().signal);
+  const rejected=assert.rejects(pending,{captureReason:'load_timeout'});
+  await settle(); h.expire(); await rejected;
+  assert.equal(vadSignal.aborted,true);
   gate.resolve(stage === 'response' ? {ok:true,arrayBuffer:async()=>new ArrayBuffer(4)} : new ArrayBuffer(4));
+  await settle();
+  assert.equal(h.nodes.length,0);
+  assert.equal(h.timers.size,0);
+});
+
+for (const kind of ['http','network','body']) test(`VAD ${kind} failure preserves RNNoise fallback`, async t => {
+  const h=harness(t); let calls=0;
+  h.replace('fetch',async()=>{
+    if (++calls === 1) return {ok:true,arrayBuffer:async()=>new ArrayBuffer(4)};
+    if (kind === 'network') throw new Error('offline');
+    return {ok:kind !== 'http',arrayBuffer:async()=>{throw new Error('body failed');}};
+  });
+  const pending=createNoiseReductionNode(h.context,new AbortController().signal);
+  await settle();
+  assert.equal(h.nodes[0].options.processorOptions.vadBinary,null);
+  h.ready();
+  assert.equal((await pending).vadStatus,'load_failed');
+  assert.equal(h.timers.size,0);
 });
 
 test('cancelling a stalled VAD request cleans its timer and does not create a node', async t => {

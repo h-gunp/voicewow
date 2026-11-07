@@ -181,6 +181,105 @@ test('resolved resume with suspended context does not claim capture is running',
   assert.ok(h.track.stops>0);
 });
 
+for (const stage of ['permission','preconnect']) for (const interruptedState of ['suspended','interrupted']) {
+  test(`startup resumes ${interruptedState} context after ${stage} before connecting audio`, async () => {
+    const h=harness(); let resumes=0;
+    h.ctx.resume=async()=>{resumes++;h.ctx.state='running';};
+    const {node}=addNoiseReduction(h); node.vadStatus='ready';
+    if (stage==='permission') h.platform.getUserMedia=async()=>{h.ctx.state=interruptedState;return h.stream;};
+    else h.platform.createNoiseReductionNode=async()=>{h.ctx.state=interruptedState;return node;};
+    await h.capture.start();
+    assert.equal(h.events.findLast(e=>e.type==='state').state,'running');
+    assert.equal(h.events.findLast(e=>e.type==='settings').settings.contextState,'running');
+    assert.equal(resumes,2);
+    for(let seq=0;seq<3;seq++) {
+      node.port.onmessage({data:{type:'analysis',seq,sampleStart:seq*480,sampleEnd:(seq+1)*480,sampleTime:(seq+1)/100,power:.01,clipped:false,speech:'speech',meterRms:.2}});
+      await h.tick(10);
+    }
+    assert.equal(h.events.findLast(e=>e.type==='analysis').analysis.meterState,'speech');
+    await h.capture.stop();
+  });
+}
+
+test('running startup does not resume again after permission or model loading', async () => {
+  const h=harness();addNoiseReduction(h);let resumes=0;
+  h.ctx.resume=async()=>{resumes++;};
+  await h.capture.start();
+  assert.equal(resumes,1);
+  assert.equal(h.events.findLast(e=>e.type==='state').state,'running');
+  await h.capture.stop();
+});
+
+test('post-permission resume does not wait for the earlier pending resume', async () => {
+  const h=harness(), early=deferred();addNoiseReduction(h);let resumes=0;
+  h.ctx.state='suspended';
+  h.ctx.resume=()=>{
+    if(++resumes===1)return early.promise;
+    h.ctx.state='running';return Promise.resolve();
+  };
+  await h.capture.start();
+  assert.equal(h.events.findLast(e=>e.type==='state').state,'running');
+  assert.equal(resumes,2);
+  early.reject(new Error('late initial resume rejection'));await settle();
+  assert.equal(h.events.findLast(e=>e.type==='state').state,'running');
+  await h.capture.stop();
+});
+
+test('stopped recovery and delayed old close cannot change a restarted context', async () => {
+  const h=harness(),next=harness(),resume=deferred(),closing=deferred();let creates=0,resumes=0;
+  h.platform.createContext=()=>++creates===1?h.ctx:next.ctx;
+  h.platform.getUserMedia=async()=>{
+    if(creates===1){h.ctx.state='suspended';return h.stream;}
+    return next.stream;
+  };
+  h.platform.createNoiseReductionNode=async context=>context===h.ctx?h.node:next.node;
+  h.ctx.resume=()=>++resumes===1?Promise.resolve():resume.promise;
+  h.ctx.close=async()=>{await closing.promise;h.ctx.state='closed';};
+  const starting=h.capture.start();await settle();
+  assert.equal(resumes,2);
+  const stopping=h.capture.stop();
+  await h.capture.start();
+  assert.equal(h.events.findLast(e=>e.type==='state').state,'running');
+  const eventCount=h.events.length;
+  resume.resolve();closing.resolve();await Promise.all([starting,stopping]);await settle();
+  assert.equal(h.events.length,eventCount);
+  assert.equal(next.ctx.state,'running');
+  assert.equal(next.track.stops,0);
+  assert.equal(next.node.connections.length,1);
+  assert.equal(h.node.connections.length,0);
+  await h.capture.stop();
+});
+
+for(const stage of ['permission','preconnect']) for(const outcome of ['reject','throw','still_suspended','timeout','cancel']) {
+  test(`startup recovery ${outcome} after ${stage} releases input without connecting late audio`, async () => {
+    const h=harness(), gate=deferred();let resumes=0,timeout;
+    const {node}=addNoiseReduction(h);
+    h.ctx.resume=()=>{
+      if(++resumes===1)return Promise.resolve();
+      if(outcome==='throw')throw new Error('blocked');
+      if(outcome==='reject')return Promise.reject(new Error('blocked'));
+      return outcome==='still_suspended'?Promise.resolve():gate.promise;
+    };
+    if(stage==='permission')h.platform.getUserMedia=async()=>{h.ctx.state='suspended';return h.stream;};
+    else h.platform.createNoiseReductionNode=async()=>{h.ctx.state='suspended';return node;};
+    h.platform.setTimeout=(fn,ms)=>{assert.equal(ms,5000);timeout=fn;return 9;};
+    h.platform.clearTimeout=()=>{};
+    const pending=h.capture.start();await settle();
+    if(outcome==='timeout')timeout();
+    if(outcome==='cancel')await h.capture.stop();
+    await pending;
+    const last=h.events.findLast(e=>e.type==='state');
+    assert.equal(last.state,outcome==='cancel'?'idle':'error');
+    if(outcome!=='cancel')assert.equal(last.reason,outcome==='timeout'?'context_resume_timeout':outcome==='still_suspended'?'context_not_running':'context_resume_failed');
+    assert.equal(resumes,2);
+    assert.ok(h.track.stops>0);
+    assert.equal(node.connections.length,0);
+    gate.resolve();await settle();
+    assert.equal(h.events.some(e=>e.type==='state'&&e.state==='running'),false);
+    assert.equal(node.connections.length,0);
+  });
+}
+
 test('resume begins before permission wait and cancellation clears its timeout', async () => {
   const h=harness(), permission=deferred(), resume=deferred(); let cleared=false, resumeCalled=false;
   h.ctx.state='suspended'; h.ctx.resume=()=>{resumeCalled=true;return resume.promise;};
