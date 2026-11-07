@@ -266,7 +266,7 @@ void main() {
   );
 
   testWidgets(
-    'uncertain recognition uses the match color without replacing its text',
+    'uncertain recognition keeps its gray color and legend without replacing its text',
     (tester) async {
       final recorder = FakePronunciationRecorder()
         ..phones = ['B', 'uEO', '[UNK]', 'G'];
@@ -281,31 +281,28 @@ void main() {
       );
       final spans = (observed.textSpan! as TextSpan).children!.cast<TextSpan>();
       expect(spans.map((span) => span.text).join(), 'ㅂ□□ㄱ');
-      expect(spans.every((span) => span.style!.color == accent), isTrue);
+      expect(spans.every((span) => span.style!.color == muted), isTrue);
       final expected = tester.widget<Text>(
         find.byKey(const Key('pronunciation-expected')),
       );
       expect(
         (expected.textSpan! as TextSpan).children!.cast<TextSpan>().every(
-          (span) => span.style!.color == accent,
+          (span) => span.style!.color == muted,
         ),
         isTrue,
       );
       await tester.scrollUntilVisible(find.text('● 일치'), 180);
       expect(find.text('− 차이'), findsOneWidget);
-      expect(find.text('… 불확실'), findsNothing);
-      await tester.scrollUntilVisible(
-        find.textContaining('불확실한 구간도 일치 색'),
-        180,
-      );
-      expect(find.textContaining('불확실한 구간도 일치 색'), findsOneWidget);
+      expect(find.text('… 불확실'), findsOneWidget);
+      await tester.scrollUntilVisible(find.textContaining('색은 추정'), 180);
+      expect(find.textContaining('불확실한 구간도 일치 색'), findsNothing);
       await tester.scrollUntilVisible(find.textContaining('uEO'), 180);
       expect(find.textContaining('uEO'), findsOneWidget);
     },
   );
 
   testWidgets(
-    'known pronunciation differences keep their red underline and explanation',
+    'known matches stay green and differences keep their red underline and explanation',
     (tester) async {
       final recorder = FakePronunciationRecorder();
       await pumpPractice(tester, recorder);
@@ -318,6 +315,9 @@ void main() {
         find.byKey(const Key('pronunciation-observed')),
       );
       final spans = (observed.textSpan! as TextSpan).children!.cast<TextSpan>();
+      final match = spans.singleWhere((span) => span.text == '마');
+      expect(match.style!.color, accent);
+      expect(match.style!.decoration, isNull);
       for (final text in ['떼', '떠']) {
         final span = spans.singleWhere((span) => span.text == text);
         expect(span.style!.color, red);

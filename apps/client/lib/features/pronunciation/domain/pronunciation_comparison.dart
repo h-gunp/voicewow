@@ -149,6 +149,8 @@ PronunciationComparison comparePronunciation({
       differences.add(
         '기준 ${unit.text} → 인식 ${counterparts.map((i) => observed.units[i].text).join()}',
       );
+    } else {
+      differences.add('기준 ${unit.text}: 일부 음소 차이');
     }
   }
   for (var index = 0; index < observed.units.length; index++) {
@@ -326,7 +328,6 @@ class _Reading {
   final units = <_Unit>[];
   final phones = <String>[];
   final owners = <int>[];
-  final uncertainPhones = <int>{};
   final wordBoundaryPhones = <int>{};
 
   void add(
@@ -391,9 +392,7 @@ _Reading _observe(List<String> phones, Set<String> notes) {
     if (start > 0 &&
         _vowels.containsKey(phones[start - 1]) &&
         _codas.containsKey(current)) {
-      notes.add('초성·종성 경계가 모호한 구간은 비교를 보류한다.');
-      reading.uncertainPhones.add(start);
-      uncertain = true;
+      notes.add('초성·종성 배치는 추정 표기이며 색상은 음소열의 일치와 차이를 비교한다.');
     }
     i++;
     var finalJamo = ' ';
@@ -401,9 +400,7 @@ _Reading _observe(List<String> phones, Set<String> notes) {
       if (_onsets.containsKey(phones[i]) &&
           i + 1 < phones.length &&
           _vowels.containsKey(phones[i + 1])) {
-        notes.add('초성·종성 경계가 모호한 구간은 비교를 보류한다.');
-        reading.uncertainPhones.add(i);
-        uncertain = true;
+        notes.add('초성·종성 배치는 추정 표기이며 색상은 음소열의 일치와 차이를 비교한다.');
       } else {
         finalJamo = _codas[phones[i++]]!;
       }
@@ -565,12 +562,13 @@ List<ComparisonMark> _marks(
       (() {
         var uncertain = unit.uncertain || unit.start == unit.end;
         var different = false;
+        var unambiguousSubstitution = false;
         var unresolved = unit.unresolved;
         for (var i = unit.start; i < unit.end; i++) {
           final paired = pairs[i];
           final label = reading.phones[i];
           if (ambiguous[i]) unresolved = true;
-          if (!_known(label) || reading.uncertainPhones.contains(i)) {
+          if (!_known(label)) {
             uncertain = true;
           } else if (paired < 0) {
             if (reading.wordBoundaryPhones.contains(i)) {
@@ -588,9 +586,7 @@ List<ComparisonMark> _marks(
               token++
             ) {
               if (otherAmbiguous[token]) unresolved = true;
-              if (otherPairs[token] < 0 &&
-                  _known(other.phones[token]) &&
-                  !other.uncertainPhones.contains(token)) {
+              if (otherPairs[token] < 0 && _known(other.phones[token])) {
                 if (other.wordBoundaryPhones.contains(token)) {
                   uncertain = true;
                 } else {
@@ -598,8 +594,7 @@ List<ComparisonMark> _marks(
                 }
               }
             }
-            if (!_known(other.phones[paired]) ||
-                other.uncertainPhones.contains(paired)) {
+            if (!_known(other.phones[paired])) {
               uncertain = true;
             } else if (label != other.phones[paired]) {
               if (reading.wordBoundaryPhones.contains(i) ||
@@ -607,12 +602,16 @@ List<ComparisonMark> _marks(
                 uncertain = true;
               } else {
                 different = true;
+                unambiguousSubstitution =
+                    unambiguousSubstitution ||
+                    (!ambiguous[i] && !otherAmbiguous[paired]);
               }
-            } else if (_merged.containsKey(label) || counterpart.uncertain) {
+            } else if (_merged.containsKey(label)) {
               uncertain = true;
             }
           }
         }
+        if (unambiguousSubstitution) return ComparisonMark.different;
         if (unresolved) return ComparisonMark.uncertain;
         if (different) return ComparisonMark.different;
         return uncertain ? ComparisonMark.uncertain : ComparisonMark.match;

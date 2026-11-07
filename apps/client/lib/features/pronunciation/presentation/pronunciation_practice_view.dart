@@ -330,11 +330,12 @@ class _PronunciationPracticeViewState extends State<PronunciationPracticeView>
                     children: [
                       Text('● 일치', style: TextStyle(color: accent)),
                       Text('− 차이', style: TextStyle(color: red)),
+                      Text('… 불확실', style: TextStyle(color: muted)),
                     ],
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    '불확실한 구간도 일치 색으로 표시한다. 색은 추정 인식과 참고 읽기의 비교다. 실제 발음 판별 정확도는 검증 전이며 잡음이 글자로 인식될 수 있다.',
+                    '색은 추정 인식과 참고 읽기의 비교다. 실제 발음 판별 정확도는 검증 전이며 잡음이 글자로 인식될 수 있다.',
                     style: smallCopy,
                   ),
                   if (result != null) ...[
@@ -451,8 +452,9 @@ class _PronunciationPracticeViewState extends State<PronunciationPracticeView>
             text: span.text,
             style: TextStyle(
               color: switch (span.mark) {
-                ComparisonMark.match || ComparisonMark.uncertain => accent,
+                ComparisonMark.match => accent,
                 ComparisonMark.different => red,
+                ComparisonMark.uncertain => muted,
               },
               decoration: span.mark == ComparisonMark.different
                   ? TextDecoration.underline

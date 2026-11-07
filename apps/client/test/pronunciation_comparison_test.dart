@@ -154,30 +154,131 @@ void main() {
     expect(result.notes.any((note) => note.contains('uEO')), isTrue);
   });
 
-  test('intervocalic nasal and liquid boundaries are not asserted', () {
-    for (final phone in ['M', 'N', 'L', 'R']) {
-      final result = compare('A $phone A', ['아나']);
+  test(
+    'an unresolved reference phone does not hide a unique known substitution',
+    () {
+      for (final fixture in [('G A', '붜', '가'), ('Ph A', '밟', '파')]) {
+        final result = compare(fixture.$1, [fixture.$2]);
+        expect(textOf(result.observed), fixture.$3);
+        expect(result.observed.single.mark, ComparisonMark.different);
+        expect(result.expected.single.mark, ComparisonMark.different);
+        expect(
+          result.differences,
+          contains('기준 ${fixture.$2} → 인식 ${fixture.$3}'),
+        );
+      }
+    },
+  );
+
+  test(
+    'a unique consonant substitution remains explained beside an unknown phone',
+    () {
+      final result = compare('Ph A [UNK] G U', ['밥구']);
+      expect(textOf(result.observed), '파□구');
+      expect(result.observed.map((span) => span.mark), [
+        ComparisonMark.different,
+        ComparisonMark.uncertain,
+        ComparisonMark.match,
+      ]);
+      expect(result.expected.map((span) => span.mark), [
+        ComparisonMark.different,
+        ComparisonMark.match,
+      ]);
+      expect(result.differences, contains('기준 밥: 일부 음소 차이'));
+    },
+  );
+
+  test('unknown-only differences cannot become confirmed substitutions', () {
+    for (final reference in ['붜', '밟']) {
+      final result = compare('B A', [reference]);
+      expect(result.observed.single.mark, ComparisonMark.uncertain);
+      expect(result.expected.single.mark, ComparisonMark.uncertain);
+      expect(result.differences, isEmpty);
+    }
+  });
+
+  test(
+    'intervocalic consonants compare their known phones independently of spelling boundaries',
+    () {
+      for (final phone in ['M', 'N', 'L', 'R']) {
+        final result = compare('A $phone A', ['아나']);
+        expect(result.observed.first.mark, ComparisonMark.match);
+        expect(
+          result.observed.last.mark,
+          phone == 'N' ? ComparisonMark.match : ComparisonMark.different,
+        );
+        expect(result.differences.isEmpty, phone == 'N');
+        expect(result.notes.any((note) => note.contains('초성·종성')), isTrue);
+      }
+    },
+  );
+
+  test(
+    'identical phones match across different syllable spellings without replacing the observation',
+    () {
+      final result = compare('A N A', ['안아']);
+      expect(textOf(result.observed), '아나');
+      expect(textOf(result.expected), '안아');
+      expect(
+        result.observed.every((s) => s.mark == ComparisonMark.match),
+        isTrue,
+      );
+      expect(
+        result.expected.every((s) => s.mark == ComparisonMark.match),
+        isTrue,
+      );
+      expect(result.differences, isEmpty);
+      expect(result.notes.any((note) => note.contains('초성·종성')), isTrue);
+    },
+  );
+
+  test(
+    'a merged vowel does not defer the next matching intervocalic consonant',
+    () {
+      final result = compare('G E N A', ['개나']);
+      expect(textOf(result.observed), '게나');
+      expect(result.observed.map((s) => s.mark), [
+        ComparisonMark.uncertain,
+        ComparisonMark.match,
+      ]);
+      expect(result.expected.map((s) => s.mark), [
+        ComparisonMark.uncertain,
+        ComparisonMark.match,
+      ]);
+    },
+  );
+
+  test(
+    'a merged vowel in a paired syllable does not taint another exact syllable',
+    () {
+      final result = compare('A N E', ['안애']);
+      expect(textOf(result.observed), '아네');
+      expect(result.observed.map((s) => s.mark), [
+        ComparisonMark.match,
+        ComparisonMark.uncertain,
+      ]);
+      expect(result.expected.map((s) => s.mark), [
+        ComparisonMark.match,
+        ComparisonMark.uncertain,
+      ]);
+      expect(result.differences, isEmpty);
+    },
+  );
+
+  test('all equally optimal repeated-phone alignments are uncertain', () {
+    for (final phones in ['G A G A', 'B A G A']) {
+      final result = compare(phones, ['가가가']);
       expect(
         result.observed.every((span) => span.mark == ComparisonMark.uncertain),
         isTrue,
       );
+      expect(
+        result.expected.every((span) => span.mark == ComparisonMark.uncertain),
+        isTrue,
+      );
       expect(result.differences, isEmpty);
-      expect(result.notes.any((note) => note.contains('경계')), isTrue);
+      expect(result.notes.any((note) => note.contains('정렬')), isTrue);
     }
-  });
-
-  test('all equally optimal repeated-phone alignments are uncertain', () {
-    final result = compare('G A G A', ['가가가']);
-    expect(
-      result.observed.every((span) => span.mark == ComparisonMark.uncertain),
-      isTrue,
-    );
-    expect(
-      result.expected.every((span) => span.mark == ComparisonMark.uncertain),
-      isTrue,
-    );
-    expect(result.differences, isEmpty);
-    expect(result.notes.any((note) => note.contains('정렬')), isTrue);
   });
 
   test(
