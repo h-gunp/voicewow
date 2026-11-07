@@ -9,6 +9,7 @@ import 'package:voicemate/features/pronunciation/data/learning_store.dart';
 import 'package:voicemate/features/pronunciation/data/speech_player.dart';
 import 'package:voicemate/features/pronunciation/presentation/pronunciation_screen.dart';
 import 'fake_audio_port.dart';
+import 'pronunciation_practice_ui_test.dart' show FakePronunciationRecorder;
 
 class FakeSpeech implements SpeechPlayer {
   final List<String> spoken = [];
@@ -88,7 +89,11 @@ void main() {
         home: MediaQuery(
           data: MediaQueryData(textScaler: TextScaler.linear(scale)),
           child: Scaffold(
-            body: PronunciationScreen(learning: learning, speech: speech),
+            body: PronunciationScreen(
+              learning: learning,
+              speech: speech,
+              recorder: FakePronunciationRecorder(),
+            ),
           ),
         ),
       ),
@@ -160,7 +165,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     final learning = LearningController(MemoryLearningStore());
     await open(tester, learning, FakeSpeech(), scale: 2);
-    for (final label in ['발음 퀴즈', '내 문장', '복습']) {
+    for (final label in ['발음 연습', '내 문장', '복습']) {
       final text = find.descendant(
         of: find.widgetWithText(Tab, label),
         matching: find.text(label),
@@ -222,6 +227,13 @@ void main() {
       await openSaved();
       await tester.ensureVisible(find.byKey(const Key('review-guide-같이 가요')));
       await tester.tap(find.byKey(const Key('review-guide-같이 가요')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('pronunciation-prepare')), findsOneWidget);
+      expect(find.text('같이 가요'), findsOneWidget);
+      expect(find.text('가치 가요'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('pronunciation-back')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(Tab, '내 문장'));
       await tester.pumpAndSettle();
       expect(
         tester
@@ -339,6 +351,7 @@ void main() {
           audioPort: FakeAudioPort(),
           pronunciationLearning: learning,
           pronunciationSpeech: speech,
+          pronunciationRecorder: FakePronunciationRecorder(),
           startWithPronunciation: true,
         ),
       );

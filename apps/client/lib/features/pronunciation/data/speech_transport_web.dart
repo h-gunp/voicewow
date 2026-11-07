@@ -2,11 +2,15 @@ import 'dart:async';
 import 'dart:js_interop';
 import 'speech_transport.dart';
 
-SpeechTransport createSpeechTransport() => WebSpeechTransport();
+SpeechTransport createSpeechTransport({bool localOnly = false}) =>
+    WebSpeechTransport(localOnly: localOnly);
 
 /// One utterance per request preserves callback identity. Unconditional browser
 /// cancel also removes utterances queued before their first start callback.
 class WebSpeechTransport implements SpeechTransport {
+  WebSpeechTransport({this.localOnly = false});
+
+  final bool localOnly;
   SpeechTransportListener? _listener;
   _WebRequest? _current;
   bool _disposed = false;
@@ -46,7 +50,9 @@ class WebSpeechTransport implements SpeechTransport {
       }
       if (!_isCurrent(request)) return false;
       final korean = voices.where(
-        (voice) => voice.lang.toLowerCase().split('-').first == 'ko',
+        (voice) =>
+            voice.lang.toLowerCase().split('-').first == 'ko' &&
+            (!localOnly || voice.localService == true),
       );
       if (korean.isEmpty) return false;
       final utterance = _SpeechUtterance(text);
@@ -141,6 +147,7 @@ extension type _SpeechSynthesis._(JSObject _) implements JSObject {
 }
 extension type _SpeechVoice._(JSObject _) implements JSObject {
   external String get lang;
+  external bool? get localService;
 }
 @JS('SpeechSynthesisUtterance')
 extension type _SpeechUtterance._(JSObject _) implements JSObject {

@@ -47,3 +47,8 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.23.2")
+    testImplementation("junit:junit:4.13.2")
+}

@@ -1,1301 +1,299 @@
 import 'dart:async';
-import 'dart:math';
-
 import 'package:flutter/material.dart';
-
 import '../../../app_theme.dart';
 import '../data/learning_store.dart';
 import '../domain/quiz_catalog.dart';
-import 'speech_controls.dart';
 
 enum ReviewFilter { all, wrong, bookmarks, guides }
 
 class QuizTrainingView extends StatefulWidget {
-  final LearningController learning;
-  final Future<void> Function(String text, bool slow) onSpeak;
-  final Future<void> Function()? onStop;
-  final SpeechPlaybackController? playback;
-  final void Function(String text)? onOpenGuide;
-  final bool reviewOnly;
-  final ReviewFilter reviewInitialFilter;
-  final int reviewFilterRequest;
-  final bool active;
-
   const QuizTrainingView({
     super.key,
     required this.learning,
-    required this.onSpeak,
-    this.onStop,
-    this.playback,
+    required this.onPractice,
     this.onOpenGuide,
     this.reviewOnly = false,
     this.reviewInitialFilter = ReviewFilter.all,
     this.reviewFilterRequest = 0,
     this.active = true,
   });
-
+  final LearningController learning;
+  final ValueChanged<QuizItem> onPractice;
+  final ValueChanged<String>? onOpenGuide;
+  final bool reviewOnly;
+  final ReviewFilter reviewInitialFilter;
+  final int reviewFilterRequest;
+  final bool active;
   @override
   State<QuizTrainingView> createState() => _QuizTrainingViewState();
 }
 
 class _QuizTrainingViewState extends State<QuizTrainingView> {
-  final Random _random = Random();
-  final Map<String, List<String>> _options = {};
-  TrainingCategory? _category;
-  String? _group;
-  late ReviewFilter _reviewFilter;
-  List<QuizItem>? _session;
-  final List<QuizItem> _sessionWrong = [];
-  int _index = 0;
-  int _correctCount = 0;
-  int? _selected;
-  bool _submitted = false;
-  bool _summary = false;
-  bool _speaking = false;
-  int _speechEpoch = 0;
-
+  TrainingCategory? category;
+  String? group;
+  late ReviewFilter filter;
   @override
   void initState() {
     super.initState();
-    _reviewFilter = widget.reviewInitialFilter;
-  }
-
-  void _stopVoice() {
-    ++_speechEpoch;
-    _speaking = false;
-    final playback = widget.playback;
-    // didUpdateWidget and dispose also pass here. Stop after the current build
-    // so the shared controller never notifies sibling controls during layout.
-    final stopping = playback != null
-        ? Future<void>.microtask(() => playback.stop(owner: this))
-        : widget.onStop?.call();
-    if (stopping != null) unawaited(stopping);
-  }
-
-  @override
-  void dispose() {
-    _stopVoice();
-    super.dispose();
+    filter = widget.reviewInitialFilter;
   }
 
   @override
   void didUpdateWidget(covariant QuizTrainingView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.active && !widget.active) _stopVoice();
-    if (oldWidget.reviewOnly != widget.reviewOnly ||
-        (widget.reviewOnly &&
-            (oldWidget.reviewInitialFilter != widget.reviewInitialFilter ||
-                oldWidget.reviewFilterRequest != widget.reviewFilterRequest))) {
-      _category = null;
-      _group = null;
-      _reviewFilter = widget.reviewInitialFilter;
-      _resetSession();
+    if (oldWidget.reviewFilterRequest != widget.reviewFilterRequest ||
+        oldWidget.reviewInitialFilter != widget.reviewInitialFilter)
+      filter = widget.reviewInitialFilter;
+  }
+
+  void _back() => setState(() {
+    if (group != null) {
+      group = null;
+    } else {
+      category = null;
     }
-  }
-
-  void _resetSession() {
-    _stopVoice();
-    _session = null;
-    _sessionWrong.clear();
-    _options.clear();
-    _index = 0;
-    _correctCount = 0;
-    _selected = null;
-    _submitted = false;
-    _summary = false;
-  }
-
-  void _startSession(List<QuizItem> items, {int startAt = 0}) {
-    if (items.isEmpty || !widget.learning.ready) return;
-    final ordered = [...items.skip(startAt), ...items.take(startAt)];
-    setState(() {
-      _resetSession();
-      _session = ordered;
-      for (final item in ordered) {
-        _options[item.id] = [item.pronunciation, item.distractor]
-          ..shuffle(_random);
-      }
-    });
-  }
-
-  void _submit() {
-    if (_selected == null || _submitted || _session == null) return;
-    final item = _session![_index];
-    final correct = _options[item.id]![_selected!] == item.pronunciation;
-    setState(() {
-      _submitted = true;
-      if (correct) {
-        _correctCount++;
-      } else {
-        _sessionWrong.add(item);
-      }
-    });
-    unawaited(widget.learning.recordAnswer(item.id, correct));
-  }
-
-  void _next() {
-    if (!_submitted || _session == null) return;
-    _stopVoice();
-    setState(() {
-      if (_index + 1 == _session!.length) {
-        _summary = true;
-      } else {
-        _index++;
-        _selected = null;
-        _submitted = false;
-      }
-    });
-  }
-
-  Future<void> _speak(QuizItem item, bool slow) async {
-    if (!_submitted || _speaking) return;
-    final epoch = ++_speechEpoch;
-    setState(() => _speaking = true);
-    try {
-      // Read the original text so the platform TTS can apply Korean prosody.
-      await widget.onSpeak(item.text, slow);
-    } catch (_) {
-      if (mounted && epoch == _speechEpoch) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('음성을 재생하지 못했어요. 다시 시도해 주세요.')),
-        );
-      }
-    } finally {
-      if (mounted && epoch == _speechEpoch) {
-        setState(() => _speaking = false);
-      }
-    }
-  }
+  });
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: widget.learning,
     builder: (context, _) {
-      if (!widget.learning.ready) {
+      if (!widget.learning.ready)
         return const Center(child: CircularProgressIndicator());
-      }
       return PopScope<void>(
-        canPop: !widget.active || (_session == null && _category == null),
-        onPopInvokedWithResult: (didPop, result) {
-          if (didPop || !widget.active) return;
-          if (_session != null) {
-            setState(_resetSession);
-          } else if (_group != null) {
-            setState(() => _group = null);
-          } else if (_category != null) {
-            setState(() {
-              _category = null;
-              _group = null;
-            });
-          }
+        canPop: !widget.active || category == null || widget.reviewOnly,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop && widget.active) _back();
         },
-        child: SingleChildScrollView(
+        child: ListView(
           key: ValueKey(
-            _session != null
-                ? 'quiz-scroll-${_summary ? 'summary' : _index}'
-                : widget.reviewOnly
-                ? 'review-scroll-${_reviewFilter.name}'
-                : 'catalog-${_category?.name ?? 'home'}-${_group ?? 'all'}',
+            'practice-list-${widget.reviewOnly}-$category-$group-$filter',
           ),
-          padding: const EdgeInsets.fromLTRB(0, 24, 0, 36),
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 720),
-              child: _session != null
-                  ? _summary
-                        ? _buildSummary(context)
-                        : _buildQuestion(context)
-                  : widget.reviewOnly
-                  ? _buildReview(context)
-                  : _category != null
-                  ? _buildCategory(context)
-                  : _buildHub(context),
-            ),
-          ),
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          children: widget.reviewOnly
+              ? _review()
+              : category == null
+              ? _categories()
+              : _expressions(),
         ),
       );
     },
   );
 
-  Widget _buildHub(BuildContext context) {
-    final completed = quizCatalog
-        .where((item) => widget.learning.answers.containsKey(item.id))
-        .length;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const _Eyebrow('한 문장씩, 자신 있게'),
-        const SizedBox(height: 10),
-        Text('발음 구별 퀴즈', style: pageTitle),
-        const SizedBox(height: 10),
-        const Text(
-          '단어부터 일상과 업무의 문장까지.\n두 보기 중 올바른 읽는 소리를 골라 보세요.',
-          style: TextStyle(color: muted, height: 1.65, fontSize: 15),
-        ),
-        const SizedBox(height: 22),
-        _Panel(
-          color: Colors.white,
-          child: Wrap(
-            spacing: 24,
-            runSpacing: 14,
-            children: [
-              _Stat(
-                label: '연습한 문제',
-                value: '$completed / ${quizCatalog.length}',
-              ),
-              _Stat(label: '다시 볼 문제', value: '${_knownWrong.length}'),
-              _Stat(label: '저장한 문제', value: '${_knownBookmarks.length}'),
-            ],
-          ),
-        ),
-        const SizedBox(height: 28),
-        Text('어떤 연습을 해볼까요?', style: sectionTitle),
-        const SizedBox(height: 14),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final scale = MediaQuery.textScalerOf(context).scale(1);
-            final columns = constraints.maxWidth >= 800 && scale < 1.6
-                ? 4
-                : constraints.maxWidth >= 270 && scale < 1.6
-                ? 2
-                : 1;
-            final width = (constraints.maxWidth - (columns - 1) * 14) / columns;
-            return Wrap(
-              spacing: 14,
-              runSpacing: 14,
-              children: [
-                for (final category in TrainingCategory.values)
-                  SizedBox(
-                    width: width,
-                    child: _categoryCard(context, category),
-                  ),
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: 24),
-        const _Hint(
-          icon: Icons.lightbulb_outline_rounded,
-          text: '정답을 확인한 뒤 예시 음성을 들을 수 있어요. 헷갈린 문제는 복습에 모아둘게요.',
-        ),
-        const SizedBox(height: 16),
-        Text(
-          catalogReadingNote,
-          style: const TextStyle(color: muted, fontSize: 14, height: 1.6),
-        ),
-      ],
-    );
-  }
+  List<Widget> _categories() => [
+    const Text('읽고 비교하는 발음 연습', style: sectionTitle),
+    const SizedBox(height: 8),
+    const Text(
+      '단어나 문장을 고르고 소리 내어 읽으면 된다. 녹음한 발음과 참고 발음을 비교할 수 있다.',
+      style: smallCopy,
+    ),
+    const SizedBox(height: 24),
+    for (final value in TrainingCategory.values) ...[
+      _row(
+        key: ValueKey('category-${value.name}'),
+        title: value.label,
+        subtitle:
+            '${quizCatalog.where((item) => item.category == value).length}개 표현 · ${value.subtitle}',
+        onTap: () => setState(() => category = value),
+      ),
+      const SizedBox(height: 12),
+    ],
+    const SizedBox(height: 12),
+    const Text(
+      '음성과 분석 결과는 기기 안에서 처리한다. 모델이 추정한 발음을 비교하는 기능이며 실제 판별 정확도는 검증 전이다.',
+      style: smallCopy,
+    ),
+  ];
 
-  Widget _categoryCard(BuildContext context, TrainingCategory category) {
+  List<Widget> _expressions() {
     final items = quizCatalog
         .where((item) => item.category == category)
         .toList();
-    final completed = items
-        .where((item) => widget.learning.answers.containsKey(item.id))
-        .length;
-    final icons = [
-      Icons.abc_rounded,
-      Icons.waving_hand_outlined,
-      Icons.forum_outlined,
-      Icons.business_center_outlined,
+    final groups = items.map((item) => item.group).toSet().toList();
+    return [
+      Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          key: const Key('practice-catalog-back'),
+          onPressed: _back,
+          icon: const Icon(Icons.arrow_back),
+          label: Text(group == null ? '분류로' : '주제로'),
+        ),
+      ),
+      const SizedBox(height: 12),
+      Text(
+        group == null ? category!.label : groupTitle(group!),
+        style: sectionTitle,
+      ),
+      const SizedBox(height: 18),
+      if (group == null)
+        for (var i = 0; i < groups.length; i++) ...[
+          _row(
+            key: ValueKey('quiz-group-${category!.name}-$i'),
+            title: groupTitle(groups[i]),
+            subtitle:
+                '${items.where((item) => item.group == groups[i]).length}개 표현',
+            onTap: () => setState(() => group = groups[i]),
+          ),
+          const SizedBox(height: 10),
+        ]
+      else
+        for (final item in items.where((item) => item.group == group)) ...[
+          _item(item),
+          const SizedBox(height: 10),
+        ],
+      const SizedBox(height: 16),
+      const Text(
+        '참고 발음은 어절별로 끊어 읽는 기준이다. 말 사이의 이어 읽기와 소리의 길이는 판정 범위에 포함하지 않는다.',
+        style: smallCopy,
+      ),
     ];
-    return Material(
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(6),
-        side: const BorderSide(color: line),
-      ),
-      child: InkWell(
-        key: ValueKey('category-${category.name}'),
-        borderRadius: BorderRadius.circular(6),
-        onTap: () => setState(() {
-          _category = category;
-          _group = null;
-        }),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: wash,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Icon(icons[category.index], color: blue, size: 26),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                category.label,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: ink,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                category.subtitle,
-                style: const TextStyle(color: ink, height: 1.5, fontSize: 16),
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Text(
-                    '$completed / ${items.length}문제 연습',
-                    style: const TextStyle(color: ink, fontSize: 14),
-                  ),
-                  const Icon(Icons.arrow_forward_rounded, size: 18, color: ink),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
-  List<QuizItem> get _knownWrong => quizCatalog
-      .where((item) => widget.learning.wrongIds.contains(item.id))
-      .toList();
-
-  List<QuizItem> get _knownBookmarks => quizCatalog
-      .where((item) => widget.learning.bookmarkedIds.contains(item.id))
-      .toList();
-
-  Widget _buildCategory(BuildContext context) {
-    final category = _category!;
-    final groups = groupsForCategory(category);
-    final visible = _group == null
-        ? <QuizItem>[]
-        : itemsForGroup(category, _group!);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _backButton(_group == null ? '전체 분류' : '${category.label} 분류', () {
-          setState(() {
-            if (_group == null) {
-              _category = null;
-            } else {
-              _group = null;
-            }
-          });
-        }),
-        const SizedBox(height: 14),
-        const _Eyebrow('발음 구별 퀴즈'),
-        const SizedBox(height: 10),
-        Text(
-          _group == null ? category.label : groupTitle(_group!),
-          style: pageTitle,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          _group == null
-              ? category == TrainingCategory.words
-                    ? '연습할 소리를 골라 주세요. 종류마다 10문제씩 연습해요.'
-                    : '연습할 상황을 골라 주세요. 한 번에 5문제씩 연습해요.'
-              : groupPracticeLabel(_group!) == null
-              ? '${category.label} · ${visible.length}문제'
-              : '(${groupPracticeLabel(_group!)})',
-          style: const TextStyle(color: muted, height: 1.6),
-        ),
-        const SizedBox(height: 22),
-        if (_group == null) ...[
-          for (var index = 0; index < groups.length; index++) ...[
-            _groupCard(context, category, groups[index], index),
-            const SizedBox(height: 12),
-          ],
-        ] else ...[
-          FilledButton.icon(
-            key: const ValueKey('quiz-start-group'),
-            onPressed: visible.isEmpty ? null : () => _startSession(visible),
-            icon: const Icon(Icons.play_arrow_rounded),
-            label: Text('${visible.length}문제 연습하기'),
-          ),
-          const SizedBox(height: 26),
-          Text('시작할 문제를 골라도 좋아요', style: sectionTitle),
-          const SizedBox(height: 12),
-          ..._questionList(visible),
-        ],
-      ],
-    );
-  }
-
-  Widget _groupCard(
-    BuildContext context,
-    TrainingCategory category,
-    String group,
-    int index,
-  ) {
-    final items = itemsForGroup(category, group);
-    final completed = items
-        .where((item) => widget.learning.answers.containsKey(item.id))
-        .length;
-    final practice = groupPracticeLabel(group);
-    return Material(
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(6),
-        side: const BorderSide(color: line),
-      ),
-      child: InkWell(
-        key: ValueKey('quiz-group-${category.name}-$index'),
-        borderRadius: BorderRadius.circular(6),
-        onTap: () => setState(() => _group = group),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                groupTitle(group),
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  height: 1.5,
-                ),
-              ),
-              if (practice != null) ...[
-                const SizedBox(height: 6),
-                Text(
-                  '($practice)',
-                  style: const TextStyle(
-                    color: muted,
-                    fontSize: 14,
-                    height: 1.5,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 10,
-                runSpacing: 6,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Text(
-                    '${items.length}문제 · $completed문제 연습',
-                    style: const TextStyle(color: muted, fontSize: 14),
-                  ),
-                  const Icon(
-                    Icons.arrow_forward_rounded,
-                    color: blue,
-                    size: 18,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildReview(BuildContext context) {
-    final wrong = _knownWrong;
-    final bookmarks = _knownBookmarks;
-    final both = {
-      ...wrong.map((item) => item.id),
-      ...bookmarks.map((item) => item.id),
-    };
-    final uniqueGuideTexts = <String>{};
-    final guides = widget.learning.guides
-        .where((guide) => uniqueGuideTexts.add(guide.text))
+  List<Widget> _review() {
+    final learning = widget.learning;
+    final visible = quizCatalog
+        .where(
+          (item) => switch (filter) {
+            ReviewFilter.wrong => learning.wrongIds.contains(item.id),
+            ReviewFilter.bookmarks => learning.bookmarkedIds.contains(item.id),
+            ReviewFilter.guides => false,
+            ReviewFilter.all =>
+              learning.wrongIds.contains(item.id) ||
+                  learning.bookmarkedIds.contains(item.id),
+          },
+        )
         .toList();
-    final visibleQuizzes = switch (_reviewFilter) {
-      ReviewFilter.wrong => wrong,
-      ReviewFilter.bookmarks => bookmarks,
-      ReviewFilter.all =>
-        quizCatalog.where((item) => both.contains(item.id)).toList(),
-      ReviewFilter.guides => <QuizItem>[],
-    };
-    final visibleGuides =
-        _reviewFilter == ReviewFilter.all ||
-            _reviewFilter == ReviewFilter.guides
-        ? guides
+    final guides = filter == ReviewFilter.all || filter == ReviewFilter.guides
+        ? learning.guides
         : <SavedGuide>[];
-    final empty = visibleQuizzes.isEmpty && visibleGuides.isEmpty;
-    final allCount = both.length + guides.length;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const _Eyebrow('익숙해질 때까지, 천천히'),
-        const SizedBox(height: 10),
-        Text('다시 보는 발음', style: pageTitle),
-        const SizedBox(height: 10),
-        const Text(
-          '틀린 문제, 저장한 문제와 내 문장을 한곳에서 다시 봐요.\n다시 맞힌 문제는 틀린 문제 목록에서 빠져요.',
-          style: TextStyle(color: muted, height: 1.6),
-        ),
-        const SizedBox(height: 22),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
+    return [
+      const Text('다시 읽을 표현', style: sectionTitle),
+      const SizedBox(height: 10),
+      const Text('저장한 표현과 이전 퀴즈 기록에서 다시 읽을 문장을 고르면 된다.', style: smallCopy),
+      const SizedBox(height: 16),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final value in ReviewFilter.values)
             ChoiceChip(
-              key: const ValueKey('review-all'),
-              label: Text('전체 $allCount'),
-              selected: _reviewFilter == ReviewFilter.all,
-              onSelected: (_) =>
-                  setState(() => _reviewFilter = ReviewFilter.all),
+              key: ValueKey('review-${value.name}'),
+              selected: filter == value,
+              onSelected: (_) => setState(() => filter = value),
+              label: Text(switch (value) {
+                ReviewFilter.all => '전체',
+                ReviewFilter.wrong => '이전 퀴즈 오답',
+                ReviewFilter.bookmarks => '저장한 표현',
+                ReviewFilter.guides => '저장한 내 문장 ${learning.guides.length}',
+              }),
             ),
-            ChoiceChip(
-              key: const ValueKey('review-wrong'),
-              label: Text('틀린 문제 ${wrong.length}'),
-              selected: _reviewFilter == ReviewFilter.wrong,
-              onSelected: (_) =>
-                  setState(() => _reviewFilter = ReviewFilter.wrong),
-            ),
-            ChoiceChip(
-              key: const ValueKey('review-bookmarks'),
-              label: Text('저장한 문제 ${bookmarks.length}'),
-              selected: _reviewFilter == ReviewFilter.bookmarks,
-              onSelected: (_) =>
-                  setState(() => _reviewFilter = ReviewFilter.bookmarks),
-            ),
-            ChoiceChip(
-              key: const ValueKey('review-guides'),
-              label: Text('저장한 내 문장 ${guides.length}'),
-              selected: _reviewFilter == ReviewFilter.guides,
-              onSelected: (_) =>
-                  setState(() => _reviewFilter = ReviewFilter.guides),
-            ),
-          ],
-        ),
-        const SizedBox(height: 22),
-        if (empty)
-          _Panel(
-            color: Colors.white,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.auto_stories_outlined, color: muted, size: 28),
-                const SizedBox(height: 16),
-                Text(
-                  switch (_reviewFilter) {
-                    ReviewFilter.bookmarks => '저장한 문제가 아직 없어요',
-                    ReviewFilter.wrong => '다시 볼 오답이 아직 없어요',
-                    ReviewFilter.guides => '저장한 내 문장이 아직 없어요',
-                    ReviewFilter.all => '복습할 내용이 아직 없어요',
-                  },
-                  textAlign: TextAlign.left,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _reviewFilter == ReviewFilter.guides
-                      ? '내 문장에서 발음 가이드를 확인하고\n다시 연습할 문장을 저장해 보세요.'
-                      : '발음 훈련에서 문제를 풀거나\n다시 볼 문제와 내 문장을 저장해 보세요.',
-                  textAlign: TextAlign.left,
-                  style: TextStyle(color: muted, height: 1.6),
-                ),
-              ],
-            ),
-          )
-        else ...[
-          if (visibleQuizzes.isNotEmpty) ...[
-            FilledButton.icon(
-              key: const ValueKey('quiz-start-review'),
-              onPressed: () => _startSession(visibleQuizzes),
-              icon: const Icon(Icons.replay_rounded),
-              label: Text('퀴즈 ${visibleQuizzes.length}문제 복습하기'),
-            ),
-            const SizedBox(height: 20),
-            ..._questionList(visibleQuizzes, showCategory: true),
-          ],
-          for (final guide in visibleGuides) ...[
-            _savedGuideTile(guide),
-            const SizedBox(height: 10),
-          ],
         ],
+      ),
+      const SizedBox(height: 20),
+      if (visible.isEmpty && guides.isEmpty)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 28),
+          child: Text(
+            filter == ReviewFilter.guides
+                ? '저장한 내 문장이 아직 없다.'
+                : '복습할 표현이 아직 없다.',
+            style: smallCopy,
+          ),
+        ),
+      for (final item in visible) ...[_item(item), const SizedBox(height: 10)],
+      for (final guide in guides) ...[
+        _row(
+          key: ValueKey('review-guide-${guide.text}'),
+          title: guide.text,
+          subtitle: '내 문장 · 눌러서 발음 연습',
+          onTap: widget.onOpenGuide == null
+              ? null
+              : () => widget.onOpenGuide!(guide.text),
+          trailing: IconButton(
+            key: ValueKey('review-guide-delete-${guide.text}'),
+            tooltip: '내 문장 삭제',
+            onPressed: () => unawaited(learning.deleteGuide(guide.text)),
+            icon: const Icon(Icons.delete_outline),
+            color: muted,
+          ),
+        ),
+        const SizedBox(height: 10),
       ],
+      if (learning.answers.isNotEmpty)
+        const Padding(
+          padding: EdgeInsets.only(top: 18),
+          child: Text(
+            '이전 퀴즈 기록은 그대로 보관한다. 녹음 결과로 과거 정답·오답 기록을 바꾸지 않는다.',
+            style: smallCopy,
+          ),
+        ),
+    ];
+  }
+
+  Widget _item(QuizItem item) {
+    final learning = widget.learning,
+        saved = learning.bookmarkedIds.contains(item.id);
+    return _row(
+      key: ValueKey('quiz-item-${item.id}'),
+      title: item.text,
+      subtitle: learning.answers.containsKey(item.id)
+          ? '이전 퀴즈: ${learning.answers[item.id]! ? '정답' : '오답'} · 지금은 읽기 연습'
+          : '눌러서 녹음하고 비교',
+      onTap: () => widget.onPractice(item),
+      trailing: IconButton(
+        key: ValueKey('practice-bookmark-${item.id}'),
+        tooltip: saved ? '저장 해제' : '표현 저장',
+        onPressed: () => unawaited(learning.toggleBookmark(item.id)),
+        icon: Icon(saved ? Icons.bookmark : Icons.bookmark_border),
+        color: accent,
+      ),
     );
   }
 
-  Widget _savedGuideTile(SavedGuide guide) => Material(
+  Widget _row({
+    required Key key,
+    required String title,
+    required String subtitle,
+    VoidCallback? onTap,
+    Widget? trailing,
+  }) => Material(
     color: Colors.white,
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(6),
       side: const BorderSide(color: line),
     ),
     child: InkWell(
-      key: ValueKey('review-guide-${guide.text}'),
+      key: key,
       borderRadius: BorderRadius.circular(6),
-      onTap: widget.onOpenGuide == null
-          ? null
-          : () {
-              _stopVoice();
-              widget.onOpenGuide!(guide.text);
-            },
+      onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 6, 16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 10, 16),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const _TypeTag('내 문장', icon: Icons.edit_note_rounded),
-                  const SizedBox(height: 10),
                   Text(
-                    guide.text,
+                    title,
                     style: const TextStyle(
                       fontSize: 18,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                       height: 1.5,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    '눌러서 발음 가이드 다시 보기',
-                    style: TextStyle(color: muted, fontSize: 14, height: 1.5),
-                  ),
+                  const SizedBox(height: 6),
+                  Text(subtitle, style: smallCopy),
                 ],
               ),
             ),
-            IconButton(
-              key: ValueKey('review-guide-delete-${guide.text}'),
-              tooltip: '내 문장 삭제',
-              onPressed: () =>
-                  unawaited(widget.learning.deleteGuide(guide.text)),
-              icon: const Icon(Icons.delete_outline_rounded),
-              color: muted,
-            ),
+            const SizedBox(width: 8),
+            trailing ?? const Icon(Icons.chevron_right, color: muted),
           ],
         ),
       ),
     ),
-  );
-
-  List<Widget> _questionList(
-    List<QuizItem> items, {
-    bool showCategory = false,
-  }) => [
-    for (var index = 0; index < items.length; index++) ...[
-      _questionTile(
-        items[index],
-        () => _startSession(items, startAt: index),
-        showCategory,
-      ),
-      const SizedBox(height: 10),
-    ],
-  ];
-
-  Widget _questionTile(QuizItem item, VoidCallback onTap, bool showCategory) {
-    final answered = widget.learning.answers[item.id];
-    final bookmarked = widget.learning.bookmarkedIds.contains(item.id);
-    return Material(
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(6),
-        side: const BorderSide(color: line),
-      ),
-      child: InkWell(
-        key: ValueKey('quiz-item-${item.id}'),
-        borderRadius: BorderRadius.circular(6),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 6, 16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (showCategory) ...[
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          const _TypeTag('퀴즈', icon: Icons.quiz_outlined),
-                          if (widget.learning.wrongIds.contains(item.id))
-                            const _TypeTag('틀린 문제'),
-                          if (bookmarked) const _TypeTag('저장한 문제'),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                    ],
-                    Text(
-                      showCategory
-                          ? '${item.category.label} · ${groupTitle(item.group)}'
-                          : groupTitle(item.group),
-                      style: const TextStyle(color: muted, fontSize: 14),
-                    ),
-                    const SizedBox(height: 7),
-                    Text(
-                      item.text,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        height: 1.5,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      answered == null
-                          ? '아직 연습 전'
-                          : answered
-                          ? '지난 연습에서 맞혔어요'
-                          : '한 번 더 연습해 보세요',
-                      style: TextStyle(
-                        color: answered == true ? blue : muted,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                tooltip: bookmarked ? '저장 해제' : '문제 저장',
-                onPressed: () =>
-                    unawaited(widget.learning.toggleBookmark(item.id)),
-                icon: Icon(
-                  bookmarked
-                      ? Icons.bookmark_rounded
-                      : Icons.bookmark_border_rounded,
-                ),
-                color: bookmarked ? blue : muted,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildQuestion(BuildContext context) {
-    final item = _session![_index];
-    final options = _options[item.id]!;
-    final correct = _submitted && options[_selected!] == item.pronunciation;
-    final bookmarked = widget.learning.bookmarkedIds.contains(item.id);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: _backButton('목록으로', () => setState(_resetSession))),
-            IconButton(
-              key: const ValueKey('quiz-bookmark'),
-              tooltip: bookmarked ? '저장 해제' : '문제 저장',
-              onPressed: () =>
-                  unawaited(widget.learning.toggleBookmark(item.id)),
-              icon: Icon(
-                bookmarked
-                    ? Icons.bookmark_rounded
-                    : Icons.bookmark_border_rounded,
-              ),
-              color: blue,
-            ),
-          ],
-        ),
-        const SizedBox(height: 18),
-        _Eyebrow('${item.category.label} · ${groupTitle(item.group)}'),
-        const SizedBox(height: 16),
-        Text(
-          '문제 ${_index + 1} / ${_session!.length}',
-          style: const TextStyle(color: muted, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 10),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: (_index + (_submitted ? 1 : 0)) / _session!.length,
-            minHeight: 6,
-            backgroundColor: line,
-            color: blue,
-            semanticsLabel: '문제 진행 상황',
-          ),
-        ),
-        const SizedBox(height: 28),
-        Text('어떻게 읽을까요?', style: pageTitle),
-        const SizedBox(height: 10),
-        const Text('올바른 발음을 골라 주세요.', style: TextStyle(color: muted)),
-        const SizedBox(height: 22),
-        _Panel(
-          color: wash,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                '연습할 표현',
-                style: TextStyle(color: muted, fontSize: 14),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                item.text,
-                style: const TextStyle(
-                  fontSize: 27,
-                  height: 1.5,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 18),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final sideBySide =
-                constraints.maxWidth >= 600 &&
-                MediaQuery.textScalerOf(context).scale(1) < 1.5;
-            final children = [
-              for (var i = 0; i < options.length; i++)
-                _optionCard(context, item, options[i], i),
-            ];
-            return sideBySide
-                ? Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: children[0]),
-                      const SizedBox(width: 14),
-                      Expanded(child: children[1]),
-                    ],
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      children[0],
-                      const SizedBox(height: 12),
-                      children[1],
-                    ],
-                  );
-          },
-        ),
-        const SizedBox(height: 20),
-        if (!_submitted) ...[
-          FilledButton(
-            key: const ValueKey('quiz-submit'),
-            onPressed: _selected == null ? null : _submit,
-            child: const Text('정답 확인'),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            '괄호 안은 읽는 소리예요. 답을 고르면 발음 설명을 볼 수 있어요.',
-            style: TextStyle(color: muted, fontSize: 14, height: 1.6),
-          ),
-        ] else ...[
-          Semantics(
-            liveRegion: true,
-            child: _Panel(
-              color: correct ? wash : const Color(0xffffedf0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Icon(
-                        correct
-                            ? Icons.check_circle_outline_rounded
-                            : Icons.lightbulb_outline_rounded,
-                        color: correct ? blue : red,
-                      ),
-                      Text(
-                        correct ? '맞았어요!' : '이렇게 읽어요',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    _reading(item.pronunciation),
-                    style: const TextStyle(
-                      fontSize: 23,
-                      fontWeight: FontWeight.w700,
-                      height: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    item.explanation,
-                    style: const TextStyle(height: 1.7, fontSize: 15),
-                  ),
-                  const SizedBox(height: 10),
-                  if (!correct)
-                    const Text(
-                      '이 문제는 복습 목록에 담았어요.',
-                      style: TextStyle(color: muted, fontSize: 14, height: 1.5),
-                    ),
-                  const SizedBox(height: 12),
-                  if (widget.playback != null)
-                    SpeechControls(
-                      playback: widget.playback!,
-                      text: item.text,
-                      owner: this,
-                      normalKey: const ValueKey('quiz-speak'),
-                      slowKey: const ValueKey('quiz-speak-slow'),
-                      normalLabel: '예시 듣기',
-                      slowLabel: '천천히 듣기',
-                      enabled: widget.active,
-                    )
-                  else
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: [
-                        OutlinedButton.icon(
-                          key: const ValueKey('quiz-speak'),
-                          style: _compactButtonStyle(),
-                          onPressed: _speaking
-                              ? null
-                              : () => _speak(item, false),
-                          icon: const Icon(Icons.volume_up_outlined, size: 20),
-                          label: const Text('예시 듣기'),
-                        ),
-                        OutlinedButton.icon(
-                          key: const ValueKey('quiz-speak-slow'),
-                          style: _compactButtonStyle(),
-                          onPressed: _speaking
-                              ? null
-                              : () => _speak(item, true),
-                          icon: const Icon(
-                            Icons.slow_motion_video_rounded,
-                            size: 20,
-                          ),
-                          label: const Text('천천히 듣기'),
-                        ),
-                      ],
-                    ),
-                  const SizedBox(height: 12),
-                  Tooltip(
-                    message: item.sourceUrl,
-                    child: const Text(
-                      '국립국어원 발음 자료를 참고했어요.',
-                      style: TextStyle(color: muted, fontSize: 14, height: 1.5),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 18),
-          FilledButton.icon(
-            key: const ValueKey('quiz-next'),
-            onPressed: _next,
-            icon: Icon(
-              _index + 1 == _session!.length
-                  ? Icons.flag_outlined
-                  : Icons.arrow_forward_rounded,
-            ),
-            label: Text(_index + 1 == _session!.length ? '연습 결과 보기' : '다음 문제'),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _optionCard(
-    BuildContext context,
-    QuizItem item,
-    String option,
-    int index,
-  ) {
-    final selected = _selected == index;
-    final isCorrect = _submitted && option == item.pronunciation;
-    final isWrong = _submitted && selected && !isCorrect;
-    final border = isCorrect
-        ? blue
-        : isWrong
-        ? red
-        : selected
-        ? blue
-        : line;
-    final fill = isCorrect
-        ? wash
-        : isWrong
-        ? const Color(0xffffedf0)
-        : selected
-        ? wash
-        : Colors.white;
-    return Semantics(
-      button: true,
-      selected: selected,
-      enabled: !_submitted,
-      child: Material(
-        color: fill,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(6),
-          side: BorderSide(color: border, width: selected || isCorrect ? 2 : 1),
-        ),
-        child: InkWell(
-          key: ValueKey('quiz-option-$index'),
-          borderRadius: BorderRadius.circular(6),
-          onTap: _submitted ? null : () => setState(() => _selected = index),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 132),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Icon(
-                        isCorrect
-                            ? Icons.check_circle_rounded
-                            : isWrong
-                            ? Icons.cancel_outlined
-                            : selected
-                            ? Icons.radio_button_checked_rounded
-                            : Icons.radio_button_off_rounded,
-                        size: 23,
-                        color: border,
-                      ),
-                      Text(
-                        isCorrect
-                            ? '${index == 0 ? 'A' : 'B'} · 정답'
-                            : isWrong
-                            ? '${index == 0 ? 'A' : 'B'} · 선택한 답'
-                            : index == 0
-                            ? 'A'
-                            : 'B',
-                        style: TextStyle(
-                          color: _submitted ? border : muted,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    _reading(option),
-                    style: const TextStyle(
-                      fontSize: 23,
-                      height: 1.5,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSummary(BuildContext context) {
-    final total = _session!.length;
-    return Column(
-      key: const ValueKey('quiz-summary'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const SizedBox(height: 20),
-        const Align(
-          alignment: Alignment.centerLeft,
-          child: Icon(Icons.celebration_outlined, size: 28, color: blue),
-        ),
-        const SizedBox(height: 22),
-        Text('이번 연습을 마쳤어요', textAlign: TextAlign.left, style: pageTitle),
-        const SizedBox(height: 12),
-        const Text(
-          '한 번 더 살펴보며 익숙해져도 좋아요.',
-          textAlign: TextAlign.left,
-          style: TextStyle(color: muted, height: 1.6),
-        ),
-        const SizedBox(height: 26),
-        _Panel(
-          color: wash,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('이번 연습 결과', style: TextStyle(color: muted)),
-              const SizedBox(height: 12),
-              Text(
-                '$total문제 중 $_correctCount문제 정답',
-                textAlign: TextAlign.left,
-                style: const TextStyle(
-                  fontSize: 27,
-                  height: 1.5,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                _sessionWrong.isEmpty
-                    ? '모든 문제를 맞혔어요!'
-                    : '헷갈린 ${_sessionWrong.length}문제는 복습 목록에 담았어요.',
-                textAlign: TextAlign.left,
-                style: const TextStyle(color: muted, height: 1.6),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 22),
-        if (_sessionWrong.isNotEmpty) ...[
-          FilledButton.icon(
-            key: const ValueKey('quiz-retry-wrong'),
-            onPressed: () => _startSession(List.of(_sessionWrong)),
-            icon: const Icon(Icons.replay_rounded),
-            label: const Text('헷갈린 문제 다시 풀기'),
-          ),
-          const SizedBox(height: 12),
-        ],
-        OutlinedButton(
-          key: const ValueKey('quiz-retry-session'),
-          onPressed: () => _startSession(List.of(_session!)),
-          child: const Text('같은 문제 다시 풀기'),
-        ),
-        const SizedBox(height: 12),
-        TextButton(
-          onPressed: () => setState(_resetSession),
-          child: const Text('목록으로 돌아가기'),
-        ),
-      ],
-    );
-  }
-
-  Widget _backButton(String label, VoidCallback onTap) => Align(
-    alignment: Alignment.centerLeft,
-    child: TextButton.icon(
-      onPressed: () {
-        _stopVoice();
-        onTap();
-      },
-      style: TextButton.styleFrom(
-        foregroundColor: muted,
-        padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 12),
-        minimumSize: const Size(0, 48),
-        alignment: Alignment.centerLeft,
-      ),
-      icon: const Icon(Icons.arrow_back_rounded, size: 20),
-      label: Text(label),
-    ),
-  );
-
-  static String _reading(String value) =>
-      value.startsWith('[') ? value : '[$value]';
-
-  static ButtonStyle _compactButtonStyle() => OutlinedButton.styleFrom(
-    minimumSize: const Size(0, 48),
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-    backgroundColor: Colors.white,
-  );
-}
-
-class _TypeTag extends StatelessWidget {
-  final String label;
-  final IconData? icon;
-  const _TypeTag(this.label, {this.icon});
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-    decoration: BoxDecoration(
-      color: wash,
-      borderRadius: BorderRadius.circular(6),
-    ),
-    child: Wrap(
-      spacing: 5,
-      runSpacing: 4,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        if (icon != null) Icon(icon, color: blue, size: 15),
-        Text(
-          label,
-          style: const TextStyle(
-            color: blue,
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            height: 1.4,
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-class _Eyebrow extends StatelessWidget {
-  final String text;
-  const _Eyebrow(this.text);
-
-  @override
-  Widget build(BuildContext context) => Text(
-    text,
-    style: const TextStyle(
-      color: blue,
-      fontSize: 14,
-      fontWeight: FontWeight.w700,
-      height: 1.5,
-    ),
-  );
-}
-
-class _Panel extends StatelessWidget {
-  final Widget child;
-  final Color color;
-  const _Panel({required this.child, required this.color});
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(22),
-    decoration: BoxDecoration(
-      color: color,
-      borderRadius: BorderRadius.circular(6),
-      border: Border.all(color: line),
-    ),
-    child: child,
-  );
-}
-
-class _Stat extends StatelessWidget {
-  final String label;
-  final String value;
-  const _Stat({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Text(label, style: const TextStyle(color: muted, fontSize: 14)),
-      const SizedBox(height: 5),
-      Text(
-        value,
-        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-      ),
-    ],
-  );
-}
-
-class _Hint extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  const _Hint({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) => Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Icon(icon, color: muted, size: 21),
-      const SizedBox(width: 10),
-      Expanded(
-        child: Text(
-          text,
-          style: const TextStyle(color: muted, height: 1.65, fontSize: 14),
-        ),
-      ),
-    ],
   );
 }

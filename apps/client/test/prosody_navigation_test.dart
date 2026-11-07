@@ -250,7 +250,12 @@ class _CountingProsodyAudio extends DeviceAudioService {
   }
 
   @override
-  Future<void> play(String path, {Duration? start, Duration? end}) async {
+  Future<void> play(
+    String path, {
+    Duration? start,
+    Duration? end,
+    bool waitForCompletion = false,
+  }) async {
     playbackStarts++;
   }
 

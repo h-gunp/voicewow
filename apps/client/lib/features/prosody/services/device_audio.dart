@@ -521,9 +521,15 @@ class DeviceAudioService {
     _stopFuture = null;
   }
 
-  /// Returns after starting playback; later playback failures are in [errors].
+  /// By default returns after starting playback; later failures are in [errors].
+  /// [waitForCompletion] keeps an exclusive practice flow busy until playback ends.
   /// [start]/[end] refer to the original WAV, including its leading silence.
-  Future<void> play(String path, {Duration? start, Duration? end}) async {
+  Future<void> play(
+    String path, {
+    Duration? start,
+    Duration? end,
+    bool waitForCompletion = false,
+  }) async {
     _checkOpen();
     if (_recording || _starting) {
       throw const DeviceAudioException('녹음을 마친 뒤 소리를 재생해 주세요.');
@@ -549,13 +555,18 @@ class DeviceAudioService {
       if (_disposed || ticket != _playGeneration) return;
       await player.seek(Duration.zero);
       if (_disposed || ticket != _playGeneration) return;
-      unawaited(
-        player.play().catchError((Object error, StackTrace stack) {
-          if (!_disposed && ticket == _playGeneration) {
-            _errors.add('소리를 재생하지 못했어요. 다시 시도해 주세요.');
-          }
-        }),
-      );
+      final playback = player.play();
+      if (waitForCompletion) {
+        await playback;
+      } else {
+        unawaited(
+          playback.catchError((Object error, StackTrace stack) {
+            if (!_disposed && ticket == _playGeneration) {
+              _errors.add('소리를 재생하지 못했어요. 다시 시도해 주세요.');
+            }
+          }),
+        );
+      }
     } on DeviceAudioException {
       rethrow;
     } catch (_) {

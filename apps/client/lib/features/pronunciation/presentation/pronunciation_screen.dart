@@ -3,14 +3,23 @@ import 'package:flutter/material.dart';
 import '../../../app_theme.dart';
 import '../data/learning_store.dart';
 import '../data/speech_player.dart';
+import '../data/pronunciation_recorder.dart';
+import '../domain/quiz_catalog.dart';
 import '../domain/pronunciation_guide.dart';
 import 'quiz_training_view.dart';
 import 'speech_controls.dart';
+import 'pronunciation_practice_view.dart';
 
 class PronunciationScreen extends StatefulWidget {
   final LearningController? learning;
   final SpeechPlayer? speech;
-  const PronunciationScreen({super.key, this.learning, this.speech});
+  final PronunciationRecorder? recorder;
+  const PronunciationScreen({
+    super.key,
+    this.learning,
+    this.speech,
+    this.recorder,
+  });
 
   @override
   State<PronunciationScreen> createState() => _PronunciationScreenState();
@@ -22,7 +31,9 @@ class _PronunciationScreenState extends State<PronunciationScreen>
   late final SpeechPlayer speech;
   late final SpeechPlaybackController playback;
   late final TabController tabs;
-  int _speechEpoch = 0;
+  late final PronunciationRecorder recorder;
+  _PracticeTarget? _target;
+  int _practiceRequest = 0;
   int _tab = 0;
   String? _requestedGuide;
   int _guideRequest = 0;
@@ -34,7 +45,8 @@ class _PronunciationScreenState extends State<PronunciationScreen>
     super.initState();
     learning =
         widget.learning ?? LearningController(PreferencesLearningStore());
-    speech = widget.speech ?? DeviceSpeechPlayer();
+    speech = widget.speech ?? DeviceSpeechPlayer(localOnly: true);
+    recorder = widget.recorder ?? createPronunciationRecorder();
     playback = SpeechPlaybackController(speech);
     tabs = TabController(length: 3, vsync: this)..addListener(_tabChanged);
     unawaited(learning.load());
@@ -42,17 +54,58 @@ class _PronunciationScreenState extends State<PronunciationScreen>
 
   void _tabChanged() {
     if (tabs.index == _tab) return;
+    ++_practiceRequest;
     unawaited(_stopSpeech());
+    unawaited(recorder.cancel());
     setState(() => _tab = tabs.index);
   }
 
   void _openGuide(String value) {
-    unawaited(_stopSpeech());
-    setState(() {
-      _requestedGuide = value;
-      _guideRequest++;
-    });
-    tabs.animateTo(1);
+    if (value.runes.length > PronunciationGuideEngine.maxInputLength ||
+        !RegExp('[가-힣]').hasMatch(value)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('완성된 한글이 포함된 300자 이내 문장으로 연습할 수 있다.')),
+      );
+      return;
+    }
+    final guide = const PronunciationGuideEngine().analyze(value);
+    _requestedGuide = value;
+    _guideRequest++;
+    unawaited(
+      _openPractice(
+        _PracticeTarget(
+          value,
+          _references(guide.pronunciation),
+          approximate: true,
+          note: '규칙 기반 참고다. 이어 읽기·고유 명사·일부 예외는 실제 소리와 다를 수 있다.',
+        ),
+      ),
+    );
+  }
+
+  List<String> _references(String reading) {
+    final variants = <String>{reading};
+    if (reading.contains('마딛께')) variants.add(reading.replaceAll('마딛께', '마싣께'));
+    if (reading.contains('마싣께')) variants.add(reading.replaceAll('마싣께', '마딛께'));
+    return variants.toList();
+  }
+
+  void _openItem(QuizItem item) => unawaited(
+    _openPractice(
+      _PracticeTarget(
+        item.text,
+        _references(item.pronunciation),
+        id: item.id,
+        note: '${item.explanation}\n어절별 참고 발음이며 말 사이의 이어 읽기는 비교 범위에서 제외한다.',
+      ),
+    ),
+  );
+
+  Future<void> _openPractice(_PracticeTarget target) async {
+    final ticket = ++_practiceRequest;
+    await _stopSpeech();
+    await recorder.cancel();
+    if (mounted && ticket == _practiceRequest) setState(() => _target = target);
   }
 
   void _openSavedGuides() {
@@ -66,35 +119,51 @@ class _PronunciationScreenState extends State<PronunciationScreen>
 
   @override
   void dispose() {
+    ++_practiceRequest;
     tabs.dispose();
     playback.dispose();
     if (widget.learning == null) learning.dispose();
     unawaited(speech.stop());
     if (widget.speech == null) unawaited(speech.dispose());
+    if (widget.recorder == null) {
+      unawaited(recorder.dispose());
+    } else {
+      unawaited(recorder.cancel());
+    }
     super.dispose();
   }
 
-  Future<void> _speak(String text, bool slow) async {
-    final epoch = ++_speechEpoch;
-    final outcome = await speech.speak(text, slow: slow);
-    if (!mounted ||
-        epoch != _speechEpoch ||
-        outcome != SpeechResult.unavailable)
-      return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('한국어 예시 음성을 재생할 수 없어요. 기기의 한국어 음성 설정을 확인해 주세요.'),
-      ),
-    );
-  }
-
   Future<void> _stopSpeech() async {
-    ++_speechEpoch;
     await playback.stop();
   }
 
   @override
-  Widget build(BuildContext context) => Center(
+  Widget build(BuildContext context) {
+    final target = _target;
+    if (target == null) return _buildLibrary(context);
+    return ListenableBuilder(
+      listenable: learning,
+      builder: (context, _) => PronunciationPracticeView(
+        key: ValueKey('practice-${target.id ?? target.text}'),
+        text: target.text,
+        references: target.references,
+        referenceIsApproximate: target.approximate,
+        referenceNote: target.note,
+        recorder: recorder,
+        playback: playback,
+        bookmarked:
+            target.id != null && learning.bookmarkedIds.contains(target.id),
+        onBookmark: target.id == null
+            ? null
+            : () => unawaited(learning.toggleBookmark(target.id!)),
+        onExit: () async {
+          if (mounted) setState(() => _target = null);
+        },
+      ),
+    );
+  }
+
+  Widget _buildLibrary(BuildContext context) => Center(
     child: ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 720),
       child: Padding(
@@ -137,7 +206,7 @@ class _PronunciationScreenState extends State<PronunciationScreen>
                   border: Border.all(color: line),
                 ),
                 tabs: const [
-                  Tab(text: '발음 퀴즈'),
+                  Tab(text: '발음 연습'),
                   Tab(text: '내 문장'),
                   Tab(text: '복습'),
                 ],
@@ -167,9 +236,7 @@ class _PronunciationScreenState extends State<PronunciationScreen>
                           children: [
                             QuizTrainingView(
                               learning: learning,
-                              onSpeak: _speak,
-                              onStop: _stopSpeech,
-                              playback: playback,
+                              onPractice: _openItem,
                               active: _tab == 0,
                             ),
                             _PersonalGuideView(
@@ -179,12 +246,11 @@ class _PronunciationScreenState extends State<PronunciationScreen>
                               onOpenSaved: _openSavedGuides,
                               requestedGuide: _requestedGuide,
                               guideRequest: _guideRequest,
+                              onPractice: _openGuide,
                             ),
                             QuizTrainingView(
                               learning: learning,
-                              onSpeak: _speak,
-                              onStop: _stopSpeech,
-                              playback: playback,
+                              onPractice: _openItem,
                               reviewOnly: true,
                               active: _tab == 2,
                               onOpenGuide: _openGuide,
@@ -206,6 +272,20 @@ class _PronunciationScreenState extends State<PronunciationScreen>
   );
 }
 
+class _PracticeTarget {
+  const _PracticeTarget(
+    this.text,
+    this.references, {
+    this.id,
+    this.note,
+    this.approximate = false,
+  });
+  final String text;
+  final List<String> references;
+  final String? id, note;
+  final bool approximate;
+}
+
 class _PersonalGuideView extends StatefulWidget {
   final LearningController learning;
   final SpeechPlaybackController playback;
@@ -213,6 +293,7 @@ class _PersonalGuideView extends StatefulWidget {
   final VoidCallback onOpenSaved;
   final String? requestedGuide;
   final int guideRequest;
+  final ValueChanged<String> onPractice;
   const _PersonalGuideView({
     required this.learning,
     required this.playback,
@@ -220,6 +301,7 @@ class _PersonalGuideView extends StatefulWidget {
     required this.onOpenSaved,
     required this.requestedGuide,
     required this.guideRequest,
+    required this.onPractice,
   });
 
   @override
@@ -402,6 +484,13 @@ class _PersonalGuideViewState extends State<_PersonalGuideView>
                   const SizedBox(height: 8),
                   const Text('괄호 안은 소리 내어 읽을 때 참고하는 표기예요.'),
                   const SizedBox(height: 16),
+                  FilledButton.icon(
+                    key: const Key('guide-practice'),
+                    onPressed: () => widget.onPractice(guide.original),
+                    icon: const Icon(Icons.mic),
+                    label: const Text('이 문장 발음 연습'),
+                  ),
+                  const SizedBox(height: 10),
                   SpeechControls(
                     playback: widget.playback,
                     text: guide.original,

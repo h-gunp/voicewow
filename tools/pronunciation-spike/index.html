@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>VoiceMate · 로컬 발음 검증</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.mjs"></script>
+</head>
+<body>
+  <main>
+    <header><span class="eyebrow">VOICEMATE / 로컬 검증</span><h1>인식된 내 발음</h1><p>녹음한 소리를 음소로 분석하는 검증 화면이다. 실제 발음 정확도는 아직 검증되지 않았다.</p></header>
+    <aside>음성은 이 기기에서만 처리한다. 녹음은 화면을 닫거나 다시 시도하면 삭제된다. 모델은 이 PC에 내려받은 약 356MB 파일을 사용한다.</aside>
+    <section aria-labelledby="prompt-title">
+      <label id="prompt-title" for="prompt">읽을 문장</label>
+      <textarea id="prompt" rows="2" maxlength="300">밥 맛있게 먹었어?</textarea>
+      <p class="hint">이 문장은 읽기 참고용이다. 인식 결과를 문장에 맞춰 보정하지 않는다.</p>
+    </section>
+    <section class="controls" aria-label="녹음과 분석">
+      <button id="prepare" class="secondary">로컬 모델 준비</button>
+      <div class="record-row"><button id="record" class="primary" disabled>● 녹음 시작</button><button id="cancel" class="secondary" disabled>취소</button></div>
+      <p id="status" role="status" aria-live="polite">모델을 준비한 다음 녹음을 시작할 수 있다.</p>
+      <span id="timer" aria-label="녹음 시간">최대 20초</span>
+      <label class="file-label" for="file">저장된 WAV로 확인</label><input id="file" type="file" accept=".wav,audio/wav" disabled>
+      <p class="hint">16비트 PCM WAV · 모노 또는 스테레오 · 20초 이하 · 업로드 없이 기기 안에서 읽는다.</p>
+    </section>
+    <section id="playback-section" hidden aria-label="내 녹음 다시 듣기"><h2>내 녹음 다시 듣기</h2><audio id="playback" controls preload="none"></audio></section>
+    <section id="result" hidden aria-labelledby="result-title">
+      <h2 id="result-title">인식된 내 발음 <span class="tag">추정 표기</span></h2>
+      <p id="transcript" class="transcript"></p>
+      <p class="hint">밑줄은 한글 표기가 모호한 부분이다. 색상과 밑줄은 발음의 정답·오답을 뜻하지 않는다.</p>
+      <ul id="notes"></ul>
+      <p id="timing" class="hint"></p>
+      <details><summary>인식된 음소 보기</summary><p id="phones"></p></details>
+    </section>
+    <footer><strong>확인할 내용</strong><p>같은 문장을 평소 발음으로 읽은 뒤, 일부러 ‘께 → 떼’, ‘써 → 떠’를 바꾸어 다시 읽으면 된다. 재생되는 실제 소리와 인식된 표기가 같은지 확인해야 한다. 잡음이 글자로 인식될 수 있어 현재 결과로 자동 채점하지 않는다.</p></footer>
+  </main>
+</body>
+</html>

@@ -1,32 +1,46 @@
-# 발음 훈련
+# 발음 연습
 
-발음 훈련은 apps/client/lib/features/pronunciation에 모은 독립 기능이다.
-앱 하단 ‘발음 훈련’으로 들어가며, 웹에서는 /?feature=pronunciation으로 바로
-열 수 있다. Android는 발음 훈련으로 시작한다. 기존 음량 측정의 마이크
-구현은 웹 전용이며 이번 발음 기능의 Android 지원과 별개다.
+발음 기능은 `apps/client/lib/features/pronunciation`에 모은 독립 기능이다.
+앱 하단 ‘발음 훈련’으로 들어가며, 웹에서는 `/?feature=pronunciation`으로 바로
+열 수 있다. Android는 발음 훈련으로 시작한다. 선다형 퀴즈 화면은 표현을
+선택하고 직접 읽는 ‘발음 연습’으로 교체했다. 기존 음량 측정과 높낮이 기능은 유지한다.
+
+사용자는 실제 발음 판별 검증을 제품 구현 뒤 직접 수행하기로 했다. 따라서
+녹음·로컬 추론·화면 비교를 연결했으며, 색상을 실제 정오나 발음 정확도라고
+표현하지 않는다. 실제 브라우저·Android 기기의 마이크 동작과 음향 정확도는
+아직 검증되지 않았다.
 
 ## 사용자 흐름
 
-- **발음 퀴즈:** 단어 / 기초 문장 / 확장 문장 / 비즈니스 문장 → 하위 분류와
-  표현 선택 → 두 보기 중 올바른 읽는 소리 선택 → 정답·설명 → 다음 문제·결과.
-- **내 문장:** 300자 이내 문장 입력 → 읽는 소리와 변화 설명 → 보통/느린
-  예시 음성 → 복습에 문장 저장. 입력칸 아래 ‘예시 문장 · 눌러서 체험해 보세요’의
-  예시를 누르면 자동 입력·분석한다. 저장 목록은 ‘저장한 문장 보기’로 연다.
-- **복습:** 전체 / 틀린 문제 / 저장한 문제 / 저장한 내 문장을 구분한다.
-  전체에서는 틀리고 저장한 동일 퀴즈를 한 번만 표시하고 종류를 함께 표시한다.
-  맞힌 오답은 오답 목록에서 빠지며 저장 표시는 유지된다. 내 문장은 선택하면
-  내 문장 화면에서 현재 규칙으로 다시 분석하며, 복습에서 삭제할 수도 있다.
+- **발음 연습:** 단어 / 기초 문장 / 확장 문장 / 비즈니스 문장에서 하위 분류와
+  표현을 선택하면 원문·참고 발음·예시 듣기가 있는 상세 화면을 연다.
+- **내 문장:** 완성된 한글을 포함한 300자 이내 문장을 입력하면 규칙 기반
+  읽는 소리와 변화 설명을 표시한다. ‘이 문장 발음 연습’으로 같은 상세 화면을
+  열 수 있고, 저장한 문장도 복습 목록에서 같은 화면으로 연다.
+- **복습:** 저장한 표현·저장한 내 문장·이전 퀴즈 기록에서 다시 읽을 항목을
+  선택한다. 기존 정답·오답은 ‘이전 퀴즈’ 기록으로 표시하며 녹음 결과로 바꾸지 않는다.
 
-보기 순서는 문제를 시작할 때 섞고, 화면이 갱신될 때는 바꾸지 않는다.
-정답 확인 전에는 예시 음성을 제공하지 않는다. 복습 기록과 문장 저장은
-기기 또는 해당 브라우저에 남으며 로그인·서버 동기화는 없다.
+상세 화면의 ‘발음 모델 준비’를 사용자가 눌러야 모델 다운로드·검증을 시작한다.
+최초 약 356MB 다운로드 안내와 준비 진행 상태를 표시한다. 준비가 끝난 뒤
+마이크를 누르면 녹음을 시작하고, 다시 누르거나 20초가 지나면 마지막 PCM
+샘플까지 받아 기기 안에서 분석한다. 준비나 화면 진입만으로 마이크를 열지 않는다.
+
+결과는 ‘인식된 내 발음’과 참고 발음을 함께 표시한다. 녹색은 비교 가능한
+음소의 일치, 빨간색과 밑줄은 차이, 회색은 비교 보류다. ‘기준 께 → 인식 떼’,
+누락·추가 등의 텍스트 설명도 표시한다. ‘다시 읽기’는 새 녹음을 시작하고
+‘내 녹음 다시 듣기’는 이번 녹음을 기기에서 재생한다. 숫자 점수나 새 정답 제출은 없다.
+
+중지·뒤로가기·탭 및 기능 이동·앱 이탈은 녹음과 분석을 취소하고 늦은 응답을
+무시한다. 새 녹음·화면 종료 때 이전 음성·음소·비교 결과를 정리한다. 북마크와
+개인 문장은 기기 또는 해당 브라우저에 저장하며 로그인·서버 동기화는 없다.
 
 ## 콘텐츠와 발음 변환 범위
 
-직접 작성한 문제는 단어 50개와 기초 문장·확장 문장·비즈니스 문장 각 25개,
-총 125개다. 단어는 아래 5개 묶음을 각각 10문제씩 연습한다.
+기존 콘텐츠는 단어 50개와 기초 문장·확장 문장·비즈니스 문장 각 25개,
+총 125개다. 모든 콘텐츠 ID·분류·원문·참고 발음·출처를 유지한다.
+단어는 아래 5개 묶음에 각각 10개가 있다.
 
-| 단어 분류 | 문제 수 |
+| 단어 분류 | 표현 수 |
 | --- | ---: |
 | 이어 읽기 (연음 연습) | 10 |
 | 된소리로 읽기 (된소리되기 연습) | 10 |
@@ -34,51 +48,91 @@
 | ㅈ·ㅊ으로 바꿔 읽기 (구개음화 연습) | 10 |
 | ㅋ·ㅌ·ㅍ·ㅊ으로 바꿔 읽기 (거센소리되기 연습) | 10 |
 
-각 문장 분류는 5개 상황 묶음에서 한 번에 5문제씩 연습한다. 기존 32문제의
-ID와 원문·정답은 유지하여 저장한 문제와 오답 기록이 새 분류에서도 이어진다.
-domain/quiz_catalog.dart의 설명과 sourceUrl은 국립국어원 자료를 기준으로
-작성했다. 문장 보기는 어절별로 나누어 읽는 연습 기준이며 어절 사이의
-선택적인 이어 읽기나 소리의 길이를 정답 판정에 포함하지 않는다.
+각 문장 분류에는 5개 상황 묶음에 각각 5개 표현이 있다.
+`domain/quiz_catalog.dart`의 설명과 `sourceUrl`은 국립국어원 자료를 기준으로
+작성했다. 문장 참고 발음은 어절별 읽기이며 어절 사이의 선택적인 이어 읽기와
+소리의 길이를 완전하게 다루지 않는다.
 기존 상용 서비스의 문제·이미지·음성은 복사하지 않았다.
 
-domain/pronunciation_guide.dart는 순수 Dart로 동작한다.
+`domain/pronunciation_guide.dart`는 순수 Dart로 동작한다.
 연음, 받침 대표음, 구개음화, 거센소리, 비음화, 유음화, 된소리와 일부
 단어 예외를 지원한다. 띄어쓰기·문장부호·숫자·영문은 보존한다.
 형태소·문장 의미 분석, 고유 명사, 모든 합성어 예외, 띄어쓰기 너머의 변화,
 장단음·억양까지 해결하는 전체 한국어 사전은 아니다. 일부 중의적인 말은
-발음을 단정하지 않고 추가 안내를 표시한다. 출력은 **규칙 기반 참고**이며
-사용자 목소리의 발음 자동 평가나 채점은 하지 않는다.
+발음을 단정하지 않고 추가 안내를 표시한다. 개인 문장의 출력은 **규칙 기반 참고**이며
+확실하게 매핑할 수 있는 음소만 실험적으로 비교한다. 참고 읽기의 모든 예외를
+검증한 채점 기준으로 취급하지 않는다. 규칙 변환에는 API 키나 네트워크가 필요하지 않다.
 
-변환 자체에는 API 키나 네트워크가 필요하지 않다. 예시 음성은 웹에서 브라우저의
-SpeechSynthesis, Android에서 flutter_tts로 기기의 한국어 음성을 사용한다.
-한국어 음성이 없거나 재생이
-실패하면 텍스트 안내를 유지한다. 기기 음성 엔진은 설정과 제공자에 따라
-네트워크를 사용할 수 있으므로 완전한 오프라인 음성 재생을 보장하지 않는다.
+`domain/pronunciation_comparison.dart`는 인식된 음소만으로 한글을 조립한다.
+원문을 넣어 인식 결과를 교정하지 않으며, 참고 발음을 음소로 분해한 뒤
+삽입·삭제·대치 정렬을 수행한다. ‘맛있게’의 `마딛께`와 `마싣께`처럼 등록한
+허용 읽기 중 최소 차이를 선택한다. 같은 최적 정렬이나 허용 기준이 서로
+다른 비교 위치를 만드는 구간은 회색으로 남긴다. 한 음소 누락 때문에 뒤 문장
+전체가 차이로 밀리지 않게 한다.
+
+모델의 E는 ㅐ/ㅔ, iE는 ㅒ/ㅖ, oE는 ㅙ/ㅚ/ㅞ를 구별하지 못한다. 해당 모음의
+일치를 단정하지 않지만 같은 음절의 별도 확정 자음 차이는 표시할 수 있다.
+uEO는 원모델 표기 불일치 때문에 `□`로 남기며, 불완전한 음절은 자모로 남긴다.
+초성·종성 구별이 모호한 음소와 어절 경계에 닿는 음소도 비교를 보류한다.
+무음·알 수 없는 출력은 정답으로 복원하지 않으며, 잡음도 글자로 인식될 수 있다.
+
+## 모델·네트워크·저장 경계
+
+제품 웹은 `apps/client/web/pronunciation`의 PCM 수집·전용 Worker·ONNX Runtime
+Web 경로를 사용한다. Android는 기존 16kHz 모노 녹음과 Kotlin ONNX Runtime
+1.23.2 경로를 사용한다. 두 엔진은 같은 고정 모델·음소 사전·CTC 규칙을 사용하고
+동일한 `List<String>` 음소 계약으로 공통 Dart 비교 화면에 연결한다.
+네이티브 녹음 구현은 Android 전용이며 다른 네이티브 플랫폼은 미지원 처리를 한다.
+
+모델은 Hugging Face의 공개 `chegrowk/ko-phone-int8` revision
+`dbb9c196f3e5e72d41c8ce2b63e6d0c91a011b70`이다. ONNX 가중치는 356,129,122바이트이며
+SHA-256은 `c1ef511e4bac127e884edb013b16fae9e0d3d54d792039417aa3cf4b48e8a134`다.
+최초 준비 때 공개 모델과 설정을 다운로드하고 크기·해시를 확인한 뒤 캐시한다.
+웹 캐시를 쓸 수 없으면 이번 실행에 내려받고 다음 실행에 다시 받을 수 있음을 안내한다.
+원모델·변환본·라이선스는 `web/pronunciation/THIRD-PARTY-NOTICES.md`에 기록했다.
+
+녹음 PCM·선택 문장·음소·비교 결과를 외부 분석 서버로 보내는 API는 사용하지 않는다.
+모델 다운로드는 공개 파일을 받는 요청이며 음성 업로드와 별개다. 네트워크 차단
+상태에서 실제 기기의 전체 흐름과 외부 요청 부재를 관찰하는 검증은 남아 있다.
+
+저장 키 `voicemate.pronunciation.v1`과 JSON version 1의 `answers`, `wrong`,
+`bookmarks`, `guides`를 보존한다. 개인 문장은 기존 최대 60개다. 새 녹음 결과는
+`recordAnswer`를 호출하지 않으며 과거 퀴즈 기록·북마크·개인 문장을 덮어쓰지 않는다.
+녹음과 비교 결과는 상세 화면의 임시 상태이며 영구 저장하지 않는다.
+
+## 예시 듣기
+
+발음 화면은 `DeviceSpeechPlayer(localOnly: true)`를 사용한다. 웹은
+SpeechSynthesis의 로컬 한국어 음성, Android는 설치된 오프라인 한국어 음성으로
+확인되는 항목만 선택한다. 로컬 여부를 확인할 수 없거나 재생이 실패하면 듣기를
+사용할 수 없다고 표시하며 원격 음성으로 대체하지 않는다. 텍스트와 녹음 연습은
+계속 사용할 수 있다. 실제 기기의 TTS 동작과 음질은 별도 검증 대상이다.
 
 듣기를 누르면 두 버튼을 회색으로 비활성화하고 누른 버튼에 ‘음성 준비 중…’을
 표시한다. 실제 시작 이벤트를 받은 뒤에만 ‘재생 중 · 정지’로 바꾸며, 이 버튼을
 누르면 재생을 멈춘다. 완료·정지·실패 뒤에는 듣기 버튼으로 돌아간다. 문장 변경,
-문제 이동, 탭·기능 이동 때도 재생과 준비 중인 요청을 취소한다. 재생 상태는
+표현 이동, 탭·기능 이동 때도 재생과 준비 중인 요청을 취소한다. 재생 상태는
 타이머로 추정하지 않는다. 음성은 선택 자료이며 듣지 않아도 연습을 완료할 수 있다.
 
 ## 통합 지점
 
-- app.dart: 기존 음량 화면과 발음 훈련 사이의 탐색. 발음으로 이동하면
-  진행 중인 마이크 입력을 먼저 중지한다.
-- data/learning_store.dart: 버전이 있는 JSON 기록, 순서대로 저장하는 큐,
-  저장 실패 시 메모리에서 연습 지속. 앱 범위의 controller를 유지하므로
+- `app.dart`: 기능 전환 전에 진행 중인 마이크·발음 녹음·재생을 정리한다.
+- `data/learning_store.dart`: 버전이 있는 JSON 기록, 순서대로 저장하는 큐,
+  저장 실패 시 메모리에서 연습을 지속하는 처리를 제공한다. 앱 범위의 controller를 유지하므로
   화면 재진입이 저장 중인 기록을 덮어쓰지 않는다.
-- data/speech_player.dart: 실제 시작·완료·취소·한국어 음성 미지원 구분.
-- data/speech_transport_web.dart: 요청마다 별도 음성 객체를 사용하여 준비 중
+- `data/pronunciation_recorder*.dart`: 준비·시작·종료·재생·취소 계약과 플랫폼 연결이다.
+- `web/pronunciation/`: 웹 PCM·Worker·모델 검증·캐시·로컬 추론 구현이다.
+- Android `PronunciationEngine.kt`: 공개 모델 다운로드·무결성 검사·백그라운드 추론·취소를 담당한다.
+- `domain/pronunciation_comparison.dart`: 음소 정렬·한글 표시·불확실성 처리를 담당한다.
+- `data/speech_player.dart`: 실제 시작·완료·취소·한국어 음성 미지원을 구분한다.
+- `data/speech_transport_web.dart`: 요청마다 별도 음성 객체를 사용하여 준비 중
   취소와 이전 음성의 늦은 이벤트를 구분한다.
-- data/speech_transport_native.dart: Android TTS 이벤트를 연결하고 취소 이벤트를
+- `data/speech_transport_native.dart`: Android TTS 이벤트를 연결하고 취소 이벤트를
   최대 1초 기다려 기능 전환 시 다른 TTS 사용과 겹치지 않게 한다. 이벤트를
   누락하는 엔진의 이전 요청은 격리하며, 준비 시간 초과 시 안내를 표시한다.
-- presentation/speech_controls.dart: 퀴즈와 내 문장이 공유하는 준비·재생·정지 UI.
-- presentation/: 분류·퀴즈·결과·개인 문장·복습 화면.
-
-공용 앱 진입점과 패키지 의존성 외의 기존 음량 처리 코드는 변경하지 않는다.
-팀 통합은 PR 검토 후 저장소 관리자가 진행한다.
+- `presentation/speech_controls.dart`: 상세 연습과 내 문장이 공유하는 준비·재생·정지 UI다.
+- `presentation/pronunciation_practice_view.dart`: 준비·녹음·비교·재시도·녹음 재생 화면이다.
+- `presentation/quiz_training_view.dart`: 파일명은 유지하며 콘텐츠·복습 목록을 표시한다.
 
 ## 웹 실행과 검사
 
@@ -94,7 +148,21 @@ SpeechSynthesis, Android에서 flutter_tts로 기기의 한국어 음성을 사�
 
 웹 배포 산출물은 apps/client/build/web 전체다. 현재 사용하는 TTS 플러그인은
 Wasm dry-run 경고가 있어, 검증 대상은 기본 JavaScript 웹 빌드다.
-실제 사용자 발음의 적절성 검증과 기기별 TTS 음질 확인은 별도로 필요하다.
+위 명령은 재현 절차다. 제품 연결 뒤 Flutter 검사 303개, Node 제품 회귀 339개와
+spike 회귀 36개 통과를 확인했으며 `flutter analyze`에서 문제가 없었다.
+390px, 320px·글자 200%, 1280px의 합성 위젯 렌더링 3개를 통과하고 이미지도
+확인했다. 합성 녹음기를 사용한 화면 검증이며 실제 브라우저 마이크 검증이 아니다.
+JavaScript release 웹 빌드는 54.9초에 성공했으며 기존 `flutter_tts`의 Wasm dry-run
+경고만 남았다. 기존 8092 서버의 `/?feature=pronunciation`,
+`/pronunciation/bridge.mjs`, `/main.dart.js`가 HTTP 200을 반환했다. HTTP로 받은
+`main.dart.js`의 SHA-256이 새 로컬 빌드와 일치했다. 새 서버를 시작하거나
+브라우저 마이크를 실행한 검증은 아니다.
+
+제품 `web/pronunciation/phone-engine.mjs`를 직접 사용한 Node WASM 추론도 확인했다.
+공개 WAV 3.5265초를 3.880초에 처리했으며 결과는 `.local/product-model-check.json`에
+있다. 이는 로컬 엔진 실행 증거이며 실제 사용자 발음 정확도나 브라우저·Android
+성능을 검증한 결과가 아니다. 실제 마이크 동작·발음 판별 정확도·기기별 TTS 음질은
+자동 검사 결과와 구분한다.
 
 ## Android
 
@@ -119,8 +187,20 @@ CMake의 ninja 실행 경로에 잘못 기록되는 Windows 환경이 있다.
 정해야 한다. 기존 웹의 음량 측정을 Android 네이티브로 옮기는 작업은
 이 발음 기능의 APK 빌드와 분리된 후속 작업이다.
 
-## Native TTS handoff safety
+발음 Kotlin 코드의 격리 컴파일과 PCM·CTC 관련 JVM 검사 4개를 통과했다.
+전체 APK 빌드 명령은 실행했으나 `No Android SDK found`로 완료하지 못했다.
+격리 컴파일·JVM 검사 결과를 실제 Android 기기에서 모델 다운로드·마이크·추론·재생을
+검증한 결과로 해석하지 않는다.
 
-The Android flutter_tts 4.2.5 plugin reports file-synthesis cancellation as an ID-less speak.onCancel. Pronunciation playback and prosody synthesis therefore share a process-wide lease before constructing or configuring FlutterTts. An issued lease is released only when its terminal callback drains; stop acknowledgement is not sufficient. If termination is missing, a new request fails unavailable instead of assigning the old callback to new speech. Pre-issuance cancellation releases the lease; definite queue rejection allows retry, while uncertain failures remain quarantined. Engine stop is guarded by lease ownership.
+## 네이티브 TTS 전환
 
-Regression tests inject actual MethodChannel event names for synthesis-to-speech and speech-to-synthesis transitions, delayed cancellation, missing terminal events, and definitive rejection/retry. These host tests do not replace Android device verification.
+Android flutter_tts 4.2.5는 파일 합성 취소를 ID 없는 `speak.onCancel`로 보고한다.
+발음 예시 재생과 높낮이 음성 합성은 FlutterTts를 만들거나 설정하기 전에
+프로세스 범위의 사용권을 공유한다. 발행한 요청은 종료 콜백을 처리해야 사용권을
+반환하며 `stop` 응답만으로 반환하지 않는다. 종료 이벤트가 없으면 새 요청을
+사용 불가로 처리하여 이전 이벤트가 새 재생에 붙지 않게 한다. 발행 전 취소와
+명확한 큐 거절은 재시도를 허용하며 불확실한 실패는 격리한다.
+
+회귀 검사는 실제 MethodChannel 이벤트 이름으로 합성·재생 전환, 늦은 취소,
+종료 이벤트 누락, 명확한 거절·재시도를 다룬다. 호스트 검사는 실제 Android
+기기의 이벤트 순서와 오디오 동작 검증을 대신하지 않는다.

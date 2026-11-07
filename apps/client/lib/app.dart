@@ -13,6 +13,7 @@ import 'screens/meter_screen.dart';
 import 'features/pronunciation/presentation/pronunciation_screen.dart';
 import 'features/pronunciation/data/learning_store.dart';
 import 'features/pronunciation/data/speech_player.dart';
+import 'features/pronunciation/data/pronunciation_recorder.dart';
 import 'features/prosody/presentation/prosody_screen.dart';
 import 'features/prosody/practice_session.dart';
 
@@ -24,6 +25,7 @@ class VoiceMateApp extends StatefulWidget {
   final PracticeSession? prosodySession;
   final LearningController? pronunciationLearning;
   final SpeechPlayer? pronunciationSpeech;
+  final PronunciationRecorder? pronunciationRecorder;
   const VoiceMateApp({
     super.key,
     this.audioPort,
@@ -33,6 +35,7 @@ class VoiceMateApp extends StatefulWidget {
     this.prosodySession,
     this.pronunciationLearning,
     this.pronunciationSpeech,
+    this.pronunciationRecorder,
   });
   @override
   State<VoiceMateApp> createState() => _VoiceMateAppState();
@@ -46,6 +49,7 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
   bool changingSection = false;
   LearningController? pronunciationLearning;
   SpeechPlayer? pronunciationSpeech;
+  PronunciationRecorder? pronunciationRecorder;
   PracticeSession? prosody;
   @override
   void initState() {
@@ -57,6 +61,7 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
         : 0;
     pronunciationLearning = widget.pronunciationLearning;
     pronunciationSpeech = widget.pronunciationSpeech;
+    pronunciationRecorder = widget.pronunciationRecorder;
     if (section == 2) _prepareProsody();
     session = SessionController(widget.audioPort ?? createAudioPort());
     semantics = WidgetsBinding.instance.ensureSemantics();
@@ -77,7 +82,10 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
     setState(() => changingSection = true);
     try {
       if (section == 0 && session.active) await session.stop();
-      if (section == 1) await pronunciationSpeech?.stop();
+      if (section == 1) {
+        await pronunciationSpeech?.stop();
+        await pronunciationRecorder?.cancel();
+      }
       final currentProsody = prosody;
       if (section == 2 && currentProsody != null) {
         await currentProsody.audio.stopPlayback();
@@ -96,6 +104,9 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
     if (widget.pronunciationLearning == null) pronunciationLearning?.dispose();
     if (widget.pronunciationSpeech == null) {
       unawaited(pronunciationSpeech?.dispose() ?? Future<void>.value());
+    }
+    if (widget.pronunciationRecorder == null) {
+      unawaited(pronunciationRecorder?.dispose() ?? Future<void>.value());
     }
     if (widget.prosodySession == null) prosody?.dispose();
     session.dispose();
@@ -152,7 +163,11 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
                   learning: pronunciationLearning ??= LearningController(
                     PreferencesLearningStore(),
                   ),
-                  speech: pronunciationSpeech ??= DeviceSpeechPlayer(),
+                  speech: pronunciationSpeech ??= DeviceSpeechPlayer(
+                    localOnly: true,
+                  ),
+                  recorder: pronunciationRecorder ??=
+                      createPronunciationRecorder(),
                 )
               : LayoutBuilder(
                   builder: (context, constraints) {

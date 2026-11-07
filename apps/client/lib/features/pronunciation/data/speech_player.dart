@@ -42,7 +42,8 @@ class DeviceSpeechPlayer implements SpeechPlayer, SpeechPlaybackSource {
   DeviceSpeechPlayer({
     this.preparationTimeout = const Duration(seconds: 10),
     SpeechTransport? transport,
-  }) : _transport = transport ?? createSpeechTransport() {
+    bool localOnly = false,
+  }) : _transport = transport ?? createSpeechTransport(localOnly: localOnly) {
     _transport.onEvent = _onEvent;
   }
 

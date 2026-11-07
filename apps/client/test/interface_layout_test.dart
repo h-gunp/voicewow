@@ -5,6 +5,7 @@ import 'package:voicemate/features/pronunciation/data/learning_store.dart';
 import 'package:voicemate/features/pronunciation/data/speech_player.dart';
 import 'package:voicemate/features/prosody/practice_session.dart';
 import 'fake_audio_port.dart';
+import 'pronunciation_practice_ui_test.dart' show FakePronunciationRecorder;
 
 void main() {
   testWidgets('desktop keeps the redesigned list and all three destinations', (
@@ -42,12 +43,13 @@ void main() {
           textScaler: TextScaler.linear(2),
           pronunciationLearning: learning,
           pronunciationSpeech: _SilentSpeech(),
+          pronunciationRecorder: FakePronunciationRecorder(),
           prosodySession: practice,
         ),
       );
       await tester.tap(find.byKey(const Key('open-pronunciation')));
       await tester.pumpAndSettle();
-      expect(find.text('발음 퀴즈'), findsOneWidget);
+      expect(find.text('발음 연습'), findsOneWidget);
       await tester.tap(find.text('내 문장'));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('guide-input')), findsOneWidget);

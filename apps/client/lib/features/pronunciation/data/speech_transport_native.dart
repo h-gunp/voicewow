@@ -2,13 +2,16 @@ import 'dart:async';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'speech_transport.dart';
 import '../../../shared/native_tts_coordinator.dart';
+import '../../prosody/services/device_audio.dart';
 
-SpeechTransport createSpeechTransport() => NativeSpeechTransport();
+SpeechTransport createSpeechTransport({bool localOnly = false}) =>
+    NativeSpeechTransport(localOnly: localOnly);
 
 /// Android callbacks from flutter_tts omit utterance IDs. Keep an issued
 /// utterance until its terminal event drains before issuing a newer one.
 class NativeSpeechTransport implements SpeechTransport {
   final Duration cancellationTimeout;
+  final bool localOnly;
   FlutterTts? _tts;
   NativeTtsLease? _lease;
   SpeechTransportListener? _listener;
@@ -19,6 +22,7 @@ class NativeSpeechTransport implements SpeechTransport {
 
   NativeSpeechTransport({
     this.cancellationTimeout = const Duration(seconds: 1),
+    this.localOnly = false,
   });
 
   @override
@@ -72,6 +76,29 @@ class NativeSpeechTransport implements SpeechTransport {
         if (!_current(attempt) || language == 0) {
           result.complete(false);
           return;
+        }
+        if (localOnly) {
+          final rawVoices = await tts.getVoices;
+          if (!_current(attempt)) {
+            result.complete(false);
+            return;
+          }
+          final voices = rawVoices is List
+              ? rawVoices.whereType<Map>().where(isInstalledOfflineKoreanVoice)
+              : <Map>[];
+          if (voices.isEmpty) {
+            result.complete(false);
+            return;
+          }
+          final voice = voices.first;
+          final selected = await tts.setVoice({
+            'name': '${voice['name']}',
+            'locale': '${voice['locale']}',
+          });
+          if (!_current(attempt) || (selected != 1 && selected != true)) {
+            result.complete(false);
+            return;
+          }
         }
         await tts.setSpeechRate(slow ? 0.3 : 0.48);
         if (!_current(attempt)) {
