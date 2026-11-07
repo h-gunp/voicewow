@@ -159,6 +159,11 @@ class _PronunciationPracticeViewState extends State<PronunciationPracticeView>
     try {
       final phones = await widget.recorder.finish();
       if (!current(ticket)) return;
+      if (phones.isEmpty) {
+        result = null;
+        _set(_Phase.ready, '인식된 발음이 없다. 마이크를 누르고 다시 읽으면 된다.');
+        return;
+      }
       result = comparePronunciation(
         phones: phones,
         references: widget.references,
@@ -325,12 +330,11 @@ class _PronunciationPracticeViewState extends State<PronunciationPracticeView>
                     children: [
                       Text('● 일치', style: TextStyle(color: accent)),
                       Text('− 차이', style: TextStyle(color: red)),
-                      Text('… 불확실', style: TextStyle(color: muted)),
                     ],
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    '색은 추정 인식과 참고 읽기의 비교다. 실제 발음 판별 정확도는 검증 전이며 잡음이 글자로 인식될 수 있다.',
+                    '불확실한 구간도 일치 색으로 표시한다. 색은 추정 인식과 참고 읽기의 비교다. 실제 발음 판별 정확도는 검증 전이며 잡음이 글자로 인식될 수 있다.',
                     style: smallCopy,
                   ),
                   if (result != null) ...[
@@ -447,9 +451,8 @@ class _PronunciationPracticeViewState extends State<PronunciationPracticeView>
             text: span.text,
             style: TextStyle(
               color: switch (span.mark) {
-                ComparisonMark.match => accent,
+                ComparisonMark.match || ComparisonMark.uncertain => accent,
                 ComparisonMark.different => red,
-                ComparisonMark.uncertain => muted,
               },
               decoration: span.mark == ComparisonMark.different
                   ? TextDecoration.underline

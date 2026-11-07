@@ -78,16 +78,39 @@ void main() {
     expect(result.differences, contains('기준 밥 → 인식 바'));
   });
 
-  test('spacing and punctuation do not insert phoneme errors', () {
+  test('known exact boundary phones match despite spacing and punctuation', () {
     final result = compare('B A p G U', ['밥 구!']);
     expect(textOf(result.expected), '밥 구!');
     expect(textOf(result.observed), '밥구');
     expect(result.differences, isEmpty);
     expect(
-      result.observed.every((span) => span.mark == ComparisonMark.uncertain),
+      result.observed.every((span) => span.mark == ComparisonMark.match),
       isTrue,
     );
   });
+
+  test('a missing boundary coda does not defer the matching next syllable', () {
+    final result = compare('B A G U', ['밥 구']);
+    expect(result.observed.map((span) => span.mark), [
+      ComparisonMark.uncertain,
+      ComparisonMark.match,
+    ]);
+    expect(result.expected.first.mark, ComparisonMark.uncertain);
+    expect(result.expected.last.mark, ComparisonMark.match);
+    expect(result.differences, isEmpty);
+  });
+
+  test(
+    'a known consonant difference inside a boundary syllable remains different',
+    () {
+      final result = compare('Ph A p G U', ['밥 구']);
+      expect(result.observed.map((span) => span.mark), [
+        ComparisonMark.different,
+        ComparisonMark.match,
+      ]);
+      expect(result.differences, contains('기준 밥 → 인식 팝'));
+    },
+  );
 
   test(
     'catalog word boundaries defer assimilation but keep independent consonant differences',
@@ -207,7 +230,7 @@ void main() {
     () {
       final result = compare('B A M M A G U', ['밥 마구'], approximate: true);
       expect(result.observed.first.mark, ComparisonMark.uncertain);
-      expect(result.observed[1].mark, ComparisonMark.uncertain);
+      expect(result.observed[1].mark, ComparisonMark.match);
       expect(result.observed.last.mark, ComparisonMark.match);
       expect(result.differences, isEmpty);
       expect(result.notes.any((note) => note.contains('어절')), isTrue);

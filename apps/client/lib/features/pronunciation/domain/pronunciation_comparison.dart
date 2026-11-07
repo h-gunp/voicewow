@@ -61,7 +61,7 @@ PronunciationComparison comparePronunciation({
     }
   }
   if (RegExp(r'\s').hasMatch(reference)) {
-    notes.add('어절 사이 음운 변화는 지원하지 않아 경계에 닿는 음소의 비교를 보류한다.');
+    notes.add('어절 경계의 차이는 이어 읽기에 따른 변화일 수 있어 비교를 보류한다.');
   }
   if (phones.isEmpty) {
     notes.add('비교할 음소가 없다. 소리를 확인하고 다시 녹음해야 한다.');
@@ -327,6 +327,7 @@ class _Reading {
   final phones = <String>[];
   final owners = <int>[];
   final uncertainPhones = <int>{};
+  final wordBoundaryPhones = <int>{};
 
   void add(
     String text,
@@ -446,7 +447,7 @@ _Reading _reference(String text) {
       reading.add(character, ['?'], unresolved: true);
     }
   }
-  // shortcut: references omit cross-word changes; defer boundary phones until those rules are supported.
+  // shortcut: references omit cross-word changes; defer boundary differences until those rules are supported.
   for (var i = 1; i + 1 < reading.units.length; i++) {
     if (!RegExp(r'\s').hasMatch(reading.units[i].text)) continue;
     for (final direction in [-1, 1]) {
@@ -458,8 +459,7 @@ _Reading _reference(String text) {
       }
       if (adjacent < 0 || adjacent >= reading.units.length) continue;
       final unit = reading.units[adjacent];
-      unit.uncertain = true;
-      reading.uncertainPhones.add(direction < 0 ? unit.end - 1 : unit.start);
+      reading.wordBoundaryPhones.add(direction < 0 ? unit.end - 1 : unit.start);
     }
   }
   return reading;
@@ -573,7 +573,11 @@ List<ComparisonMark> _marks(
           if (!_known(label) || reading.uncertainPhones.contains(i)) {
             uncertain = true;
           } else if (paired < 0) {
-            different = true;
+            if (reading.wordBoundaryPhones.contains(i)) {
+              uncertain = true;
+            } else {
+              different = true;
+            }
           } else {
             final counterpart = other.units[other.owners[paired]];
             if (otherAmbiguous[paired] || counterpart.unresolved)
@@ -586,14 +590,24 @@ List<ComparisonMark> _marks(
               if (otherAmbiguous[token]) unresolved = true;
               if (otherPairs[token] < 0 &&
                   _known(other.phones[token]) &&
-                  !other.uncertainPhones.contains(token))
-                different = true;
+                  !other.uncertainPhones.contains(token)) {
+                if (other.wordBoundaryPhones.contains(token)) {
+                  uncertain = true;
+                } else {
+                  different = true;
+                }
+              }
             }
             if (!_known(other.phones[paired]) ||
                 other.uncertainPhones.contains(paired)) {
               uncertain = true;
             } else if (label != other.phones[paired]) {
-              different = true;
+              if (reading.wordBoundaryPhones.contains(i) ||
+                  other.wordBoundaryPhones.contains(paired)) {
+                uncertain = true;
+              } else {
+                different = true;
+              }
             } else if (_merged.containsKey(label) || counterpart.uncertain) {
               uncertain = true;
             }

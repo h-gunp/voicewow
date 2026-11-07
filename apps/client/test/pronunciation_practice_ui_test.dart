@@ -266,6 +266,98 @@ void main() {
   );
 
   testWidgets(
+    'uncertain recognition uses the match color without replacing its text',
+    (tester) async {
+      final recorder = FakePronunciationRecorder()
+        ..phones = ['B', 'uEO', '[UNK]', 'G'];
+      await pumpPractice(tester, recorder);
+      await tap(tester, 'pronunciation-prepare');
+      await tester.pumpAndSettle();
+      await tap(tester, 'pronunciation-mic');
+      await tap(tester, 'pronunciation-mic');
+      await tester.pumpAndSettle();
+      final observed = tester.widget<Text>(
+        find.byKey(const Key('pronunciation-observed')),
+      );
+      final spans = (observed.textSpan! as TextSpan).children!.cast<TextSpan>();
+      expect(spans.map((span) => span.text).join(), 'ㅂ□□ㄱ');
+      expect(spans.every((span) => span.style!.color == accent), isTrue);
+      final expected = tester.widget<Text>(
+        find.byKey(const Key('pronunciation-expected')),
+      );
+      expect(
+        (expected.textSpan! as TextSpan).children!.cast<TextSpan>().every(
+          (span) => span.style!.color == accent,
+        ),
+        isTrue,
+      );
+      await tester.scrollUntilVisible(find.text('● 일치'), 180);
+      expect(find.text('− 차이'), findsOneWidget);
+      expect(find.text('… 불확실'), findsNothing);
+      await tester.scrollUntilVisible(
+        find.textContaining('불확실한 구간도 일치 색'),
+        180,
+      );
+      expect(find.textContaining('불확실한 구간도 일치 색'), findsOneWidget);
+      await tester.scrollUntilVisible(find.textContaining('uEO'), 180);
+      expect(find.textContaining('uEO'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'known pronunciation differences keep their red underline and explanation',
+    (tester) async {
+      final recorder = FakePronunciationRecorder();
+      await pumpPractice(tester, recorder);
+      await tap(tester, 'pronunciation-prepare');
+      await tester.pumpAndSettle();
+      await tap(tester, 'pronunciation-mic');
+      await tap(tester, 'pronunciation-mic');
+      await tester.pumpAndSettle();
+      final observed = tester.widget<Text>(
+        find.byKey(const Key('pronunciation-observed')),
+      );
+      final spans = (observed.textSpan! as TextSpan).children!.cast<TextSpan>();
+      for (final text in ['떼', '떠']) {
+        final span = spans.singleWhere((span) => span.text == text);
+        expect(span.style!.color, red);
+        expect(span.style!.decoration, TextDecoration.underline);
+      }
+      await tester.scrollUntilVisible(find.text('기준 께 → 인식 떼'), 180);
+      expect(find.text('기준 께 → 인식 떼'), findsOneWidget);
+      expect(find.text('기준 써 → 인식 떠'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'empty recognition clears the result and permits another take without preparing again',
+    (tester) async {
+      final recorder = FakePronunciationRecorder();
+      await pumpPractice(tester, recorder);
+      await tap(tester, 'pronunciation-prepare');
+      await tester.pumpAndSettle();
+      await tap(tester, 'pronunciation-mic');
+      await tap(tester, 'pronunciation-mic');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('pronunciation-observed')), findsOneWidget);
+      recorder.phones = [];
+      await tap(tester, 'pronunciation-mic');
+      await tap(tester, 'pronunciation-mic');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('pronunciation-observed')), findsNothing);
+      expect(find.byKey(const Key('pronunciation-expected')), findsNothing);
+      expect(find.byKey(const Key('pronunciation-replay')), findsNothing);
+      expect(find.textContaining('인식된 발음이 없다'), findsOneWidget);
+      expect(find.byKey(const Key('pronunciation-prepare')), findsNothing);
+      expect(recorder.prepares, 1);
+      await tap(tester, 'pronunciation-mic');
+      expect(recorder.starts, 3);
+      expect(find.text('녹음 종료 · 분석'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
     'disposed view cancels pending recognition and ignores its late result',
     (tester) async {
       final recorder = FakePronunciationRecorder()
