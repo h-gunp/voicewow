@@ -1,0 +1,16 @@
+{
+  "source": "https://huggingface.co/chegrowk/ko-phone-int8",
+  "source_revision": "dbb9c196f3e5e72d41c8ce2b63e6d0c91a011b70",
+  "source_onnx_sha256": "c1ef511e4bac127e884edb013b16fae9e0d3d54d792039417aa3cf4b48e8a134",
+  "model": "ko-phone-int8.ort",
+  "bytes": 356216776,
+  "part_bytes": 16777216,
+  "sha256": "a280f2679f08c809ae3c5ad55abe15dc78803e06143cc9b485c143612652765e",
+  "conversion": {
+    "onnxruntime": "1.31.0",
+    "optimization": "ORT_ENABLE_EXTENDED",
+    "disable_prepacking": true
+  },
+  "license": "Apache-2.0",
+  "note": "Same quantized weights in ORT format; no training or requantization."
+}
