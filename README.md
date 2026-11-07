@@ -14,8 +14,6 @@ Flutter 3.47.7과 함께 제공되는 Dart를 사용한다. Node.js와 Python 3�
 Windows 실행 스크립트를 사용하려면 Flutter SDK를 저장소의 .tools/flutter에 설치한다. SDK와 빌드 결과는 커밋하지 않는다.
 
 ```powershell
-python tools/pronunciation-spike/prepare-web-model.py
-python tools/pronunciation-spike/prepare-web-model.py --check
 Push-Location apps/client
 & ../../.tools/flutter/bin/flutter.bat pub get
 & ../../.tools/flutter/bin/flutter.bat test
@@ -26,8 +24,9 @@ npm test
 .\scripts\start-web.ps1
 ```
 
-발음 모델 조각 22개는 Git에서 제외되지만 웹 빌드와 정적 배포에는 필요하다.
-모델 준비와 배포 검증은 [모바일 발음 안정성 기록](docs/mobile-pronunciation-stability.md)을 따른다.
+발음 모델은 GitHub의 고정 커밋에서 별도로 내려받으며 Sites 배포 파일에 포함하지 않는다.
+로컬 모델 검증·캐시 준비 도구는 선택 사항이다. 호스팅과 배포 검증은
+[모바일 발음 안정성 기록](docs/mobile-pronunciation-stability.md)을 따른다.
 
 ## 구조와 동작
 

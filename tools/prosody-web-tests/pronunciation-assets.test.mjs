@@ -79,7 +79,7 @@ test('cache writes use pull streams instead of copying the complete model buffer
   assert.ok(bodies.at(-1) instanceof ReadableStream);
 });
 
-test('web ORT parts load sequentially from the same site and retain whole-model verification', async t => {
+test('web ORT parts load from a pinned asset commit and reuse the existing verified cache key', async t => {
   const f = fixture(t);
   const calls = [];
   t.mock.method(globalThis, 'fetch', async (url, options) => {
@@ -88,9 +88,14 @@ test('web ORT parts load sequentially from the same site and retain whole-model 
   });
   const model = { ...asset, path: 'ko-phone-int8.ort', partBytes: 2 };
   assert.deepEqual(await f.load(model), bytes);
-  assert.ok(calls[0].url.endsWith('/pronunciation/models/ko-phone-int8.ort.part00'));
-  assert.ok(calls[1].url.endsWith('/pronunciation/models/ko-phone-int8.ort.part01'));
-  assert.equal(calls[0].options.body, undefined);
+  const base = 'https://raw.githubusercontent.com/h-gunp/voicewow/72bb26aa05c94763dfab5f150a7ae747a1937e10/';
+  assert.deepEqual(calls.map(call => call.url), [base + 'ko-phone-int8.ort.part00', base + 'ko-phone-int8.ort.part01']);
+  for (const { options } of calls) {
+    assert.equal(options.credentials, 'omit');
+    assert.equal(options.referrerPolicy, 'no-referrer');
+    assert.equal(options.body, undefined);
+  }
+  assert.deepEqual(f.saved, [new URL('../../apps/client/web/pronunciation/models/ko-phone-int8.ort', import.meta.url).href]);
   assert.deepEqual(await f.load(model), bytes);
   assert.equal(calls.length, 2);
 });

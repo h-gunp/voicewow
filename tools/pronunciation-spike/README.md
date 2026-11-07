@@ -10,9 +10,11 @@
 
 제품 웹 구현은 `apps/client/web/pronunciation/`에 있다. 이 도구의 `phone-engine.mjs`, `phones.mjs`, `recording.mjs`, `audio.mjs`는 제품 모듈을 재수출하고 `client.mjs`는 제품 클라이언트에 spike의 로컬 Worker를 연결하여 같은 코드를 검사한다. Android는 같은 고정 모델·사전·CTC 규칙의 Kotlin ONNX 엔진으로 같은 음소 계약을 반환한다. 네이티브 구현은 Android 전용이며 다른 네이티브 플랫폼은 미지원 처리한다.
 
-제품 웹의 첫 준비는 고정 Hugging Face revision의 설정·음소 사전과 같은 사이트에 배포한 ORT 모델 조각 22개를 내려받아 크기·해시를 검사하고 캐시한다. ORT는 기존 ONNX와 같은 가중치의 포맷 변환이며 추가 양자화나 텍스트 ASR 교체가 아니다. 아래 spike 서버와 기본 `measure.mjs`는 미리 받은 기존 ONNX 파일을 사용한다. 따라서 기본 spike 측정만으로 제품 웹의 ORT 로더·메모리 경로를 검증했다고 판단하지 않는다. 어느 경로도 사용자 음성·선택 문장·인식 결과를 외부 분석 서버에 업로드하는 API를 사용하지 않는다. 제품 예시 듣기는 로컬로 확인된 한국어 TTS만 선택하며 원격 음성으로 대체하지 않는다. 실제 기기에서 네트워크 차단 후 흐름과 외부 요청 부재를 관찰하는 검증은 남아 있다.
+제품 웹의 첫 준비는 고정 Hugging Face revision의 설정·음소 사전과 GitHub `h-gunp/voicewow`의 고정 커밋에 게시한 ORT 모델 조각 22개를 내려받아 크기·해시를 검사하고 캐시한다. 모델 요청은 `raw.githubusercontent.com`의 공개 정적 파일 다운로드다. ORT는 기존 ONNX와 같은 가중치의 포맷 변환이며 추가 양자화나 텍스트 ASR 교체가 아니다. 아래 spike 서버와 기본 `measure.mjs`는 미리 받은 기존 ONNX 파일을 사용한다. 따라서 기본 spike 측정만으로 제품 웹의 ORT 로더·메모리 경로를 검증했다고 판단하지 않는다. 어느 경로도 사용자 음성·선택 문장·인식 결과를 외부 분석 서버에 업로드하는 API를 사용하지 않는다. 제품 예시 듣기는 로컬로 확인된 한국어 TTS만 선택하며 원격 음성으로 대체하지 않는다. 실제 기기에서 네트워크 차단 후 흐름과 외부 요청 부재를 관찰하는 검증은 남아 있다.
 
-제품 웹 빌드 전에는 저장소 루트에서 `python tools/pronunciation-spike/prepare-web-model.py`를 실행하고 `--check`로 검증한다. 도구는 검증된 고정 ORT 원본을 16MiB 이하의 조각으로 배치하며, 원본이 없으면 공개 사이트의 고정 조각을 받는다. 조각은 Git에서 제외되지만 `apps/client/build/web/pronunciation/models/`에 복사된 22개 파일을 정적 배포에 모두 포함해야 한다. 모델 준비를 생략한 소스 전용 배포는 지원하지 않는다. 고정 해시와 최초 게시 조건은 [모바일 발음 안정성 기록](../../docs/mobile-pronunciation-stability.md)에 있다.
+제품 웹 빌드는 모델 준비 명령 없이 수행한다. Sites의 전체 아카이브 상한 256MiB에 맞춰 모델을 GitHub에 별도로 호스팅하며 웹 배포 산출물에 모델 조각을 포함하지 않는다. `python tools/pronunciation-spike/prepare-web-model.py`는 로컬 검증·캐시 준비가 필요할 때 선택해서 실행한다. 도구는 고정 ORT 파일을 검증해 `.local/pronunciation-spike/web-model/`에 16MiB 이하의 조각으로 보관하며, 원본이 없으면 GitHub의 고정 조각을 받는다. `--check`는 준비된 로컬 조각을 검증한다. 고정 출처와 해시는 [모바일 발음 안정성 기록](../../docs/mobile-pronunciation-stability.md)에 있다.
+
+모델 자산 브랜치는 `codex/pronunciation-model-ort-a280f267`이며 다운로드는 [고정 커밋 `72bb26aa05c94763dfab5f150a7ae747a1937e10`](https://github.com/h-gunp/voicewow/tree/72bb26aa05c94763dfab5f150a7ae747a1937e10)을 사용한다. 파일 경로는 `https://raw.githubusercontent.com/h-gunp/voicewow/72bb26aa05c94763dfab5f150a7ae747a1937e10/ko-phone-int8.ort.part00`부터 `.part21`까지다.
 
 ## 실행
 

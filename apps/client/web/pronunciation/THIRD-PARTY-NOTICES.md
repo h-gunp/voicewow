@@ -17,7 +17,9 @@ The original model's reported metric is not VoiceMate accuracy. Browser/device p
 
 제품 웹의 `ko-phone-int8.ort`는 위 고정 ONNX 가중치를 Python ONNX Runtime 1.31.0의 extended 최적화로 직렬화한 파일이다. 추가 양자화나 학습은 하지 않았다. 크기는 356,216,776바이트이고 SHA-256은 `a280f2679f08c809ae3c5ad55abe15dc78803e06143cc9b485c143612652765e`다. 기존 모델의 Apache-2.0 고지와 원저자 표기를 유지한다.
 
-이 고정 파일은 `models/ko-phone-int8.ort.part00`부터 `.part21`까지 16MiB 이하의 22개 조각으로 같은 사이트에 배포한다. 준비 도구는 `tools/pronunciation-spike/prepare-web-model.py`이며 전체 크기·결합 해시를 검증한다. 기본 spike와 Android는 기존 ONNX 파일을 사용한다.
+이 고정 파일은 `ko-phone-int8.ort.part00`부터 `.part21`까지 16MiB 이하의 22개 조각으로 GitHub `h-gunp/voicewow`의 모델 자산 전용 브랜치에 게시하며, 브라우저는 `raw.githubusercontent.com`의 고정 커밋 URL에서 받는다. Sites 앱 배포에는 모델 조각을 포함하지 않는다. 공개 모델 파일을 받는 요청이며 사용자 음성·문장·인식 결과를 전송하지 않는다. `tools/pronunciation-spike/prepare-web-model.py`는 선택적인 로컬 검증·캐시 준비 도구이며 전체 크기·결합 해시를 검증한다. 기본 spike와 Android는 기존 ONNX 파일을 사용한다.
+
+모델 자산 브랜치는 `codex/pronunciation-model-ort-a280f267`이며 다운로드 기준은 [커밋 `72bb26aa05c94763dfab5f150a7ae747a1937e10`](https://github.com/h-gunp/voicewow/tree/72bb26aa05c94763dfab5f150a7ae747a1937e10)이다. [첫 모델 조각](https://raw.githubusercontent.com/h-gunp/voicewow/72bb26aa05c94763dfab5f150a7ae747a1937e10/ko-phone-int8.ort.part00), [모델 출처 기록](https://raw.githubusercontent.com/h-gunp/voicewow/72bb26aa05c94763dfab5f150a7ae747a1937e10/source.json), [모델 라이선스](https://raw.githubusercontent.com/h-gunp/voicewow/72bb26aa05c94763dfab5f150a7ae747a1937e10/LICENSE)는 모두 이 고정 커밋을 사용한다.
 
 발음 전용 JS 런타임의 upstream은 [onnxruntime-web 1.23.2 배포 파일](https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.2/dist/ort.wasm.min.mjs)과 [WASM 세션 구현](https://github.com/microsoft/onnxruntime/blob/v1.23.2/js/web/lib/wasm/wasm-core-impl.ts)이다. MIT 라이선스는 `vendor/onnx/LICENSE.txt`, 원본·수정본 해시와 패치 범위는 `vendor/onnx/source.json`에 있다. 원본 JS의 SHA-256은 `69751720f611e37d1ce2fa3c6ebaa80f949014752636c5f8887a63d40feadcc7`, 수정본은 `583c6a7bae7abc378c8c74087e84017f36d59a537dc572769ac34af0fb122d63`다.
 

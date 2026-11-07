@@ -101,9 +101,11 @@ Android와 기본 spike는 이 ONNX 파일을 사용한다. 제품 웹은 같은
 `a280f2679f08c809ae3c5ad55abe15dc78803e06143cc9b485c143612652765e`다.
 추가 양자화·학습·텍스트 ASR 교체는 하지 않았다.
 
-제품 웹은 설정·음소 사전을 고정 Hugging Face revision에서 받고, ORT 모델은 같은
-사이트의 `/pronunciation/models/ko-phone-int8.ort.part00`부터 `.part21`까지 22개
-정적 파일로 받는다. 조각별 최대 크기는 16MiB다. 전체 크기·SHA-256을 확인한 뒤
+제품 웹은 설정·음소 사전을 고정 Hugging Face revision에서 받고, ORT 모델은
+`h-gunp/voicewow`의 모델 자산 전용 브랜치 `codex/pronunciation-model-ort-a280f267`의
+[고정 커밋 `72bb26aa05c94763dfab5f150a7ae747a1937e10`](https://github.com/h-gunp/voicewow/tree/72bb26aa05c94763dfab5f150a7ae747a1937e10)에서 받는다.
+`raw.githubusercontent.com`의 `ko-phone-int8.ort.part00`부터 `.part21`까지 22개
+공개 정적 파일이며 조각별 최대 크기는 16MiB다. 전체 크기·SHA-256을 확인한 뒤
 캐시하며 캐시 재사용 때도 다시 검증한다. 해시 계산과 캐시 쓰기는 256KiB 단위로
 처리한다. 발음 전용 ONNX Runtime Web 1.23.2 JS는 직접 참조하는 모델 버퍼를
 세션 수명 동안 보존하며, 소유권을 넘긴 입력 버퍼는 지원 환경에서 WASM 복사 뒤 해제한다.
@@ -158,8 +160,6 @@ SpeechSynthesis의 로컬 한국어 음성, Android는 설치된 오프라인 �
 저장소의 .flutter-version에 맞는 Flutter 3.47.7을 사용한다.
 설치된 Flutter가 PATH에 없다면 아래 flutter를 SDK의 절대 경로로 바꾼다.
 
-    python tools/pronunciation-spike/prepare-web-model.py
-    python tools/pronunciation-spike/prepare-web-model.py --check
     cd apps/client
     flutter pub get
     flutter analyze
@@ -167,14 +167,17 @@ SpeechSynthesis의 로컬 한국어 음성, Android는 설치된 오프라인 �
     flutter build web --release --no-web-resources-cdn
     flutter run -d chrome
 
-저장소 루트에서 모델 준비를 먼저 실행한다. 준비 도구는 고정 ORT 원본을 검증해
-22개 조각으로 배치한다. 로컬 원본이 없으면 공개 사이트의 같은 고정 조각을 받는다.
-자동 포맷 재변환은 하지 않는다. 고정 조각이 최초 게시되기 전에는 검증된 로컬 ORT
-원본이 필요하다. `scripts/start-web.ps1 -Build`도 Flutter 빌드 전에 이 준비를 수행한다.
+일반 웹 빌드에는 모델 준비 명령이 필요하지 않다. 모델 조각은 GitHub의 고정 커밋에서
+다운로드하므로 Sites의 앱 배포 산출물에 넣지 않는다. 공개 모델 다운로드는 사용자
+음성·문장·결과를 보내는 요청이 아니다.
 
-웹 배포 산출물은 `apps/client/build/web` 전체다. 모델 조각은 Git에서 제외되지만
-**정적 배포에는 22개 모두 포함해야 한다.** 소스 파일만 배포하거나 모델 준비 없이
-빌드한 산출물을 배포하면 웹 모델을 준비할 수 없다. 세부 검증 절차는
+`prepare-web-model.py`는 로컬 검증·캐시 준비가 필요할 때 선택해서 사용한다.
+고정 ORT 파일을 검증해 `.local/pronunciation-spike/web-model/`에 조각으로 보관하며,
+로컬 원본이 없으면 GitHub의 고정 조각을 받는다. 자동 포맷 재변환은 하지 않는다.
+`--check`는 이미 준비된 로컬 조각만 검증한다.
+
+웹 배포 산출물은 모델 조각을 제외한 `apps/client/build/web` 전체다. 이번 Sites 배포
+경로의 전체 아카이브 상한은 256MiB이므로 모델 호스팅을 분리한다. 세부 검증 절차는
 [모바일 발음 안정성 기록](mobile-pronunciation-stability.md)에 있다. 현재 사용하는 TTS 플러그인은
 Wasm dry-run 경고가 있어, 검증 대상은 기본 JavaScript 웹 빌드다.
 위 명령은 재현 절차다. 2026-11-07 모바일 안정성 변경 후 Node 검사 407개와 Flutter 검사

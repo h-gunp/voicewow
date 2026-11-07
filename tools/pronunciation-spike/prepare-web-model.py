@@ -1,4 +1,4 @@
-"""Prepare the pinned local ORT model for Flutter's static web assets."""
+"""Prepare verified ORT model parts in the local cache, outside Flutter assets."""
 import argparse
 import hashlib
 from pathlib import Path
@@ -9,9 +9,9 @@ import urllib.request
 
 DOWNLOAD = runpy.run_path(str(Path(__file__).with_name("download-model.py")))
 ROOT = Path(__file__).resolve().parents[2]
-BUNDLED = "apps/client/web/pronunciation/models/ko-phone-int8.ort"
+BUNDLED = ".local/pronunciation-spike/web-model/ko-phone-int8.ort"
 PART_BYTES = 16 * 1024 * 1024
-PUBLIC_URL = "https://voicemate-main-20261103.hongskrr.chatgpt.site/pronunciation/models/ko-phone-int8.ort"
+PUBLIC_URL = "https://raw.githubusercontent.com/h-gunp/voicewow/72bb26aa05c94763dfab5f150a7ae747a1937e10/ko-phone-int8.ort"
 ORT_METADATA = {"size": 356216776, "lfs": {"sha256":
     "a280f2679f08c809ae3c5ad55abe15dc78803e06143cc9b485c143612652765e"}}
 
@@ -98,10 +98,7 @@ def prepare(check_only=False):
         if not valid(converted, ORT_METADATA):
             download_canonical(converted, ORT_METADATA)
         stage_verified(converted, ROOT, BUNDLED, ORT_METADATA)
-    if not check_only and target.exists():
-        DOWNLOAD["verify_file"](target, ORT_METADATA)
-        target.unlink()
-    print(f"Verified web model parts: {target}.part00... ({ORT_METADATA['size']} bytes)")
+    print(f"Verified local model parts: {target}.part00... ({ORT_METADATA['size']} bytes)")
 
 
 if __name__ == "__main__":

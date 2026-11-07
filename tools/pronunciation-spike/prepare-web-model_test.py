@@ -62,7 +62,7 @@ class PreparationTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     builder.stage_verified(source, root, path, metadata)
 
-    def test_check_only_validates_bundle_without_downloading_or_repairing(self):
+    def test_prepare_keeps_parts_local_and_check_never_downloads_or_repairs(self):
         builder = self.builder()
         payload = b"verified model"
         builder.ORT_METADATA = {"size": len(payload), "lfs": {"sha256": hashlib.sha256(payload).hexdigest()}}
@@ -71,9 +71,13 @@ class PreparationTests(unittest.TestCase):
         builder.download_canonical = download_forbidden
         with tempfile.TemporaryDirectory() as directory:
             builder.ROOT = Path(directory)
-            target = builder.ROOT / (builder.BUNDLED + ".part00")
-            target.parent.mkdir(parents=True)
-            target.write_bytes(payload)
+            source = builder.ROOT / ".local/pronunciation-spike/onnx/model_quantized.extended.ort"
+            source.parent.mkdir(parents=True)
+            source.write_bytes(payload)
+            builder.prepare()
+            target = builder.ROOT / ".local/pronunciation-spike/web-model/ko-phone-int8.ort.part00"
+            self.assertTrue(target.is_file())
+            self.assertFalse((builder.ROOT / "apps/client/web").exists())
             builder.prepare(check_only=True)
             target.write_bytes(b"x" * len(payload))
             with self.assertRaises(ValueError):

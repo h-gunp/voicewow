@@ -2,6 +2,7 @@ import { MODEL_REVISION } from './phone-engine.mjs';
 import { sha256 } from './sha256.mjs';
 
 const BASE = `https://huggingface.co/chegrowk/ko-phone-int8/resolve/${MODEL_REVISION}/`;
+const WEB_MODEL_BASE = 'https://raw.githubusercontent.com/h-gunp/voicewow/72bb26aa05c94763dfab5f150a7ae747a1937e10/';
 const CACHE = `voicemate-pronunciation-${MODEL_REVISION}`;
 
 function modelParts(asset) {
@@ -11,7 +12,7 @@ function modelParts(asset) {
     async pull(controller) {
       while (part < count || reader) {
         if (!reader) {
-          const url = new URL(`./models/${asset.path}.part${String(part++).padStart(2, '0')}`, import.meta.url);
+          const url = new URL(`${asset.path}.part${String(part++).padStart(2, '0')}`, WEB_MODEL_BASE);
           const response = await fetch(url, { credentials: 'omit', referrerPolicy: 'no-referrer' });
           if (!response.ok || !response.body) throw new Error('발음 모델 파일이 배포되지 않았거나 연결이 끊겼다. 새로고침 후 다시 시도해야 한다.');
           reader = response.body.getReader();
@@ -56,6 +57,7 @@ export function createModelLoader(onProgress = () => {}) {
     const isWebModel = asset.path === 'ko-phone-int8.ort';
     if (isWebModel && (!Number.isSafeInteger(asset.partBytes) || asset.partBytes < 1
       || asset.partBytes > 16777216 || Math.ceil(asset.bytes / asset.partBytes) > 32)) throw new Error('모델 파일 정보가 올바르지 않다.');
+    // Keep the assembled model cache key stable when its download host changes.
     const url = isWebModel ? new URL(`./models/${asset.path}`, import.meta.url).href : BASE + asset.path;
     let cache;
     try { cache = await globalThis.caches?.open(CACHE); }
