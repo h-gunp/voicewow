@@ -420,7 +420,7 @@ async function playUrl(url,start=0,end=null,label=''){
     if(label){$('listening-status').hidden=false;setText('listening-status',`${label} · ${seconds(start)}${end===null?'':`–${seconds(end)}`} 재생 중`);}
     listen(audio,'ended',()=>{if(playback===audio)stopPlayback();},{once:true});
     if(end!==null)playbackTimer=setTimeout(()=>{if(playback===audio)stopPlayback();},Math.max(.1,end-start)*1000);
-  }catch{setText('practice-status','소리를 재생하지 못했어요. 브라우저의 소리 설정을 확인해 주세요.');}
+  }catch{if(playback===audio)setText('practice-status','소리를 재생하지 못했어요. 브라우저의 소리 설정을 확인해 주세요.');}
 }
 function preview(){
   if(!guide.analysis)return;

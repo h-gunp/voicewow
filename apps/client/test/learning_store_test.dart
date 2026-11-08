@@ -22,7 +22,55 @@ class UnavailableStore implements LearningStore {
       throw StateError('unavailable');
 }
 
+class ReadFailsStore implements LearningStore {
+  LearningSnapshot value = LearningSnapshot(
+    guides: [SavedGuide('기존 문장', DateTime.utc(2026))],
+  );
+  @override
+  Future<LearningSnapshot> load() async => throw StateError('read failed');
+  @override
+  Future<void> save(LearningSnapshot next) async => value = next;
+}
+
+class RetryWriteStore implements LearningStore {
+  LearningSnapshot value = LearningSnapshot();
+  int attempts = 0;
+  @override
+  Future<LearningSnapshot> load() async => value;
+  @override
+  Future<void> save(LearningSnapshot next) async {
+    if (++attempts == 1) throw StateError('write failed');
+    value = next;
+  }
+}
+
 void main() {
+  test(
+    'failed initial read cannot overwrite existing saved sentences',
+    () async {
+      final store = ReadFailsStore();
+      final learning = LearningController(store);
+      await learning.load();
+      await learning.saveGuide('새 문장');
+      expect(learning.guides.single.text, '새 문장');
+      expect(store.value.guides.single.text, '기존 문장');
+      expect(learning.storageUnavailable, isTrue);
+      learning.dispose();
+    },
+  );
+
+  test('a later save retries after a temporary write failure', () async {
+    final store = RetryWriteStore();
+    final learning = LearningController(store);
+    await learning.load();
+    await learning.saveGuide('첫 문장');
+    expect(learning.storageUnavailable, isTrue);
+    await learning.saveGuide('다음 문장');
+    expect(learning.storageUnavailable, isFalse);
+    expect(store.value.guides.map((guide) => guide.text), ['다음 문장', '첫 문장']);
+    learning.dispose();
+  });
+
   test('wrong answers, bookmarks and saved sentences survive reload', () async {
     final store = MemoryLearningStore();
     final first = LearningController(store);

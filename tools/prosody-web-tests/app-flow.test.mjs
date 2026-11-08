@@ -942,3 +942,56 @@ test('content chooser and text navigation cannot interrupt an active recording; 
     assert.equal(el('change-mode').disabled,false);
   }finally{ui.cleanup();}
 });
+
+test('cancelled pending playback does not report a playback error',async()=>{
+  const ui=await setup();
+  let rejectPlay;
+  globalThis.Audio=class {
+    addEventListener(){} removeEventListener(){}
+    play(){return new Promise((_,reject)=>{rejectPlay=reject;});}
+    pause(){rejectPlay(new DOMException('Playback interrupted','AbortError'));}
+  };
+  try{
+    await ui.button('mode','guide').fire('click');
+    await ui.el('guide-play').fire('click');
+    const before=ui.el('practice-status').textContent;
+    ui.app.pause();
+    await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(ui.el('practice-status').textContent,before);
+  }finally{ui.cleanup();}
+});
+
+test('replaced pending playback does not overwrite the current playback status',async()=>{
+  const ui=await setup();
+  let rejectFirst, count=0;
+  globalThis.Audio=class {
+    constructor(){this.index=++count;}
+    addEventListener(){} removeEventListener(){}
+    play(){return this.index===1?new Promise((_,reject)=>{rejectFirst=reject;}):Promise.resolve();}
+    pause(){}
+  };
+  try{
+    await ui.button('mode','guide').fire('click');
+    await ui.el('guide-play').fire('click');
+    await ui.el('guide-play').fire('click');
+    const before=ui.el('practice-status').textContent;
+    rejectFirst(new DOMException('Playback interrupted','AbortError'));
+    await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(ui.el('practice-status').textContent,before);
+  }finally{ui.cleanup();}
+});
+
+test('current playback failure reports the audio error',async()=>{
+  const ui=await setup();
+  globalThis.Audio=class {
+    addEventListener(){} removeEventListener(){}
+    play(){return Promise.reject(new Error('Playback failed'));}
+    pause(){}
+  };
+  try{
+    await ui.button('mode','guide').fire('click');
+    await ui.el('guide-play').fire('click');
+    await new Promise(resolve=>setImmediate(resolve));
+    assert.match(ui.el('practice-status').textContent,/소리를 재생하지 못했어요/);
+  }finally{ui.cleanup();}
+});

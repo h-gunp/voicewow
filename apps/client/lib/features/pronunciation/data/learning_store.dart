@@ -107,6 +107,7 @@ class LearningController extends ChangeNotifier {
   Future<void> _writes = Future.value();
   bool ready = false;
   bool storageUnavailable = false;
+  bool _loaded = false;
   bool _disposed = false;
   Future<void>? _loading;
 
@@ -121,6 +122,7 @@ class LearningController extends ChangeNotifier {
   Future<void> _load() async {
     try {
       _snapshot = await store.load();
+      _loaded = true;
     } catch (_) {
       storageUnavailable = true;
     }
@@ -184,6 +186,7 @@ class LearningController extends ChangeNotifier {
   Future<void> _persist() {
     final value = _snapshot;
     _notify();
+    if (!_loaded) return Future.value();
     // Keep a slower earlier write from replacing a newer answer.
     _writes = _writes.then((_) async {
       try {

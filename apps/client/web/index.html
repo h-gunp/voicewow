@@ -18,6 +18,7 @@
       await import('./prosody/bridge.mjs');
       const bootstrap=document.createElement('script');
       bootstrap.src='flutter_bootstrap.js';
+      bootstrap.onerror=()=>{document.getElementById('loading').textContent='화면을 불러오지 못했다. 새로고침한다.';};
       document.body.append(bootstrap);
     } catch {
       document.getElementById('loading').textContent='화면을 불러오지 못했다. 새로고침한다.';
