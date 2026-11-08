@@ -12,9 +12,15 @@ enum ProsodyStep { prepare, record, result }
 
 /// One task at a time: choose a phrase, record, then review the accepted result.
 class ProsodyScreen extends StatefulWidget {
-  const ProsodyScreen({super.key, this.session, this.onExit});
+  const ProsodyScreen({
+    super.key,
+    this.session,
+    this.onExit,
+    this.suspended = false,
+  });
   final PracticeSession? session;
   final Future<void> Function()? onExit;
+  final bool suspended;
   @override
   State<ProsodyScreen> createState() => _ProsodyScreenState();
 }
@@ -56,6 +62,15 @@ class _ProsodyScreenState extends State<ProsodyScreen>
       }
       _lastResult = next;
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant ProsodyScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!kIsWeb && widget.suspended && !oldWidget.suspended) {
+      unawaited(s.audio.stopPlayback());
+      if (s.busy) unawaited(s.cancelCurrent());
+    }
   }
 
   void _show(ProsodyStep step) {
@@ -651,7 +666,10 @@ class _ProsodyScreenState extends State<ProsodyScreen>
   @override
   Widget build(BuildContext context) {
     if (kIsWeb) {
-      return ProsodyWebFrame(onExit: widget.onExit);
+      return ProsodyWebFrame(
+        onExit: widget.onExit,
+        suspended: widget.suspended,
+      );
     }
     final title = switch (_step) {
       ProsodyStep.prepare => '연습 준비',

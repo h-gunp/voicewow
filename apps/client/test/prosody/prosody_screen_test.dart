@@ -8,6 +8,7 @@ import 'package:voicemate/app.dart';
 import 'package:voicemate/features/prosody/audio/audio_analysis.dart';
 import 'package:voicemate/features/prosody/practice_feedback.dart';
 import 'package:voicemate/features/prosody/practice_session.dart';
+import 'package:voicemate/features/prosody/presentation/prosody_screen.dart';
 import 'package:voicemate/features/prosody/services/device_audio.dart';
 import 'package:voicemate/features/prosody/widgets/prosody_chart.dart';
 
@@ -146,6 +147,41 @@ Future<void> _finish(WidgetTester tester, _ScreenSession s) async {
 }
 
 void main() {
+  testWidgets(
+    'suspending the screen stops audio without replacing its guide or accepted result',
+    (tester) async {
+      final s = _ScreenSession();
+      final reference = s.reference;
+      final accepted = _accepted(reference!.analysis);
+      s.result = accepted;
+      s.phase = PracticePhase.recording;
+      Widget app(bool suspended) => MaterialApp(
+        home: Scaffold(
+          body: ProsodyScreen(session: s, suspended: suspended),
+        ),
+      );
+      await tester.pumpWidget(app(false));
+      await tester.pumpWidget(app(true));
+      await tester.pumpAndSettle();
+      final audio = s.audio as _ScreenAudio;
+      expect(audio.cancellations, 1);
+      expect(s.reference, same(reference));
+      expect(s.result, same(accepted));
+      await tester.pumpWidget(app(true));
+      await tester.pumpAndSettle();
+      expect(
+        audio.cancellations,
+        1,
+        reason: 'unchanged suspension must not repeat cancellation',
+      );
+      await tester.pumpWidget(app(false));
+      await tester.pumpAndSettle();
+      expect(s.reference, same(reference));
+      expect(s.result, same(accepted));
+      await _finish(tester, s);
+    },
+  );
+
   testWidgets(
     'preparation, recorder and accepted results are separate views and recording is explicit',
     (tester) async {

@@ -61,7 +61,8 @@ function paintChart(id, options) {
     }
     if (onSelect) Array.from(axis.children).forEach((item, i) => item.setAttribute('aria-pressed', String(i === current)));
   }
-  drawGraph($(id), { ...options, externalRegionLabels: captions.length > 0 });
+  const canvas = $(id);
+  if (canvas.clientWidth > 0) drawGraph(canvas, { ...options, externalRegionLabels: captions.length > 0 });
 }
 
 function renderGuideRegions(){
@@ -99,6 +100,7 @@ function refresh(){
   $('regenerate-guide').hidden=!scriptReferences.get(scriptIndex)?.generated;
   $('regenerate-guide').disabled=busy||unprepared;
   $('cancel-guide').hidden=state!=='generating';
+  $('guide-preparation').hidden=state!=='generating';
   $('cancel-guide').textContent=ready>0?'멈추고 준비된 문장 연습하기':'생성 취소';
   $('guide-progress').hidden=!total;
   $('guide-progress').max=total||1;$('guide-progress').value=ready;

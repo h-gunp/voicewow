@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'dart:js_interop';
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 
+import '../../../widgets/training_guide.dart';
 import 'prosody_web_frame_contract.dart';
 
 @JS('window')
@@ -78,8 +79,9 @@ class _BrowserFramePort implements ProsodyFramePort {
 /// Hosts only the bundled, same-origin web practice page. Constructing or
 /// attaching this widget does not request a microphone, synthesize or play audio.
 class ProsodyWebFrame extends StatefulWidget {
-  const ProsodyWebFrame({super.key, this.onExit});
+  const ProsodyWebFrame({super.key, this.onExit, this.suspended = false});
   final Future<void> Function()? onExit;
+  final bool suspended;
 
   @override
   State<ProsodyWebFrame> createState() => _ProsodyWebFrameState();
@@ -87,27 +89,72 @@ class ProsodyWebFrame extends StatefulWidget {
 
 class _ProsodyWebFrameState extends State<ProsodyWebFrame>
     with WidgetsBindingObserver {
-  late final Uri _source;
   late final String _origin;
   late final JSFunction _messages;
   _Frame? _frame;
   ProsodyFrameLifecycle? _lifecycle;
   bool _exiting = false;
+  bool _ready = false;
+  String? _loadIssue;
+  Timer? _loadTimer;
+  int _attempt = 0;
+  double _textScale = 1;
 
   @override
   void initState() {
     super.initState();
-    _source = embeddedProsodyUri(Uri.base);
     _origin = Uri.base.origin;
     _messages = ((JSObject raw) => _onMessage(_MessageEvent(raw))).toJS;
     _hostWindow.addEventListener('message', _messages);
     WidgetsBinding.instance.addObserver(this);
+    _startDeadline();
   }
 
-  void _attach(Object element) {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final scale = MediaQuery.textScalerOf(context).scale(16) / 16;
+    if (scale == _textScale) return;
+    _textScale = scale;
+    _sendTextScale();
+  }
+
+  @override
+  void didUpdateWidget(covariant ProsodyWebFrame oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.suspended && !oldWidget.suspended) _lifecycle?.stopAudio();
+  }
+
+  void _sendTextScale() => _frame?.contentWindow?.postMessage(
+    {'type': prosodyTextScaleMessage, 'scale': _textScale}.jsify(),
+    _origin,
+  );
+
+  void _startDeadline() {
+    _loadTimer?.cancel();
+    _loadTimer = Timer(const Duration(seconds: 30), () {
+      if (mounted && !_ready) {
+        setState(() => _loadIssue = '화면 준비에 시간이 걸린다. 잠시 기다리거나 다시 불러오면 된다.');
+      }
+    });
+  }
+
+  void _reload() {
+    _lifecycle?.dispose();
+    _lifecycle = null;
+    _frame = null;
+    setState(() {
+      _attempt++;
+      _ready = false;
+      _loadIssue = null;
+    });
+    _startDeadline();
+  }
+
+  void _attach(Object element, int attempt) {
     final frame = _Frame(element as JSObject);
     final lifecycle = ProsodyFrameLifecycle(_BrowserFramePort(frame, _origin));
-    if (!mounted) {
+    if (!mounted || attempt != _attempt) {
       lifecycle.dispose();
       return;
     }
@@ -119,7 +166,7 @@ class _ProsodyWebFrameState extends State<ProsodyWebFrame>
       'style',
       'border:0;width:100%;height:100%;display:block;background:#ffffff;',
     );
-    frame.src = _source.toString();
+    frame.src = embeddedProsodyUri(Uri.base, textScale: _textScale).toString();
   }
 
   void _onMessage(_MessageEvent event) {
@@ -131,6 +178,36 @@ class _ProsodyWebFrameState extends State<ProsodyWebFrame>
     try {
       data = event.data?.dartify();
     } catch (_) {
+      return;
+    }
+    if (acceptsProsodyMessage(
+      origin: event.origin,
+      expectedOrigin: _origin,
+      fromFrame: event.source == child,
+      data: data,
+      type: prosodyReadyMessage,
+    )) {
+      _loadTimer?.cancel();
+      _sendTextScale();
+      if (widget.suspended) _lifecycle?.stopAudio();
+      setState(() {
+        _ready = true;
+        _loadIssue = null;
+      });
+      return;
+    }
+    if (acceptsProsodyMessage(
+      origin: event.origin,
+      expectedOrigin: _origin,
+      fromFrame: event.source == child,
+      data: data,
+      type: prosodyErrorMessage,
+    )) {
+      _loadTimer?.cancel();
+      setState(() {
+        _ready = false;
+        _loadIssue = '높낮이 화면을 불러오지 못했다. 연결을 확인하고 다시 시도하면 된다.';
+      });
       return;
     }
     if (!acceptsProsodyExit(
@@ -163,6 +240,7 @@ class _ProsodyWebFrameState extends State<ProsodyWebFrame>
 
   @override
   void dispose() {
+    _loadTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _hostWindow.removeEventListener('message', _messages);
     _lifecycle?.dispose();
@@ -171,9 +249,51 @@ class _ProsodyWebFrameState extends State<ProsodyWebFrame>
   }
 
   @override
-  Widget build(BuildContext context) => HtmlElementView.fromTagName(
-    key: const Key('prosody-web-frame'),
-    tagName: 'iframe',
-    onElementCreated: _attach,
-  );
+  Widget build(BuildContext context) {
+    final attempt = _attempt;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Visibility(
+          visible: _ready,
+          maintainState: true,
+          maintainAnimation: true,
+          maintainSize: true,
+          child: HtmlElementView.fromTagName(
+            key: ValueKey('prosody-web-frame-$attempt'),
+            tagName: 'iframe',
+            onElementCreated: (element) => _attach(element, attempt),
+          ),
+        ),
+        if (!_ready)
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    _loadIssue ?? '높낮이 연습 화면을 준비 중이다.',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (_loadIssue == null) const LinearProgressIndicator(),
+                const SizedBox(height: 20),
+                const TrainingPreparationCard(),
+                if (_loadIssue != null) ...[
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: _reload,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('다시 불러오기'),
+                  ),
+                ],
+              ],
+            ),
+          ),
+      ],
+    );
+  }
 }

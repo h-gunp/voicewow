@@ -134,6 +134,21 @@ async function setup({microphone=false, holdResume=false, holdPermission=false, 
   };
 }
 
+test('first entry and choosing a bundled guide need no worker, audio context or microphone',async()=>{
+  const ui=await setup();
+  try{
+    assert.equal(ui.workers.length,0);
+    assert.equal(ui.contextOpens(),0);
+    assert.equal(ui.microphoneRequests(),0);
+    await ui.button('mode','guide').fire('click');
+    assert.equal(ui.workers.length,0);
+    assert.equal(ui.contextOpens(),0);
+    assert.equal(ui.microphoneRequests(),0);
+    assert.equal(ui.el('record').disabled,false);
+    assert.equal(ui.el('guide-preparation').hidden,true);
+  }finally{ui.cleanup();}
+});
+
 test('ASR is opt-in, preparation is cancellable and never requests the microphone',async()=>{
   const ui=await setup(),{el}=ui;
   try{
@@ -265,6 +280,7 @@ test('one guide action prepares every sentence on one reused worker and navigati
     await ui.prepareScript();
     const generation=el('generate-guide').fire('click');
     await settle(()=>ui.workers.length===1);
+    assert.equal(el('guide-preparation').hidden,false);
     const worker=ui.workers[0],first=worker.requests[0];
     assert.equal(first.text,'안녕하세요.');
     assert.equal(el('record').disabled,true);
@@ -303,6 +319,7 @@ test('partial preparation survives cancellation and retries only the missing sen
     await settle(()=>worker.requests.length===2);
     const stale=worker.requests[1];
     await el('cancel-guide').fire('click');await generation;
+    assert.equal(el('guide-preparation').hidden,true);
     assert.equal(worker.terminated,true);
     assert.equal(el('record').disabled,false);
     assert.match(el('guide-ready-count').textContent,/1 \/ 2/);
@@ -558,6 +575,57 @@ test('same-origin host cleanup stops a live microphone and untrusted messages do
   }finally{ui.cleanup();}
 });
 
+test('opening host help cancels generation while retaining the draft and completed guides',async()=>{
+  const ui=await setup(),{el}=ui;
+  try{
+    await ui.prepareScript();
+    const draft=el('script-input').value;
+    const generating=el('generate-guide').fire('click');
+    await settle(()=>ui.workers.length===1);
+    const worker=ui.workers[0];
+    worker.emit({type:'complete',id:worker.requests[0].id,samples:voicePayload(),sampleRate:16000});
+    await settle(()=>worker.requests.length===2);
+    ui.hostCleanup();
+    await generating;
+    assert.equal(worker.terminated,true);
+    assert.equal(el('script-input').value,draft);
+    assert.match(el('guide-ready-count').textContent,/1 \/ 2/);
+    assert.equal(el('record').disabled,false);
+    await el('guide-play').fire('click');
+    const preparedUrl=ui.playedAudio.at(-1).url;
+    el('script-input').value='아직 적용하지 않은 새 초안이다.';
+    await el('script-input').fire('input');
+    ui.hostCleanup();
+    assert.equal(ui.playedAudio.at(-1).paused,true);
+    assert.equal(el('script-input').value,'아직 적용하지 않은 새 초안이다.');
+    assert.match(el('guide-ready-count').textContent,/1 \/ 2/);
+    el('script-input').value=draft;
+    await el('script-input').fire('input');
+    await el('guide-play').fire('click');
+    assert.equal(ui.playedAudio.at(-1).url,preparedUrl);
+  }finally{ui.cleanup();}
+});
+
+test('opening host help stops playback but retains an accepted recording and selected result',async()=>{
+  const ui=await setup(),{el}=ui;
+  try{
+    await ui.prepareScript();await ui.inputAudio('reference-file');
+    await settle(()=>!el('record').disabled);
+    await ui.inputAudio('user-file');await settle(()=>el('flow-results').hidden===false);
+    await el('feedback-list').children[2].fire('click');
+    const before={label:el('graph-selected-label').textContent,summary:el('summary-observation').textContent};
+    await el('user-play').fire('click');
+    const url=ui.playedAudio.at(-1).url;
+    ui.hostCleanup();
+    assert.equal(ui.playedAudio.at(-1).paused,true);
+    assert.equal(el('user-play').disabled,false);
+    assert.equal(el('graph-selected-label').textContent,before.label);
+    assert.equal(el('summary-observation').textContent,before.summary);
+    await el('user-play').fire('click');
+    assert.equal(ui.playedAudio.at(-1).url,url);
+  }finally{ui.cleanup();}
+});
+
 test('repeated DTW matches at a single user timestamp cannot enable excerpt playback',async()=>{
   const ui=await setup(),{el,inputAudio}=ui;
   try{
@@ -718,11 +786,11 @@ test('content choice opens focused preparation screens and removes obsolete entr
   }finally{ui.cleanup();}
 });
 
-test('first mobile choice redraws hidden charts at visible width and restores result chart after reopening',async()=>{
+test('hidden charts do not paint until the first visible mobile choice and retain their result on reopening',async()=>{
   const ui=await setup({layoutWidth:253}),{el,button}=ui;
   try{
     assert.equal(el('guide-chart').clientWidth,0);
-    assert.equal(el('guide-chart').width,1000,'hidden initialization uses the 500px fallback');
+    assert.equal(el('guide-chart').width,undefined,'hidden initialization must not allocate a fallback canvas');
     await button('mode','guide').fire('click');
     assert.equal(el('guide-chart').clientWidth,253);
     assert.equal(el('guide-chart').width,506,'first visible chart uses the actual mobile width');
@@ -731,7 +799,7 @@ test('first mobile choice redraws hidden charts at visible width and restores re
     await el('change-mode').fire('click');
     ui.resize();
     assert.equal(el('result-chart').clientWidth,0);
-    assert.equal(el('result-chart').width,1000);
+    assert.equal(el('result-chart').width,506,'hidden resize must not repaint at a guessed width');
     await button('mode','guide').fire('click');
     assert.equal(el('result-chart').width,506);
     assert.equal(el('result-chart').height,510);

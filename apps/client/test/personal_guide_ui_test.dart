@@ -394,4 +394,39 @@ void main() {
       learning.dispose();
     },
   );
+
+  testWidgets('help keeps an unsaved personal sentence', (tester) async {
+    final learning = LearningController(MemoryLearningStore());
+    addTearDown(learning.dispose);
+    await tester.pumpWidget(
+      VoiceMateApp(
+        audioPort: FakeAudioPort(),
+        pronunciationLearning: learning,
+        pronunciationSpeech: FakeSpeech(),
+        pronunciationRecorder: FakePronunciationRecorder(),
+        startWithPronunciation: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(Tab, '내 문장'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('guide-input')),
+      '아직 저장하지 않은 문장',
+    );
+    await tester.tap(find.byKey(const Key('open-training-guide')));
+    await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('guide-input')))
+          .controller!
+          .text,
+      '아직 저장하지 않은 문장',
+    );
+    expect(learning.guides, isEmpty);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
 }

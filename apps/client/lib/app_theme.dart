@@ -15,8 +15,8 @@ const pageTitle = TextStyle(
   letterSpacing: -1,
   height: 1.3,
 );
-const sectionTitle = TextStyle(fontSize: 15, fontWeight: FontWeight.w700);
-const bodyCopy = TextStyle(color: muted, fontSize: 14, height: 1.7);
+const sectionTitle = TextStyle(fontSize: 16, fontWeight: FontWeight.w700);
+const bodyCopy = TextStyle(color: muted, fontSize: 16, height: 1.7);
 const smallCopy = TextStyle(color: muted, fontSize: 14, height: 1.7);
 
 ThemeData buildAppTheme() {
@@ -31,7 +31,7 @@ ThemeData buildAppTheme() {
         ),
         bodyMedium: const TextStyle(
           fontFamily: 'Pretendard',
-          fontSize: 14,
+          fontSize: 16,
           height: 1.6,
           color: ink,
         ),
@@ -87,7 +87,7 @@ ThemeData buildAppTheme() {
         minimumSize: const Size(0, 52),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         textStyle: textTheme.labelLarge!.copyWith(
-          fontSize: 15,
+          fontSize: 16,
           fontWeight: FontWeight.w600,
         ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
@@ -100,7 +100,7 @@ ThemeData buildAppTheme() {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         side: const BorderSide(color: line),
         textStyle: textTheme.labelLarge!.copyWith(
-          fontSize: 14,
+          fontSize: 16,
           fontWeight: FontWeight.w600,
         ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
@@ -110,6 +110,10 @@ ThemeData buildAppTheme() {
       style: TextButton.styleFrom(
         foregroundColor: accent,
         minimumSize: const Size(48, 48),
+        textStyle: textTheme.labelLarge!.copyWith(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
       ),
     ),

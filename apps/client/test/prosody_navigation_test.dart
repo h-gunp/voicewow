@@ -18,6 +18,44 @@ import 'package:voicemate/screens/scenario_screen.dart';
 import 'fake_audio_port.dart';
 
 void main() {
+  testWidgets('help waits for cancellation and keeps prosody on return', (
+    tester,
+  ) async {
+    final audio = _CountingProsodyAudio();
+    final practice = PracticeSession(audio: audio);
+    _seedAcceptedPractice(practice);
+    final reference = practice.reference;
+    addTearDown(practice.dispose);
+    await tester.pumpWidget(
+      VoiceMateApp(
+        audioPort: FakeAudioPort(),
+        prosodySession: practice,
+        startWithProsody: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await practice.startRecording();
+    await tester.pump();
+    audio.cancelGate = Completer<void>();
+    await tester.tap(find.byKey(const Key('open-training-guide')));
+    await tester.pump();
+    expect(find.text('사용 안내'), findsNothing);
+    expect(audio.capturing, isTrue);
+    audio.cancelGate!.complete();
+    await tester.pumpAndSettle();
+    expect(audio.capturing, isFalse);
+    expect(find.byType(ProsodyScreen, skipOffstage: false), findsOneWidget);
+    expect(find.text('사용 안내'), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byType(ProsodyScreen), findsOneWidget);
+    expect(practice.reference, same(reference));
+    expect(practice.recording, isFalse);
+    expect(audio.recordingStarts, 1);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets(
     'leaving optional practice preparation returns to volume without starting audio',
     (tester) async {

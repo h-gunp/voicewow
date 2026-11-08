@@ -15,6 +15,7 @@ class FakePronunciationRecorder implements PronunciationRecorder {
   int prepares = 0, starts = 0, finishes = 0, cancels = 0, plays = 0;
   Completer<List<String>>? pending;
   Completer<void>? startPending;
+  Completer<void>? playPending;
   String? failure;
   String? playbackFailure;
   void Function()? limit;
@@ -60,6 +61,7 @@ class FakePronunciationRecorder implements PronunciationRecorder {
   Future<void> play() async {
     plays++;
     if (playbackFailure != null) throw StateError(playbackFailure!);
+    await playPending?.future;
   }
 
   @override
@@ -111,12 +113,109 @@ Future<void> pumpPractice(
 }
 
 Future<void> tap(WidgetTester tester, String key) async {
-  await tester.ensureVisible(find.byKey(Key(key)));
+  if (find.byKey(Key(key)).evaluate().isEmpty) {
+    await tester.scrollUntilVisible(
+      find.byKey(Key(key)),
+      100,
+      scrollable: find.byType(Scrollable).last,
+    );
+  }
+  await Scrollable.ensureVisible(
+    tester.element(find.byKey(Key(key))),
+    alignment: .5,
+  );
+  await tester.pump();
   await tester.tap(find.byKey(Key(key)));
   await tester.pump();
 }
 
 void main() {
+  testWidgets('help cancels pronunciation and keeps the practice reusable', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final recorder = FakePronunciationRecorder();
+    final learning = LearningController(MemoryLearningStore());
+    addTearDown(learning.dispose);
+    await tester.pumpWidget(
+      VoiceMateApp(
+        audioPort: FakeAudioPort(),
+        pronunciationLearning: learning,
+        pronunciationSpeech: _SilentSpeech(),
+        pronunciationRecorder: recorder,
+        startWithPronunciation: true,
+        textScaler: const TextScaler.linear(3),
+      ),
+    );
+    await tester.pumpAndSettle();
+    for (final key in [
+      'category-words',
+      'quiz-group-words-0',
+      'quiz-item-${quizCatalog.first.id}',
+      'pronunciation-prepare',
+      'pronunciation-mic',
+    ]) {
+      await tap(tester, key);
+      await tester.pumpAndSettle();
+    }
+    await tester.ensureVisible(find.byKey(const Key('pronunciation-cancel')));
+    expect(
+      find.byKey(const Key('pronunciation-cancel')).hitTestable(),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+    final cancels = recorder.cancels;
+    await tester.tap(find.byKey(const Key('open-training-guide')));
+    await tester.pumpAndSettle();
+    expect(recorder.cancels, greaterThan(cancels));
+    expect(
+      find.byType(PronunciationPracticeView, skipOffstage: false),
+      findsOneWidget,
+    );
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text(quizCatalog.first.text), findsOneWidget);
+    for (final key in ['pronunciation-prepare', 'pronunciation-mic']) {
+      await tap(tester, key);
+      await tester.pumpAndSettle();
+    }
+    expect(recorder.starts, 2);
+    await tap(tester, 'pronunciation-mic');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('pronunciation-observed')), findsOneWidget);
+    final completedCancels = recorder.cancels;
+    final prepares = recorder.prepares;
+    await tester.tap(find.byKey(const Key('open-training-guide')));
+    await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('pronunciation-observed')), findsOneWidget);
+    expect(find.byKey(const Key('pronunciation-prepare')), findsNothing);
+    expect(recorder.cancels, completedCancels);
+    expect(recorder.prepares, prepares);
+    recorder.playPending = Completer<void>();
+    await tap(tester, 'pronunciation-replay');
+    await tester.tap(find.byKey(const Key('open-training-guide')));
+    await tester.pumpAndSettle();
+    recorder.playPending!.complete();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tap(tester, 'pronunciation-prepare');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('pronunciation-observed')), findsOneWidget);
+    expect(
+      tester
+          .widget<OutlinedButton>(find.byKey(const Key('pronunciation-replay')))
+          .onPressed,
+      isNull,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets(
     'catalog detail cancels analysis on feature exit and never changes past answers',
     (tester) async {

@@ -14,11 +14,13 @@ class PronunciationScreen extends StatefulWidget {
   final LearningController? learning;
   final SpeechPlayer? speech;
   final PronunciationRecorder? recorder;
+  final bool suspended;
   const PronunciationScreen({
     super.key,
     this.learning,
     this.speech,
     this.recorder,
+    this.suspended = false,
   });
 
   @override
@@ -58,6 +60,15 @@ class _PronunciationScreenState extends State<PronunciationScreen>
     unawaited(_stopSpeech());
     unawaited(recorder.cancel());
     setState(() => _tab = tabs.index);
+  }
+
+  @override
+  void didUpdateWidget(covariant PronunciationScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.suspended && !oldWidget.suspended) {
+      ++_practiceRequest;
+      unawaited(_stopSpeech());
+    }
   }
 
   void _openGuide(String value) {
@@ -150,6 +161,7 @@ class _PronunciationScreenState extends State<PronunciationScreen>
         referenceIsApproximate: target.approximate,
         referenceNote: target.note,
         recorder: recorder,
+        suspended: widget.suspended,
         playback: playback,
         bookmarked:
             target.id != null && learning.bookmarkedIds.contains(target.id),
@@ -168,108 +180,119 @@ class _PronunciationScreenState extends State<PronunciationScreen>
       constraints: const BoxConstraints(maxWidth: 720),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 22),
-            const Text(
-              '내 속도로, 함께',
-              style: TextStyle(
-                color: blue,
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 6),
-            const Text('발음 훈련', style: pageTitle),
-            const SizedBox(height: 6),
-            const Text('익숙한 말부터, 내 속도로 연습해요.', style: smallCopy),
-            const SizedBox(height: 18),
-            Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: canvas,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: line),
-              ),
-              child: TabBar(
-                controller: tabs,
-                isScrollable: true,
-                tabAlignment: TabAlignment.start,
-                labelColor: ink,
-                unselectedLabelColor: muted,
-                indicatorSize: TabBarIndicatorSize.tab,
-                dividerColor: Colors.transparent,
-                indicator: BoxDecoration(
-                  color: wash,
+        child: LayoutBuilder(
+          builder: (context, constraints) => Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (constraints.maxHeight >=
+                  MediaQuery.textScalerOf(context).scale(280)) ...[
+                const SizedBox(height: 22),
+                const Text(
+                  '내 속도로, 함께',
+                  style: TextStyle(
+                    color: blue,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text('발음 훈련', style: pageTitle),
+                const SizedBox(height: 6),
+                const Text('익숙한 말부터, 내 속도로 연습해요.', style: smallCopy),
+                const SizedBox(height: 18),
+              ],
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: canvas,
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(color: line),
                 ),
-                tabs: const [
-                  Tab(text: '발음 연습'),
-                  Tab(text: '내 문장'),
-                  Tab(text: '복습'),
-                ],
+                child: TabBar(
+                  controller: tabs,
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
+                  labelColor: ink,
+                  unselectedLabelColor: muted,
+                  indicatorSize: TabBarIndicatorSize.tab,
+                  dividerColor: Colors.transparent,
+                  indicator: BoxDecoration(
+                    color: wash,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: line),
+                  ),
+                  tabs: [
+                    Tab(height: _tabHeight(context), text: '발음 연습'),
+                    Tab(height: _tabHeight(context), text: '내 문장'),
+                    Tab(height: _tabHeight(context), text: '복습'),
+                  ],
+                ),
               ),
-            ),
-            Expanded(
-              child: ListenableBuilder(
-                listenable: learning,
-                builder: (context, _) {
-                  if (!learning.ready) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  return Column(
-                    children: [
-                      if (learning.storageUnavailable)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 12),
-                          child: Text(
-                            '기록을 저장하지 못했어요. 이번 연습은 계속할 수 있어요.',
-                            style: TextStyle(color: red),
+              Expanded(
+                child: ListenableBuilder(
+                  listenable: learning,
+                  builder: (context, _) {
+                    if (!learning.ready) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    return Column(
+                      children: [
+                        if (learning.storageUnavailable)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 12),
+                            child: Text(
+                              '기록을 저장하지 못했어요. 이번 연습은 계속할 수 있어요.',
+                              style: TextStyle(color: red),
+                            ),
+                          ),
+                        Expanded(
+                          child: TabBarView(
+                            controller: tabs,
+                            physics: const NeverScrollableScrollPhysics(),
+                            children: [
+                              QuizTrainingView(
+                                learning: learning,
+                                onPractice: _openItem,
+                                active: _tab == 0,
+                              ),
+                              _PersonalGuideView(
+                                learning: learning,
+                                playback: playback,
+                                onStop: _stopSpeech,
+                                onOpenSaved: _openSavedGuides,
+                                requestedGuide: _requestedGuide,
+                                guideRequest: _guideRequest,
+                                onPractice: _openGuide,
+                              ),
+                              QuizTrainingView(
+                                learning: learning,
+                                onPractice: _openItem,
+                                reviewOnly: true,
+                                active: _tab == 2,
+                                onOpenGuide: _openGuide,
+                                reviewInitialFilter: _reviewInitialFilter,
+                                reviewFilterRequest: _reviewRequest,
+                              ),
+                            ],
                           ),
                         ),
-                      Expanded(
-                        child: TabBarView(
-                          controller: tabs,
-                          physics: const NeverScrollableScrollPhysics(),
-                          children: [
-                            QuizTrainingView(
-                              learning: learning,
-                              onPractice: _openItem,
-                              active: _tab == 0,
-                            ),
-                            _PersonalGuideView(
-                              learning: learning,
-                              playback: playback,
-                              onStop: _stopSpeech,
-                              onOpenSaved: _openSavedGuides,
-                              requestedGuide: _requestedGuide,
-                              guideRequest: _guideRequest,
-                              onPractice: _openGuide,
-                            ),
-                            QuizTrainingView(
-                              learning: learning,
-                              onPractice: _openItem,
-                              reviewOnly: true,
-                              active: _tab == 2,
-                              onOpenGuide: _openGuide,
-                              reviewInitialFilter: _reviewInitialFilter,
-                              reviewFilterRequest: _reviewRequest,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  );
-                },
+                      ],
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     ),
   );
+
+  double _tabHeight(BuildContext context) =>
+      (MediaQuery.textScalerOf(context).scale(14) * 1.6 + 16).clamp(
+        48,
+        double.infinity,
+      );
 }
 
 class _PracticeTarget {

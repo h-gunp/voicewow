@@ -50,6 +50,10 @@ void main() {
       await tester.tap(find.byKey(const Key('open-pronunciation')));
       await tester.pumpAndSettle();
       expect(find.text('발음 연습'), findsOneWidget);
+      expect(find.byKey(const Key('text-size-control')), findsOneWidget);
+      await tester.ensureVisible(find.text('내 문장'));
+      await tester.pumpAndSettle();
+      expect(find.text('내 문장').hitTestable(), findsOneWidget);
       await tester.tap(find.text('내 문장'));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('guide-input')), findsOneWidget);
@@ -59,6 +63,7 @@ void main() {
       await tester.tap(find.byKey(const Key('open-prosody')));
       await tester.pumpAndSettle();
       expect(find.text('연습 준비'), findsOneWidget);
+      expect(find.byKey(const Key('text-size-control')), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     },

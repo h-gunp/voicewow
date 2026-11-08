@@ -16,7 +16,38 @@ void main() {
     expect(source.path, '/team/app/prosody/index.html');
     expect(source.queryParameters, {'embedded': '1'});
     expect(source.fragment, isEmpty);
+    expect(embeddedProsodyUri(nested, textScale: 1.875).queryParameters, {
+      'embedded': '1',
+      'textScale': '1.875',
+    });
+    expect(embeddedProsodyUri(nested, textScale: double.nan).queryParameters, {
+      'embedded': '1',
+    });
   });
+
+  test(
+    'only the current same-origin frame can announce readiness or failure',
+    () {
+      for (final type in [prosodyReadyMessage, prosodyErrorMessage]) {
+        bool accept({
+          String origin = 'https://voicemate.example',
+          bool fromFrame = true,
+          Object? data,
+        }) => acceptsProsodyMessage(
+          origin: origin,
+          expectedOrigin: 'https://voicemate.example',
+          fromFrame: fromFrame,
+          data: data ?? {'type': type},
+          type: type,
+        );
+        expect(accept(), isTrue);
+        expect(accept(origin: 'https://elsewhere.example'), isFalse);
+        expect(accept(fromFrame: false), isFalse);
+        expect(accept(data: type), isFalse);
+        expect(accept(data: {'type': prosodyExitMessage}), isFalse);
+      }
+    },
+  );
 
   test('only the actual same-origin frame can request an exit', () {
     bool accept({

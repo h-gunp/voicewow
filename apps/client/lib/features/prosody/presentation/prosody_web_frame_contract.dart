@@ -1,19 +1,43 @@
 const prosodyCleanupMessage = 'voicemate:prosody:cleanup';
 const prosodyExitMessage = 'voicemate:prosody:exit';
+const prosodyReadyMessage = 'voicemate:prosody:ready';
+const prosodyErrorMessage = 'voicemate:prosody:error';
+const prosodyTextScaleMessage = 'voicemate:prosody:text-scale';
 
-Uri embeddedProsodyUri(Uri base) =>
-    base.resolve('prosody/index.html?embedded=1');
+Uri embeddedProsodyUri(Uri base, {double textScale = 1}) => base
+    .resolve('prosody/index.html')
+    .replace(
+      queryParameters: {
+        'embedded': '1',
+        if (textScale.isFinite && textScale > 0 && textScale != 1)
+          'textScale': '$textScale',
+      },
+    );
+
+bool acceptsProsodyMessage({
+  required String origin,
+  required String expectedOrigin,
+  required bool fromFrame,
+  required Object? data,
+  required String type,
+}) =>
+    origin == expectedOrigin &&
+    fromFrame &&
+    data is Map &&
+    data['type'] == type;
 
 bool acceptsProsodyExit({
   required String origin,
   required String expectedOrigin,
   required bool fromFrame,
   required Object? data,
-}) =>
-    origin == expectedOrigin &&
-    fromFrame &&
-    data is Map &&
-    data['type'] == prosodyExitMessage;
+}) => acceptsProsodyMessage(
+  origin: origin,
+  expectedOrigin: expectedOrigin,
+  fromFrame: fromFrame,
+  data: data,
+  type: prosodyExitMessage,
+);
 
 /// The browser adapter is separate so microphone teardown can be tested without
 /// starting a real recorder or depending on an embedded document being loaded.
