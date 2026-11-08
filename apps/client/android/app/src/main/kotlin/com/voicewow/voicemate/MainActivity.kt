@@ -6,6 +6,7 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private var pronunciation: PronunciationEngine? = null
+    private var volume: VolumeEngine? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -14,11 +15,23 @@ class MainActivity : FlutterActivity() {
             cacheDir,
             MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "voicemate/pronunciation"),
         )
+        volume?.close()
+        volume = VolumeEngine(
+            applicationContext,
+            MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "voicemate/volume"),
+        )
+    }
+
+    override fun onStop() {
+        volume?.suspendCapture()
+        super.onStop()
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         pronunciation?.close()
         pronunciation = null
+        volume?.close()
+        volume = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
 }

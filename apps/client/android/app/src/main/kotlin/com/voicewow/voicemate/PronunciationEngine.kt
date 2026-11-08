@@ -16,6 +16,7 @@ import java.net.URI
 import java.nio.FloatBuffer
 import java.security.MessageDigest
 import java.util.concurrent.Executors
+import kotlin.math.abs
 import kotlin.math.sqrt
 
 internal object PronunciationPcm {
@@ -24,11 +25,26 @@ internal object PronunciationPcm {
             "16kHz 모노 음성을 0.2초 이상 20초 이하로 녹음해야 한다."
         }
         require(samples.all { it.isFinite() && it in -1.001f..1.001f }) { "오디오 값이 올바르지 않다." }
-        val mean = samples.sumOf { it.toDouble() } / samples.size
-        val variance = samples.sumOf { (it - mean) * (it - mean) } / samples.size
+        val rawMean = samples.sumOf { it.toDouble() } / samples.size
+        val variance = samples.sumOf { (it - rawMean) * (it - rawMean) } / samples.size
         require(variance >= 1e-10) { "분석할 소리가 없거나 너무 작다. 다시 녹음해야 한다." }
-        val scale = sqrt(variance + 1e-7)
-        return FloatArray(samples.size) { ((samples[it] - mean) / scale).toFloat() }
+        val threshold = maxOf(samples.maxOf { abs(it.toDouble()) } * 0.01, 1e-4)
+        val first = samples.indexOfFirst { abs(it.toDouble()) >= threshold }
+        var input = samples
+        if (first >= 0) {
+            val last = samples.indexOfLast { abs(it.toDouble()) >= threshold }
+            val length = last - first + 1 + 12800
+            // Match the web path's sample-level 400 ms context without cutting speech.
+            if (length <= 320000) {
+                val start = first - 6400
+                input = FloatArray(length) { samples.getOrElse(start + it) { 0f } }
+            }
+        }
+        val mean = input.sumOf { it.toDouble() } / input.size
+        val inputVariance = input.sumOf { (it - mean) * (it - mean) } / input.size
+        require(inputVariance.isFinite() && inputVariance > 0) { "분석할 소리가 없거나 너무 작다. 다시 녹음해야 한다." }
+        val scale = sqrt(inputVariance)
+        return FloatArray(input.size) { ((input[it] - mean) / scale).toFloat() }
     }
 
     fun decode(logits: FloatArray, shape: LongArray, vocab: Array<String>): List<String> {
@@ -62,6 +78,17 @@ internal class PronunciationLease {
         if (owner != session) return false
         generation++
         return true
+    }
+}
+
+internal fun removeInterruptedModelParts(directory: File) {
+    if (!directory.exists()) return
+    check(directory.isDirectory) { "모델 저장 경로를 사용할 수 없다." }
+    val files = checkNotNull(directory.listFiles()) { "모델 저장 공간을 확인하지 못했다." }
+    for (file in files) {
+        if (file.isFile && file.name.startsWith("model-") && file.name.endsWith(".part")) {
+            check(file.delete() || !file.exists()) { "중단된 모델 다운로드 파일을 정리하지 못했다." }
+        }
     }
 }
 
@@ -172,7 +199,12 @@ class PronunciationEngine(private val cacheRoot: File, private val channel: Meth
 
     private fun prepare(operation: Pending) {
         if (model != null) return
-        val files = ASSETS.map { asset -> loadAsset(asset, operation) }
+        val files = synchronized(downloadLock) {
+            checkCurrent(operation)
+            // A replaced Flutter engine may still be closing its old download.
+            removeInterruptedModelParts(File(cacheRoot, "pronunciation/$REVISION"))
+            ASSETS.map { asset -> loadAsset(asset, operation) }
+        }
         val config = JSONObject(files[0].readText())
         val vocabulary = JSONObject(files[1].readText())
         val added = JSONObject(files[2].readText())
@@ -317,6 +349,7 @@ class PronunciationEngine(private val cacheRoot: File, private val channel: Meth
     }
 
     companion object {
+        private val downloadLock = Any()
         private const val REVISION = "dbb9c196f3e5e72d41c8ce2b63e6d0c91a011b70"
         private val ASSETS = listOf(
             Asset("config.json", 2063, "bc3394c2db0f96a9ab5e68c3a389201266bd21a26fcde109ff9d07accda26bd2"),

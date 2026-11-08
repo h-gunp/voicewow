@@ -9,6 +9,7 @@ import 'widgets/training_guide.dart';
 import 'widgets/training_warmup.dart';
 import 'audio/audio_port.dart';
 import 'audio/unsupported_audio_port.dart'
+    if (dart.library.io) 'audio/native_audio_port.dart'
     if (dart.library.js_interop) 'audio/web_audio_port.dart';
 import 'session_controller.dart';
 import 'screens/scenario_screen.dart';
@@ -75,7 +76,12 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
     pronunciationSpeech = widget.pronunciationSpeech;
     pronunciationRecorder = widget.pronunciationRecorder;
     _warmingUp = section != 0;
-    session = SessionController(widget.audioPort ?? createAudioPort());
+    session = SessionController(
+      widget.audioPort ?? createAudioPort(),
+      levelOffset: !kIsWeb && defaultTargetPlatform == TargetPlatform.android
+          ? 105
+          : SessionController.inputLevelOffset,
+    );
     semantics = WidgetsBinding.instance.ensureSemantics();
     _textSizeStore = widget.textSizeStore ?? PreferencesTextSizeStore();
     unawaited(_loadTextSize());

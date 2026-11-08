@@ -8,6 +8,7 @@ import 'package:voicemate/app_theme.dart';
 import 'package:voicemate/features/pronunciation/data/learning_store.dart';
 import 'package:voicemate/features/pronunciation/data/speech_player.dart';
 import 'package:voicemate/features/pronunciation/presentation/pronunciation_screen.dart';
+import 'package:voicemate/features/pronunciation/presentation/pronunciation_practice_view.dart';
 import 'fake_audio_port.dart';
 import 'pronunciation_practice_ui_test.dart' show FakePronunciationRecorder;
 
@@ -102,6 +103,25 @@ void main() {
     await tester.tap(find.text('내 문장'));
     await tester.pumpAndSettle();
   }
+
+  testWidgets('personal practice accepts both standard readings of 맛있어', (
+    tester,
+  ) async {
+    final learning = LearningController(MemoryLearningStore());
+    await open(tester, learning, FakeSpeech());
+    await tester.enterText(find.byKey(const Key('guide-input')), '맛있어');
+    await tester.tap(find.byKey(const Key('guide-analyze')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('guide-practice')));
+    await tester.tap(find.byKey(const Key('guide-practice')));
+    await tester.pumpAndSettle();
+    final practice = tester.widget<PronunciationPracticeView>(
+      find.byType(PronunciationPracticeView),
+    );
+    expect(practice.references, unorderedEquals(['마시써', '마디써']));
+    await tester.pumpWidget(const SizedBox.shrink());
+    learning.dispose();
+  });
 
   testWidgets(
     'personal sentence analyze, save, reload and stale result clear',

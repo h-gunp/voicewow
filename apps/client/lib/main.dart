@@ -10,6 +10,18 @@ void main() {
       'Pretendard 1.3.9',
     ], await rootBundle.loadString('assets/fonts/OFL.txt'));
     yield LicenseEntryWithLineBreaks(
+      ['RNNoise'],
+      await rootBundle.loadString(
+        'android/app/src/main/cpp/vendor/rnnoise/COPYING',
+      ),
+    );
+    yield LicenseEntryWithLineBreaks(
+      ['libfvad / WebRTC'],
+      '${await rootBundle.loadString('android/app/src/main/cpp/vendor/libfvad/LICENSE')}\n'
+      '${await rootBundle.loadString('android/app/src/main/cpp/vendor/libfvad/PATENTS')}\n'
+      '${await rootBundle.loadString('android/app/src/main/cpp/vendor/libfvad/AUTHORS')}',
+    );
+    yield LicenseEntryWithLineBreaks(
       ['Supertonic 3 model'],
       'Supertonic 3 · Supertone\nhttps://huggingface.co/supertone-oss-archive/supertonic-3\n'
       '이 모델은 BigScience Open RAIL-M 5항과 첨부 A의 이용 제한을 따릅니다.\n\n'

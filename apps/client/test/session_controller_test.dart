@@ -19,6 +19,27 @@ void main() {
     await session.start();
     expect(port.starts, 0);
   });
+  test(
+    'Android offset 105 lowers the same input by 9 without changing raw dBFS',
+    () async {
+      final androidPort = FakeAudioPort();
+      final android = SessionController(androidPort, levelOffset: 105)
+        ..selectScenario(Scenario.values.first);
+      await android.start();
+      androidPort.send(const AudioEvent.state(CaptureState.running));
+      androidPort.send(
+        const AudioEvent.analysis({
+          'meterState': 'speech',
+          'speech': 'speech',
+          'meterDbfs': -40.0,
+        }),
+      );
+      expect(android.displayLevel, 65);
+      expect(android.analysis['meterDbfs'], -40);
+      expect(session.levelOffset, 114);
+      android.dispose();
+    },
+  );
   test('fresh speech remains visible outside manual sampling', () async {
     session.selectScenario(Scenario.values.first);
     await session.start();

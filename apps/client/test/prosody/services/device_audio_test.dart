@@ -1,11 +1,120 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, debugDefaultTargetPlatformOverride;
+import 'package:flutter/services.dart'
+    show MethodCall, MethodChannel, StandardMethodCodec;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:record/record.dart';
+import 'package:voicemate/features/prosody/audio/wav.dart';
 import 'package:voicemate/features/prosody/services/device_audio.dart';
+import 'package:voicemate/shared/native_tts_coordinator.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  group('native synthesis errors', () {
+    const ttsChannel = MethodChannel('flutter_tts');
+    const pathChannel = MethodChannel('plugins.flutter.io/path_provider');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    late Directory directory;
+    late DeviceAudioService service;
+    late _SynthesisPlatform platform;
+
+    setUp(() async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      directory = await Directory.systemTemp.createTemp('voicemate_tts_test_');
+      service = DeviceAudioService();
+      platform = _SynthesisPlatform();
+      messenger.setMockMethodCallHandler(ttsChannel, platform.handle);
+      messenger.setMockMethodCallHandler(
+        pathChannel,
+        (_) async => directory.path,
+      );
+    });
+
+    tearDown(() async {
+      await service.cancelGuide();
+      await platform.event('speak.onCancel');
+      await service.dispose();
+      for (final pending in platform.pending) {
+        if (!pending.isCompleted) pending.complete(1);
+      }
+      messenger.setMockMethodCallHandler(ttsChannel, null);
+      messenger.setMockMethodCallHandler(pathChannel, null);
+      debugDefaultTargetPlatformOverride = null;
+      await directory.delete(recursive: true);
+    });
+
+    test(
+      'synth.onError fails immediately, removes partial output and permits retry',
+      () async {
+        final generating = service.generateGuide('안녕하세요.');
+        final failed = expectLater(
+          generating.timeout(const Duration(seconds: 1)),
+          throwsA(
+            isA<DeviceAudioException>().having(
+              (error) => error.message,
+              'message',
+              contains('기기에서 가이드 음성을 만들지 못했어요'),
+            ),
+          ),
+        );
+        await platform.started.future.timeout(const Duration(seconds: 1));
+        final partial = File(platform.paths.single);
+        expect(await partial.exists(), isTrue);
+        await platform.event(
+          'synth.onError',
+          'Error from TextToSpeech (synth) - 5',
+        );
+        await failed;
+        expect(service.isGenerating, isFalse);
+        expect(platform.pending.single.isCompleted, isFalse);
+        expect(await partial.exists(), isFalse);
+
+        platform.started = Completer<void>();
+        final retry = service.generateGuide('다시 읽는다.');
+        await platform.started.future.timeout(const Duration(seconds: 1));
+        final bytes = encodeWav(List<double>.filled(160, 0), 16000);
+        await File(platform.paths.last).writeAsBytes(bytes);
+        platform.pending.last.complete(1);
+        await platform.event('synth.onComplete');
+        expect((await retry).bytes, bytes);
+        expect(service.isGenerating, isFalse);
+      },
+    );
+
+    test(
+      'an error delivered during issue is handled without an unhandled future',
+      () async {
+        platform.failDuringIssue = true;
+        await expectLater(
+          service
+              .generateGuide('바로 오류가 난다.')
+              .timeout(const Duration(seconds: 1)),
+          throwsA(
+            isA<DeviceAudioException>().having(
+              (error) => error.message,
+              'message',
+              contains('기기에서 가이드 음성을 만들지 못했어요'),
+            ),
+          ),
+        );
+        expect(service.isGenerating, isFalse);
+        expect(await File(platform.paths.single).exists(), isFalse);
+        final next = await NativeTtsCoordinator.shared.acquire(
+          NativeTtsKind.speech,
+          timeout: Duration.zero,
+        );
+        expect(next, isNotNull);
+        next!.releaseUnissued();
+      },
+    );
+  });
+
   test('Android TTS string flags select installed offline Korean voices', () {
     expect(
       isInstalledOfflineKoreanVoice({
@@ -109,6 +218,52 @@ void main() {
       await service.dispose();
     },
   );
+}
+
+class _SynthesisPlatform {
+  Completer<void> started = Completer<void>();
+  final pending = <Completer<Object?>>[];
+  final paths = <String>[];
+  bool failDuringIssue = false;
+
+  Future<Object?> handle(MethodCall call) async {
+    switch (call.method) {
+      case 'isLanguageInstalled':
+        return true;
+      case 'getVoices':
+        return [
+          {
+            'locale': 'ko-KR',
+            'network_required': '0',
+            'features': '',
+            'name': 'offline',
+          },
+        ];
+      case 'synthesizeToFile':
+        final path = (call.arguments as Map)['fileName'] as String;
+        paths.add(path);
+        await File(path).writeAsBytes([1, 2, 3]);
+        final completion = Completer<Object?>();
+        pending.add(completion);
+        if (failDuringIssue) await event('synth.onError', 'synthesis failed');
+        started.complete();
+        // Android reports synth.onError without resolving this method result.
+        return completion.future;
+      default:
+        return 1;
+    }
+  }
+
+  Future<void> event(String method, [Object? arguments]) async {
+    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .handlePlatformMessage(
+          'flutter_tts',
+          const StandardMethodCodec().encodeMethodCall(
+            MethodCall(method, arguments),
+          ),
+          null,
+        );
+  }
 }
 
 class _DelayedRecordPlatform extends RecordPlatform {

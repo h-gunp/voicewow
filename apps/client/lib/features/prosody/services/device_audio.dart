@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
@@ -153,7 +155,7 @@ class DeviceAudioService {
     if (_recording || _starting || _guideBusy || _cancelFuture != null) {
       throw const DeviceAudioException('진행 중인 녹음이나 가이드를 마친 뒤 다시 시도해 주세요.');
     }
-    if (!Platform.isAndroid) {
+    if (defaultTargetPlatform != TargetPlatform.android) {
       throw const DeviceAudioException(
         '기기 가이드 생성은 현재 안드로이드에서 지원해요. 준비된 예시로 연습할 수 있어요.',
       );
@@ -161,6 +163,7 @@ class DeviceAudioService {
     final ticket = ++_guideGeneration;
     _guideBusy = true;
     final cancelled = Completer<void>();
+    final synthesisFailed = Completer<void>();
     _guideCancelled = cancelled;
     String? path;
     NativeTtsLease? lease;
@@ -183,10 +186,15 @@ class DeviceAudioService {
       }
       _guideLease = lease;
       final tts = _tts = FlutterTts();
-      NativeTtsCoordinator.shared.installHandler(
-        lease,
-        tts.platformCallHandler,
-      );
+      NativeTtsCoordinator.shared.installHandler(lease, (call) async {
+        if (call.method == 'synth.onError' &&
+            lease?.issued == true &&
+            !synthesisFailed.isCompleted) {
+          // Android leaves synthesizeToFile pending after this error callback.
+          synthesisFailed.complete();
+        }
+        return tts.platformCallHandler(call);
+      });
       final installed = await tts.isLanguageInstalled('ko-KR');
       checkGeneration();
       if (installed != true && installed != 1) {
@@ -258,6 +266,11 @@ class DeviceAudioService {
       });
       await Future.any<void>([
         completed,
+        synthesisFailed.future.then(
+          (_) => throw const DeviceAudioException(
+            '기기에서 가이드 음성을 만들지 못했어요. 다시 시도해 주세요.',
+          ),
+        ),
         cancelled.future.then(
           (_) => throw const DeviceAudioException('가이드 만들기를 취소했어요.'),
         ),

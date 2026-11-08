@@ -86,7 +86,7 @@ class _PronunciationScreenState extends State<PronunciationScreen>
       _openPractice(
         _PracticeTarget(
           value,
-          _references(guide.pronunciation),
+          pronunciationReferences(value, guide.pronunciation),
           approximate: true,
           note: '기본 발음 규칙을 적용한 참고 읽기다.',
         ),
@@ -94,18 +94,11 @@ class _PronunciationScreenState extends State<PronunciationScreen>
     );
   }
 
-  List<String> _references(String reading) {
-    final variants = <String>{reading};
-    if (reading.contains('마딛께')) variants.add(reading.replaceAll('마딛께', '마싣께'));
-    if (reading.contains('마싣께')) variants.add(reading.replaceAll('마싣께', '마딛께'));
-    return variants.toList();
-  }
-
   void _openItem(QuizItem item) => unawaited(
     _openPractice(
       _PracticeTarget(
         item.text,
-        _references(item.pronunciation),
+        pronunciationReferences(item.text, item.pronunciation),
         id: item.id,
         note: item.explanation,
       ),

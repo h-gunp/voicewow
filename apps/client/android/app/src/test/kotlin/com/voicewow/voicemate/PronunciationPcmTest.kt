@@ -2,6 +2,7 @@ package com.voicewow.voicemate
 
 import org.junit.Assert.*
 import org.junit.Test
+import kotlin.math.sqrt
 
 class PronunciationPcmTest {
     private val vocab = Array(45) { "phone$it" }.also {
@@ -18,14 +19,72 @@ class PronunciationPcmTest {
 
     @Test fun normalizationUsesRawPcmAndRejectsInvalidOrSilentAudio() {
         val raw = FloatArray(3200) { if (it % 2 == 0) 0.5f else -0.5f }
+        val original = raw.copyOf()
         val normalized = PronunciationPcm.normalize(raw, 16000)
-        assertEquals(1.0, normalized[0].toDouble(), 1e-5)
-        assertEquals(-1.0, normalized[1].toDouble(), 1e-5)
+        assertEquals(16000, normalized.size)
+        assertEquals(sqrt(5.0), normalized[6400].toDouble(), 1e-5)
+        assertEquals(-sqrt(5.0), normalized[6401].toDouble(), 1e-5)
+        assertArrayEquals(original, raw, 0f)
         for (invalid in listOf(FloatArray(3200), FloatArray(3199), FloatArray(320001),
-            raw.copyOf().also { it[0] = Float.NaN }, raw.copyOf().also { it[0] = 2f })) {
+            FloatArray(3200) { 0.01f }, FloatArray(3200) { if (it % 2 == 0) 1e-6f else -1e-6f },
+            raw.copyOf().also { it[0] = Float.NaN }, raw.copyOf().also { it[0] = Float.POSITIVE_INFINITY },
+            raw.copyOf().also { it[0] = 2f })) {
             assertThrows(IllegalArgumentException::class.java) { PronunciationPcm.normalize(invalid, 16000) }
         }
         assertThrows(IllegalArgumentException::class.java) { PronunciationPcm.normalize(raw, 48000) }
+    }
+
+    @Test fun outerSilenceDoesNotChangeSamplesEvenWithoutFrameAlignment() {
+        val raw = FloatArray(3200) { if (it % 2 == 0) 0.25f else -0.25f }
+        val expected = PronunciationPcm.normalize(raw, 16000)
+        for (padding in listOf(16001, 16080, 16159)) {
+            val padded = FloatArray(raw.size + padding * 2)
+            raw.copyInto(padded, padding)
+            assertArrayEquals(expected, PronunciationPcm.normalize(padded, 16000), 0f)
+        }
+    }
+
+    @Test fun contextPreservesQuietEdgesAndInternalPauses() {
+        val raw = FloatArray(20000)
+        raw[1700] = 0.002f
+        raw[8000] = 0.5f
+        raw[10000] = -0.002f
+        raw[12000] = -0.5f
+        raw[18300] = 0.003f
+        val original = raw.copyOf()
+        val expectedContext = raw.copyOfRange(1600, 18401)
+        assertArrayEquals(standardize(expectedContext), PronunciationPcm.normalize(raw, 16000), 0f)
+        assertArrayEquals(original, raw, 0f)
+    }
+
+    @Test fun quietGainKeepsNormalizedSamplesWithoutVarianceEpsilon() {
+        val raw = FloatArray(3200) { if (it % 2 == 0) 0.1f else -0.1f }
+        val quiet = FloatArray(raw.size) { raw[it] * 0.01f }
+        assertArrayEquals(PronunciationPcm.normalize(raw, 16000),
+            PronunciationPcm.normalize(quiet, 16000), 1e-6f)
+    }
+
+    @Test fun contextNeverTruncatesAudioToFitTheTwentySecondLimit() {
+        val raw = FloatArray(320000) { if (it % 2 == 0) 0.25f else -0.25f }
+        val original = raw.copyOf()
+        assertArrayEquals(standardize(raw), PronunciationPcm.normalize(raw, 16000), 0f)
+        assertArrayEquals(original, raw, 0f)
+
+        val atLimit = FloatArray(307200) { if (it % 2 == 0) 0.25f else -0.25f }
+        assertEquals(320000, PronunciationPcm.normalize(atLimit, 16000).size)
+        val exceeds = FloatArray(307201) { if (it % 2 == 0) 0.25f else -0.25f }
+        assertArrayEquals(standardize(exceeds), PronunciationPcm.normalize(exceeds, 16000), 0f)
+    }
+
+    @Test fun validSignalBelowTheBoundaryThresholdKeepsItsOriginalExtent() {
+        val raw = FloatArray(3200) { if (it % 2 == 0) 5e-5f else -5e-5f }
+        assertArrayEquals(standardize(raw), PronunciationPcm.normalize(raw, 16000), 0f)
+    }
+
+    private fun standardize(samples: FloatArray): FloatArray {
+        val mean = samples.sumOf { it.toDouble() } / samples.size
+        val variance = samples.sumOf { (it - mean) * (it - mean) } / samples.size
+        return FloatArray(samples.size) { ((samples[it] - mean) / sqrt(variance)).toFloat() }
     }
 
     @Test fun malformedOutputIsRejected() {

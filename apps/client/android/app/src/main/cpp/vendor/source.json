@@ -1,0 +1,60 @@
+{
+  "rnnoise": {
+    "repository": "https://github.com/xiph/rnnoise",
+    "commit": "1cbdbcf1283499bbb2230a6b0f126eb9b236defd",
+    "source_files_sha256": {
+      "AUTHORS": "348b0956050157b718a11e1464633619b709b19b45172f336cef2205aa0cec63",
+      "COPYING": "e2f59ff41d9d03adc3dcf3deff170f8c8cf4a6eb4a9b174762a7656d23200ffa",
+      "include/rnnoise.h": "9d6c8bd5607d1795b870b2a094ee2ad08cc239cae0c0c584a701a809811156f6",
+      "src/_kiss_fft_guts.h": "0214dfe2aabb3b81d88fe814b8253fc2ec6da12bbbc98e08c1011a5bd60e3b29",
+      "src/arch.h": "1686a3ca5817bb7d99049a1801c6ab3a7e91a5d0a6804b1c1cafb36e5eeb62f8",
+      "src/celt_lpc.c": "18b48a49671cf91dfa887263baa0eecd4c15e66b706367ddd4c561312536104d",
+      "src/celt_lpc.h": "7729cea359579ad962c8b50d0e3b9ff9203a3e6a549040e2440e4f4722805c03",
+      "src/common.h": "fa6069db8f7fd18d79d5bea55cded6f9019570b2886908323270d07225c7c0ce",
+      "src/denoise.c": "17e1fa284b9f1401374e80efd5f66b87f1d2d78a4116eb2360853885ae55ac4f",
+      "src/kiss_fft.c": "c2cadd75dbefa1f04f66528b217eed96cb6aa0cd6e87cb80cb4b96bab8b3e50a",
+      "src/kiss_fft.h": "ae7f295d1eebb0d19312934de91659b1e852fc8bb433402d4b3146037cb32f0a",
+      "src/opus_types.h": "e2c1075e26567b8d57706d2f0042e36d5d440721fc3fd27a6fce9f0fc8a31557",
+      "src/pitch.c": "74a26d1b8e2e856febf4045c57f9c409dce75040b9f29a40e5d6e6323dfa45e3",
+      "src/pitch.h": "f6939f0b88052506cbe7b1d6b4afd4ead41bedbab80183ec0c4672df0bfae9c2",
+      "src/rnn.c": "44f369ccf7c67064a46f064a3294486fb017ff68772b01de1c759b79c429f231",
+      "src/rnn.h": "a2da02dbe5320bc318674fac9ecb536db174109526e2fa7870e6c5ce45335649",
+      "src/rnn_data.c": "7b90ed18f065a34597d80b4c00e140a7c5eb6380ef8c9c6bf265384c944ae708",
+      "src/rnn_data.h": "e756aad79f6f0710cd1fa4abfd9db3da693e92ac3a3a90051e2c969578452653",
+      "src/rnn_reader.c": "8e6cbb1e0ecdfcf800765fc5685d4fb1d239f104b6e7be94a4b71a3d5d8f6bd1",
+      "src/tansig_table.h": "835fcdf08d5b92e249fbe9ba6cdd9758688a5fdf134efb9da0e42989e8c18b8a"
+    },
+    "modifications": "none"
+  },
+  "libfvad": {
+    "repository": "https://github.com/OzymandiasTheGreat/libfvad-wasm",
+    "commit": "2692578b7f2af573e3a6efb84e4356b41250d414",
+    "source_files_sha256": {
+      "AUTHORS": "4f2595dbde4f035bf44285dd299475f2cf1c9882a0e578db173b2fdf4b8dfad9",
+      "LICENSE": "78b16d4e803975e0c5d826339c607d0676192a40e2c510c10b2cb4ab4cde416a",
+      "PATENTS": "01462e2068d1a04c2274f3389773014c14ed9bc3446b28303543bd3e3c064145",
+      "include/fvad.h": "a7ed028c3f685396bf65da7fc81a753cb0f94eec7a494072bec587725d53862e",
+      "src/common.h": "9d5a991e13bf73bd93a7e2e101db719da9e14086e5f1b1bbf63b082e524daee3",
+      "src/fvad.c": "4764aa813ca4d07b10a4de212ff41c3a134af46062f10d4d9f4dc722b56b336d",
+      "src/signal_processing/division_operations.c": "fb57461a7bcbfffecc3e4a8c641c4183e2ab427685cb3b3ad7d737dda3cb6d56",
+      "src/signal_processing/energy.c": "fef67abfc5708274799f5a3fdb3df4fa91a950dd6a98ffdaf9738b32fccfef1a",
+      "src/signal_processing/get_scaling_square.c": "edbd3619857bc3aa9ddfcbf1201a6c907a61bece038fce41afe3589c1a4bc277",
+      "src/signal_processing/resample_48khz.c": "65f9c0333bfa40c197486a4e63c9d444be8f0089d6e041b6d42d3fcbb6390f5c",
+      "src/signal_processing/resample_by_2_internal.c": "f7ab177a112a5f4093abde5b483973da5338a0913b7347bcff10eb5c731503ac",
+      "src/signal_processing/resample_by_2_internal.h": "1b4b66058aa8a64601a0beb01bf8fc112387b3c6a2db9ec1e9fadc37096b982b",
+      "src/signal_processing/resample_fractional.c": "ed4ac3498d41e3ad466f25cf291f23a57a29a5c4c248ccc9312407f32eff26be",
+      "src/signal_processing/signal_processing_library.h": "806fc377bf6486bca6f9df366f68421801d377d025c87af13348d2a383b9ecbd",
+      "src/signal_processing/spl_inl.c": "6f17afe654639115b46197ffc03f30af5e8297701025039e5b3623f2e3608835",
+      "src/signal_processing/spl_inl.h": "56125f099bf55b2bb64a6fc2182936c6d897a6ffc6926134db9033ae061e5acd",
+      "src/vad/vad_core.c": "9c03adc9935290921f04c6858124cdd0362979a6ad889ef214826917aac03489",
+      "src/vad/vad_core.h": "4a012292a1e15cda3f24772f30e6df8927bdc55a28ca65102dc72dc77c6f7520",
+      "src/vad/vad_filterbank.c": "c44eb10c2a70810cef6720a7846ea3638e933cf1ed85affaac2dba0e6927210d",
+      "src/vad/vad_filterbank.h": "3c0704f9d917fabd927a228175edefd4934351ab8229292969b54217a30ab793",
+      "src/vad/vad_gmm.c": "f45eeafdbea7491301e7eb57a7cbb2a720dc43f9e256e3f8fa944f0d3f0e6067",
+      "src/vad/vad_gmm.h": "a9c51c01dae8eed13b17507b9f2e1a6ec248297f4372124f0b59ace88f46d16f",
+      "src/vad/vad_sp.c": "9b7718a283c04c13caeb1c4174d63cc6de9a7c02dad05c65d2cbc5df2686a059",
+      "src/vad/vad_sp.h": "5de6fc001a838f8cd9acab67c082695a8ed37c8f905bf3abac122c5edb17f041"
+    },
+    "modifications": "none"
+  }
+}

@@ -7,6 +7,7 @@ class SessionController extends ChangeNotifier {
   static const double inputLevelOffset = 114;
 
   final AudioPort _audio;
+  final double levelOffset;
   late final StreamSubscription<AudioEvent> _subscription;
   Scenario? scenario;
   CaptureState state = CaptureState.idle;
@@ -19,7 +20,7 @@ class SessionController extends ChangeNotifier {
   int _environmentRequest = 0;
   bool _cancellingEnvironment = false;
   bool _acceptEvents = false, _disposed = false;
-  SessionController(this._audio) {
+  SessionController(this._audio, {this.levelOffset = inputLevelOffset}) {
     _subscription = _audio.events.listen(_onEvent);
   }
   bool get active =>
@@ -87,8 +88,8 @@ class SessionController extends ChangeNotifier {
       return null;
     final dbfs = analysis['meterDbfs'];
     if (dbfs is! num || !dbfs.isFinite) return null;
-    // 웹사이트 측정값과 보정 전 값의 차이를 사용자가 실험으로 관측한 보정값이다.
-    return (dbfs + inputLevelOffset).clamp(0.0, 120.0).toDouble();
+    // 플랫폼별 표시 보정값은 실제 기기에서 확인한 사용자 설정을 사용한다.
+    return (dbfs + levelOffset).clamp(0.0, 120.0).toDouble();
   }
 
   void selectScenario(Scenario value) {

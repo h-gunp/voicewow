@@ -26,3 +26,7 @@ flutter:
     - assets/prosody/guides/
     - assets/fonts/OFL.txt
     - web/prosody/vendor/supertonic/LICENSE-model.txt
+    - android/app/src/main/cpp/vendor/rnnoise/COPYING
+    - android/app/src/main/cpp/vendor/libfvad/LICENSE
+    - android/app/src/main/cpp/vendor/libfvad/PATENTS
+    - android/app/src/main/cpp/vendor/libfvad/AUTHORS

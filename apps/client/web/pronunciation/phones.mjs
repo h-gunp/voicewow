@@ -4,16 +4,36 @@ export function prepareSamples(samples, sampleRate) {
     || samples.length < 3200 || samples.length > 320000) {
     throw new Error('16kHz 모노 음성을 0.2초 이상 20초 이하로 입력해야 한다.');
   }
-  let mean = 0;
+  let mean = 0, peak = 0;
   for (const value of samples) {
     if (!Number.isFinite(value) || Math.abs(value) > 1.001) throw new Error('오디오 값이 올바르지 않다.');
     mean += value / samples.length;
+    peak = Math.max(peak, Math.abs(value));
   }
   let variance = 0;
   for (const value of samples) variance += (value - mean) ** 2 / samples.length;
   if (variance < 1e-10) throw new Error('분석할 소리가 없거나 너무 작다. 다시 녹음해야 한다.');
-  const scale = Math.sqrt(variance + 1e-7);
-  return Float32Array.from(samples, value => (value - mean) / scale);
+
+  // Anchor context to samples, not frames, so button timing cannot shift the model's input grid.
+  const threshold = Math.max(1e-4, peak * .01);
+  let first = 0, last = samples.length - 1;
+  while (first < samples.length && Math.abs(samples[first]) < threshold) first++;
+  while (last >= first && Math.abs(samples[last]) < threshold) last--;
+  const start = first - 6400, end = last + 1 + 6400;
+  let input = samples;
+  if (first <= last && end - start <= 320000) {
+    input = new Float32Array(end - start);
+    const sourceStart = Math.max(0, start), sourceEnd = Math.min(samples.length, end);
+    input.set(samples.subarray(sourceStart, sourceEnd), sourceStart - start);
+    mean = 0;
+    for (const value of input) mean += value / input.length;
+    variance = 0;
+    for (const value of input) variance += (value - mean) ** 2 / input.length;
+  }
+  // Silence was rejected above; an additive epsilon would attenuate quiet speech differently.
+  if (!(variance > 0) || !Number.isFinite(variance)) throw new Error('분석할 소리가 없다. 다시 녹음해야 한다.');
+  const scale = Math.sqrt(variance);
+  return Float32Array.from(input, value => (value - mean) / scale);
 }
 
 export function decodePhones(logits, dims, vocab) {

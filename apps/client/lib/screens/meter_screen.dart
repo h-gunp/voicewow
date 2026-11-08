@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../app_theme.dart';
 import '../audio/audio_port.dart';
@@ -35,13 +36,15 @@ class MeterScreen extends StatelessWidget {
   }
 
   String get description {
+    if (session.reason == 'app_backgrounded')
+      return '앱을 벗어나 입력을 중지했다. 다시 시작한다.';
     if (session.reason == 'tab_hidden') return '탭을 벗어나 입력을 중지했다. 다시 시작한다.';
     if (session.reason == 'device_changed') return '입력 장치 구성이 바뀌었다. 다시 시작한다.';
     return switch (session.state) {
       CaptureState.requesting =>
         session.settings['noiseReductionState'] == 'loading'
             ? '입력 준비가 끝나면 측정을 시작한다.'
-            : '브라우저의 권한 요청에서 마이크를 허용한다.',
+            : '권한 요청에서 마이크를 허용한다.',
       CaptureState.running => switch (session.settings['noiseReductionState']) {
         'active' => '주변 소음을 줄인 입력이다.',
         'disabled' => '소음 억제가 꺼져 발화 막대를 표시하지 않는다.',
@@ -49,7 +52,10 @@ class MeterScreen extends StatelessWidget {
         _ => '주변 소리도 함께 반영된다.',
       },
       CaptureState.error => switch (session.reason) {
-        'permission_denied' => '주소창의 사이트 권한에서 마이크를 허용한 뒤 다시 시작한다.',
+        'permission_denied' =>
+          kIsWeb
+              ? '주소창의 사이트 권한에서 마이크를 허용한 뒤 다시 시작한다.'
+              : '설정 → 애플리케이션 → VoiceMate → 권한에서 마이크를 허용한 뒤 다시 시작한다.',
         'device_missing' => '마이크 연결을 확인한 뒤 다시 시작한다.',
         'device_busy' => '다른 앱의 마이크 사용을 확인한다.',
         'noise_reduction_failed' => '소음 억제 중 문제가 발생했다. 다시 시작한다.',
@@ -58,11 +64,13 @@ class MeterScreen extends StatelessWidget {
         'context_not_running' => '다시 시작을 눌러 오디오 엔진을 다시 시작한다.',
         'frame_timeout' => '오디오 엔진 상태와 연결을 확인한 뒤 다시 시작한다.',
         'input_muted' || 'input_ended' => '마이크 연결을 확인한 뒤 다시 시작한다.',
-        'settings_unavailable' => '브라우저와 마이크 연결을 확인한 뒤 다시 시작한다.',
+        'settings_unavailable' => '마이크 연결을 확인한 뒤 다시 시작한다.',
         'insecure_context' => '마이크를 사용하려면 이 페이지를 HTTPS 주소로 연다.',
         'unsupported' =>
-          '이 브라우저에서는 필요한 입력 기능을 지원하지 않는다. HTTPS 페이지를 최신 Safari 또는 Chrome에서 연다.',
-        _ => '마이크 연결과 브라우저 상태를 확인한 뒤 다시 시작한다.',
+          kIsWeb
+              ? '이 브라우저에서는 필요한 입력 기능을 지원하지 않는다. HTTPS 페이지를 최신 Safari 또는 Chrome에서 연다.'
+              : '마이크 기능을 시작하지 못했다. 앱을 다시 실행한다.',
+        _ => '마이크 연결을 확인한 뒤 다시 시작한다.',
       },
       CaptureState.idle => '다시 시작하면 마이크 입력을 확인할 수 있다.',
     };
@@ -90,7 +98,7 @@ class MeterScreen extends StatelessWidget {
       (_, 'unavailable', _, _, _)
           when settings['noiseReductionReason'] == 'load_failed' =>
         '소음 억제 파일을 불러오거나 준비하지 못했다.',
-      (_, 'unavailable', _, _, _) => '이 브라우저에서 소음 억제를 준비하지 못했다.',
+      (_, 'unavailable', _, _, _) => '소음 억제를 준비하지 못했다.',
       (_, _, 'load_timeout', _, _) => '발화 판별 파일을 불러오는 시간이 초과됐다.',
       (_, _, 'load_failed', _, _) => '발화 판별 파일을 불러오지 못했다.',
       (_, _, 'init_failed', _, _) => '발화 판별기를 준비하지 못했다.',

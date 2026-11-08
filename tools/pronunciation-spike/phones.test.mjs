@@ -16,6 +16,40 @@ test('normalization preserves input, rejects silence/non-finite/unsupported rate
   assert.throws(() => prepareSamples([.1, .2], 16000));
 });
 
+test('speech context is invariant to arbitrary button silence and microphone gain', () => {
+  const input = Float32Array.from({ length: 16000 }, (_, i) => Math.sin(i / 10) * .1);
+  const expected = prepareSamples(input, 16000);
+  for (const prefix of [16001, 16080, 16159]) {
+    const padded = new Float32Array(prefix + input.length + 32000);
+    padded.set(input, prefix);
+    assert.deepEqual(prepareSamples(padded, 16000), expected);
+    const quiet = prepareSamples(Float32Array.from(padded, value => value * .15), 16000);
+    assert.equal(quiet.length, expected.length);
+    assert.ok(quiet.every((value, i) => Math.abs(value - expected[i]) < 1e-6));
+  }
+});
+
+test('context preserves weak edge consonants, internal pauses and the 20 second bound', () => {
+  const input = new Float32Array(25600);
+  for (let i = 0; i < input.length; i++) {
+    const amplitude = i < 3200 || i >= 22400 ? .00001
+      : i >= 9600 && i < 16000 ? 0 : .1;
+    input[i] = (i % 2 ? -1 : 1) * amplitude;
+  }
+  const original = input.slice(), output = prepareSamples(input, 16000);
+  assert.deepEqual(input, original);
+  assert.equal(output.length, input.length + 6400);
+  assert.ok(output[3200] > 0 && output[3201] < 0);
+  assert.ok(output[25600] > 0 && output[25601] < 0);
+  assert.ok(Math.abs(output[3200] / output[6400] - .0001) < 1e-8);
+  assert.ok(output.subarray(12800, 19200).every(value => Math.abs(value) < 1e-10));
+  const full = Float32Array.from({ length: 320000 }, (_, i) => i % 2 ? -.1 : .1);
+  const bounded = prepareSamples(full, 16000);
+  assert.equal(bounded.length, 320000);
+  assert.equal(bounded[0], 1);
+  assert.equal(bounded.at(-1), -1);
+});
+
 function logitsFor(ids, classes = 45) {
   const logits = new Float32Array(ids.length * classes).fill(-10);
   ids.forEach((id, frame) => logits[frame * classes + id] = 10);

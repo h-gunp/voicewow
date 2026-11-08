@@ -119,7 +119,7 @@ void main() {
       }),
     );
     await tester.pump();
-    expect(find.text('입력 수준 108.0'), findsOneWidget);
+    expect(find.text('입력 수준 99.0'), findsOneWidget);
     expect(find.byKey(const Key('input-fill')), findsOneWidget);
     expect(find.byKey(const Key('reference-upper')), findsOneWidget);
     for (final word in ['적정', '더 크게', '더 작게', 'dBA'])
@@ -206,8 +206,8 @@ void main() {
   });
 
   for (final fixture in [
-    ('quiet', 53, 75, -61.0),
-    ('meeting', 68, 78, -46.0),
+    ('quiet', 53, 75, -52.0),
+    ('meeting', 68, 78, -37.0),
   ]) {
     testWidgets('${fixture.$1} keeps red limits on the live input bar', (
       tester,
@@ -274,20 +274,24 @@ void main() {
     await tester.pumpAndSettle();
     port.send(const AudioEvent.state(CaptureState.running));
     for (final fixture in [
-      (-50.0, '64.0'),
-      (-20.0, '94.0'),
-      (-9.0, '105.0'),
-      (0.0, '114.0'),
-      (5.0, '119.0'),
-      (6.0, '120.0'),
+      (-50.0, '55.0'),
+      (-20.0, '85.0'),
+      (-9.0, '96.0'),
+      (0.0, '105.0'),
+      (5.0, '110.0'),
+      (6.0, '111.0'),
+      (14.0, '119.0'),
       (15.0, '120.0'),
       (16.0, '120.0'),
       (26.0, '120.0'),
       (30.0, '120.0'),
-      (-79.0, '35.0'),
-      (-100.0, '14.0'),
-      (-104.0, '10.0'),
-      (-113.0, '1.0'),
+      (-79.0, '26.0'),
+      (-99.0, '6.0'),
+      (-100.0, '5.0'),
+      (-104.0, '1.0'),
+      (-105.0, '0.0'),
+      (-106.0, '0.0'),
+      (-113.0, '0.0'),
       (-114.0, '0.0'),
       (-120.0, '0.0'),
       (null, '—'),
@@ -380,7 +384,10 @@ void main() {
       if (reason == 'insecure_context') {
         expect(find.textContaining('HTTPS 주소'), findsOneWidget);
       } else if (reason == 'unsupported') {
-        expect(find.textContaining('최신 Safari 또는 Chrome'), findsOneWidget);
+        expect(
+          find.textContaining('마이크 기능을 시작하지 못했다. 앱을 다시 실행한다.'),
+          findsOneWidget,
+        );
       } else {
         expect(find.textContaining('입력 장치 구성이 바뀌었다'), findsOneWidget);
         expect(find.textContaining('다시 시작'), findsWidgets);

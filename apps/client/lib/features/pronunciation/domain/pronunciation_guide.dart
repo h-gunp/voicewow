@@ -11,6 +11,52 @@
 ///   https://www.korean.go.kr/common/download.do?c_file_name=1d66f826-df50-418d-a34f-2c38fa1fd45e_0.pdf&file_path=reportData&o_file_name=한국어문규정집.pdf
 library;
 
+/// Standard Pronunciation article 15 permits both 맛있-/멋있- readings.
+/// NIKL: qna_seq=324749 (both stems), 324340 (맛있어), 335997 (맛있는).
+/// https://www.korean.go.kr/front/onlineQna/onlineQnaView.do?qna_seq=324749
+/// This only expands reference readings; it never receives observed phones.
+List<String> pronunciationReferences(String original, String reading) {
+  final hangul = RegExp('[가-힣]');
+  final source = hangul.allMatches(original).toList();
+  final spoken = hangul.allMatches(reading).toList();
+  if (source.length != spoken.length) return [reading];
+
+  final replacements = <int, String>{};
+  for (var i = 0; i + 1 < source.length; i++) {
+    final stem = source[i].group(0);
+    if ((stem != '맛' && stem != '멋') ||
+        source[i + 1].start != source[i].end ||
+        source[i + 1].group(0) != '있' ||
+        spoken[i].group(0) != (stem == '맛' ? '마' : '머')) {
+      continue;
+    }
+    final syllable = spoken[i + 1].group(0)!.codeUnitAt(0) - 0xac00;
+    final initial = syllable ~/ 588;
+    if (syllable % 588 ~/ 28 != _i || (initial != 3 && initial != _s)) {
+      continue;
+    }
+    final alternate = initial == 3 ? _s : 3;
+    replacements[spoken[i + 1].start] = String.fromCharCode(
+      0xac00 + alternate * 588 + syllable % 588,
+    );
+  }
+
+  var allChanged = reading;
+  for (final entry in replacements.entries) {
+    allChanged = allChanged.replaceRange(entry.key, entry.key + 1, entry.value);
+  }
+  final variants = <String>{reading, allChanged};
+  for (final entry in replacements.entries) {
+    for (final variant in variants.toList()) {
+      if (variants.length == 16) break;
+      variants.add(variant.replaceRange(entry.key, entry.key + 1, entry.value));
+    }
+  }
+  // shortcut: over four occurrences exceed the comparison's 16-reference cap;
+  // support every mixed reading if that cap is replaced by local alternatives.
+  return variants.toList(growable: false);
+}
+
 class PronunciationPoint {
   final String before;
   final String after;
