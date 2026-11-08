@@ -3,7 +3,7 @@ import 'dart:js_interop';
 
 import 'package:flutter/material.dart';
 
-import '../../../widgets/training_guide.dart';
+import 'prosody_frame_shell.dart';
 import 'prosody_web_frame_contract.dart';
 
 @JS('window')
@@ -130,6 +130,18 @@ class _ProsodyWebFrameState extends State<ProsodyWebFrame>
     _origin,
   );
 
+  void _updateFrameVisibility() {
+    // Hide the connected DOM, not Flutter's paint path that attaches it.
+    _frame?.setAttribute(
+      'style',
+      'border:0;width:100%;height:100%;display:block;background:#ffffff;'
+          'visibility:${_ready ? 'visible' : 'hidden'};'
+          'pointer-events:${_ready ? 'auto' : 'none'};',
+    );
+    _frame?.setAttribute('aria-hidden', '${!_ready}');
+    _frame?.setAttribute('tabindex', _ready ? '0' : '-1');
+  }
+
   void _startDeadline() {
     _loadTimer?.cancel();
     _loadTimer = Timer(const Duration(seconds: 30), () {
@@ -162,10 +174,7 @@ class _ProsodyWebFrameState extends State<ProsodyWebFrame>
     _lifecycle = lifecycle;
     frame.title = 'VoiceMate 높낮이 연습';
     frame.allow = "microphone 'self'";
-    frame.setAttribute(
-      'style',
-      'border:0;width:100%;height:100%;display:block;background:#ffffff;',
-    );
+    _updateFrameVisibility();
     frame.src = embeddedProsodyUri(Uri.base, textScale: _textScale).toString();
   }
 
@@ -194,6 +203,7 @@ class _ProsodyWebFrameState extends State<ProsodyWebFrame>
         _ready = true;
         _loadIssue = null;
       });
+      _updateFrameVisibility();
       return;
     }
     if (acceptsProsodyMessage(
@@ -208,6 +218,7 @@ class _ProsodyWebFrameState extends State<ProsodyWebFrame>
         _ready = false;
         _loadIssue = '높낮이 화면을 불러오지 못했다. 연결을 확인하고 다시 시도하면 된다.';
       });
+      _updateFrameVisibility();
       return;
     }
     if (!acceptsProsodyExit(
@@ -251,49 +262,15 @@ class _ProsodyWebFrameState extends State<ProsodyWebFrame>
   @override
   Widget build(BuildContext context) {
     final attempt = _attempt;
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Visibility(
-          visible: _ready,
-          maintainState: true,
-          maintainAnimation: true,
-          maintainSize: true,
-          child: HtmlElementView.fromTagName(
-            key: ValueKey('prosody-web-frame-$attempt'),
-            tagName: 'iframe',
-            onElementCreated: (element) => _attach(element, attempt),
-          ),
-        ),
-        if (!_ready)
-          SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Semantics(
-                  liveRegion: true,
-                  child: Text(
-                    _loadIssue ?? '높낮이 연습 화면을 준비 중이다.',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                if (_loadIssue == null) const LinearProgressIndicator(),
-                const SizedBox(height: 20),
-                const TrainingPreparationCard(),
-                if (_loadIssue != null) ...[
-                  const SizedBox(height: 16),
-                  FilledButton.icon(
-                    onPressed: _reload,
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('다시 불러오기'),
-                  ),
-                ],
-              ],
-            ),
-          ),
-      ],
+    return ProsodyFrameShell(
+      ready: _ready,
+      issue: _loadIssue,
+      onRetry: _reload,
+      frame: HtmlElementView.fromTagName(
+        key: ValueKey('prosody-web-frame-$attempt'),
+        tagName: 'iframe',
+        onElementCreated: (element) => _attach(element, attempt),
+      ),
     );
   }
 }
