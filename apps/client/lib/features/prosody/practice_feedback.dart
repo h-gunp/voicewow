@@ -23,8 +23,7 @@ class PracticeFeedback {
 // Engineering support requirements for representative endpoint measurements;
 // never normal ranges, perceptual thresholds or a validated clinical rubric.
 const _epsilon = 1e-8;
-const _roundingNote =
-    '수치는 0.1 단위로 반올림했어요. 실제 목소리가 잡힌 앞·뒤 대표 구간의 비교이며 중간 흐름 전체를 뜻하지 않아요.';
+const _roundingNote = '목소리가 잡힌 앞·뒤 구간을 비교해 소수 첫째 자리까지 표시한다.';
 
 bool _valid(AudioFrame frame, bool volume) =>
     frame.active &&
@@ -292,6 +291,6 @@ PracticeFeedback practiceFeedback(
     detail:
         '예시는 ${_numeric(r, volume)}. 내 녹음은 ${_numeric(u, volume)}. '
         '측정 구간: 예시 ${_windows(r)} / 내 녹음 ${_windows(u)}. '
-        '$_roundingNote${volume ? ' 크기는 녹음별 상대값이며 실제 소음계 데시벨이 아니에요.' : ''}',
+        '$_roundingNote${volume ? ' 크기는 각 녹음의 중간값을 기준으로 한 상대 dB다.' : ''}',
   );
 }

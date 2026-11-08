@@ -151,6 +151,9 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('warmup-skip')));
+    await tester.tap(find.byKey(const Key('warmup-skip')));
+    await tester.pumpAndSettle();
     for (final key in [
       'category-words',
       'quiz-group-words-0',
@@ -240,6 +243,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('warmup-skip')));
+      await tester.tap(find.byKey(const Key('warmup-skip')));
+      await tester.pumpAndSettle();
       for (final key in [
         'category-words',
         'quiz-group-words-0',
@@ -286,6 +292,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('warmup-skip')));
+      await tester.tap(find.byKey(const Key('warmup-skip')));
+      await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(Tab, '내 문장'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(ActionChip, '같이 가요'));
@@ -323,8 +332,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(recorder.finishes, 1);
       expect(find.byKey(const Key('pronunciation-observed')), findsOneWidget);
-      await tester.scrollUntilVisible(find.textContaining('색은 추정'), 180);
-      expect(find.textContaining('추정'), findsWidgets);
+      await tester.scrollUntilVisible(find.textContaining('회색은 비교하기'), 180);
+      expect(find.textContaining('회색은 비교하기 어려운 부분이다.'), findsOneWidget);
       expect(find.byKey(const Key('quiz-submit')), findsNothing);
       await tester.scrollUntilVisible(
         find.byKey(const Key('pronunciation-replay')),
@@ -393,7 +402,7 @@ void main() {
       await tester.scrollUntilVisible(find.text('● 일치'), 180);
       expect(find.text('− 차이'), findsOneWidget);
       expect(find.text('… 불확실'), findsOneWidget);
-      await tester.scrollUntilVisible(find.textContaining('색은 추정'), 180);
+      await tester.scrollUntilVisible(find.textContaining('회색은 비교하기'), 180);
       expect(find.textContaining('불확실한 구간도 일치 색'), findsNothing);
       await tester.scrollUntilVisible(find.textContaining('uEO'), 180);
       expect(find.textContaining('uEO'), findsOneWidget);

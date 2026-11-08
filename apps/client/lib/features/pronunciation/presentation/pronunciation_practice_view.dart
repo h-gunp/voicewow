@@ -173,7 +173,7 @@ class _PronunciationPracticeViewState extends State<PronunciationPracticeView>
   Future<void> _finish() async {
     if (phase != _Phase.recording) return;
     final ticket = epoch;
-    _set(_Phase.analyzing, '기기 안에서 발음을 분석 중이다.');
+    _set(_Phase.analyzing, '발음을 분석 중이다.');
     try {
       final phones = await widget.recorder.finish();
       if (!current(ticket)) return;
@@ -401,7 +401,7 @@ class _PronunciationPracticeViewState extends State<PronunciationPracticeView>
       const SizedBox(height: 10),
       _panel(
         result == null
-            ? const Text('녹음한 뒤 모델이 추정한 발음이 여기에 표시된다.', style: smallCopy)
+            ? const Text('녹음하면 인식된 발음이 여기에 표시된다.', style: smallCopy)
             : _colored(result!.observed, const Key('pronunciation-observed')),
       ),
       const SizedBox(height: 10),
@@ -415,10 +415,7 @@ class _PronunciationPracticeViewState extends State<PronunciationPracticeView>
         ],
       ),
       const SizedBox(height: 10),
-      const Text(
-        '색은 추정 인식과 참고 읽기의 비교다. 실제 발음 판별 정확도는 검증 전이며 잡음이 글자로 인식될 수 있다.',
-        style: smallCopy,
-      ),
+      const Text('회색은 비교하기 어려운 부분이다. 다시 녹음해 확인할 수 있다.', style: smallCopy),
       if (result != null) ...[
         const SizedBox(height: 16),
         for (final difference in result!.differences)
@@ -441,10 +438,7 @@ class _PronunciationPracticeViewState extends State<PronunciationPracticeView>
       ],
       if (phase == _Phase.idle) ...[
         const SizedBox(height: 24),
-        const Text(
-          '최초 모델 준비에는 약 356MB 다운로드가 필요하다. 이후 녹음은 기기 안에서 처리한다.',
-          style: smallCopy,
-        ),
+        const Text('처음에는 약 356MB 모델을 내려받는다.', style: smallCopy),
       ],
     ],
   );

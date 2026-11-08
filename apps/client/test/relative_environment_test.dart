@@ -67,7 +67,7 @@ void main() {
           ),
         ),
       );
-      expect(find.text('실험적 상대 입력 기준 · 실제 음압 아님'), findsOneWidget);
+      expect(find.text('주변 환경음의 상대 입력 기준'), findsOneWidget);
       expect(find.textContaining('고정 참고범위 55.0–77.0'), findsOneWidget);
       expect(find.textContaining('발화 수준 추정'), findsNothing);
       expect(find.textContaining('주변 잡음 추정'), findsNothing);
@@ -77,7 +77,7 @@ void main() {
     },
   );
 
-  testWidgets('relative input limitation is explained in diagnostics', (
+  testWidgets('diagnostics keep input units and license access', (
     tester,
   ) async {
     final session = SessionController(FakeAudioPort())
@@ -105,7 +105,7 @@ void main() {
     await tester.ensureVisible(find.text('앱 정보 · 진단'));
     await tester.tap(find.text('앱 정보 · 진단'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('자동 이득 변화와 실제 소음 변화를 구분할 수 없다'), findsOneWidget);
+    expect(find.textContaining('소음 억제 후 입력 — dBFS'), findsOneWidget);
     await tester.tap(find.text('오픈소스 · 모델 이용 조건'));
     await tester.pumpAndSettle();
     expect(find.byType(LicensePage), findsOneWidget);

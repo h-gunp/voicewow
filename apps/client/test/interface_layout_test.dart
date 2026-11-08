@@ -49,6 +49,9 @@ void main() {
       );
       await tester.tap(find.byKey(const Key('open-pronunciation')));
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('warmup-skip')));
+      await tester.tap(find.byKey(const Key('warmup-skip')));
+      await tester.pumpAndSettle();
       expect(find.text('발음 연습'), findsOneWidget);
       expect(find.byKey(const Key('text-size-control')), findsOneWidget);
       await tester.ensureVisible(find.text('내 문장'));
@@ -61,6 +64,9 @@ void main() {
       await tester.tap(find.text('복습'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('open-prosody')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('warmup-skip')));
+      await tester.tap(find.byKey(const Key('warmup-skip')));
       await tester.pumpAndSettle();
       expect(find.text('연습 준비'), findsOneWidget);
       expect(find.byKey(const Key('text-size-control')), findsOneWidget);

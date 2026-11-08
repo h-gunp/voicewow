@@ -115,7 +115,7 @@ void main() {
     expect(feedback.available, isTrue);
     expect(feedback.tone, 'neutral');
     expect(feedback.observation, isNot(matches(RegExp('평평|일정|정상|성공'))));
-    expect(feedback.detail, contains('중간 흐름 전체를 뜻하지'));
+    expect(feedback.detail, contains('앞·뒤 구간을 비교'));
   });
 
   test(
@@ -131,7 +131,7 @@ void main() {
       expect(feedback.tone, 'practice');
       expect(feedback.action, contains('조금 키워서'));
       expect(feedback.detail, contains('dB'));
-      expect(feedback.detail, contains('실제 소음계 데시벨이 아니'));
+      expect(feedback.detail, contains('각 녹음의 중간값을 기준으로 한 상대 dB'));
     },
   );
 

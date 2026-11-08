@@ -39,7 +39,7 @@ test('rounded zero does not claim a flat contour or a normal range', () => {
     assert.equal(result.available, true);
     assert.equal(result.direction, 'rounded-zero');
     assert.match(result.observation, /반올림하면 0.0반음/);
-    assert.match(result.note, /중간 흐름 전체를 뜻하지/);
+    assert.match(result.note, /앞·뒤 대표 구간을 비교한 값/);
     assert.doesNotMatch(result.observation, /평평|일정|변화가 없|유지/);
   }
 });
@@ -101,7 +101,7 @@ test('volume comparison uses relative level direction and never claims calibrate
   assert.match(result.observation, /작아요.*커요/);
   assert.match(result.detail, /dB.*커요.*dB.*작아요/);
   assert.match(result.action, /소리를.*키워서/);
-  assert.match(result.note, /실제 소음계 데시벨이 아니/);
+  assert.match(result.note, /기준 크기에 대한 상대 dB/);
 });
 
 test('insufficient time support and truly sparse endpoint evidence abstain without quality judgement', () => {
@@ -143,7 +143,7 @@ test('middle consonant or pause gaps do not invent a continuous path or erase us
   const result = describeGoal(gapped, { ...range, target: 'rise' });
   assert.equal(result.available, true);
   assert.match(result.observation, /뒤쪽의 대표 높이/);
-  assert.match(result.note, /중간 흐름 전체를 뜻하지/);
+  assert.match(result.note, /앞·뒤 대표 구간을 비교한 값/);
 });
 
 test('only explicit selected intervals and targets are evaluated, never inferred final syllables', () => {

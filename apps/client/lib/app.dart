@@ -6,6 +6,7 @@ import 'package:flutter/semantics.dart';
 import 'app_theme.dart';
 import 'text_size_preferences.dart';
 import 'widgets/training_guide.dart';
+import 'widgets/training_warmup.dart';
 import 'audio/audio_port.dart';
 import 'audio/unsupported_audio_port.dart'
     if (dart.library.js_interop) 'audio/web_audio_port.dart';
@@ -52,6 +53,7 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
   late int section;
   bool changingSection = false;
   bool _showingGuide = false;
+  late bool _warmingUp;
   LearningController? pronunciationLearning;
   SpeechPlayer? pronunciationSpeech;
   PronunciationRecorder? pronunciationRecorder;
@@ -72,7 +74,7 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
     pronunciationLearning = widget.pronunciationLearning;
     pronunciationSpeech = widget.pronunciationSpeech;
     pronunciationRecorder = widget.pronunciationRecorder;
-    if (section == 2) _prepareProsody();
+    _warmingUp = section != 0;
     session = SessionController(widget.audioPort ?? createAudioPort());
     semantics = WidgetsBinding.instance.ensureSemantics();
     _textSizeStore = widget.textSizeStore ?? PreferencesTextSizeStore();
@@ -204,20 +206,29 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
     return next;
   }
 
+  void _completeWarmup() {
+    if (!_warmingUp || changingSection) return;
+    if (section == 2) _prepareProsody();
+    setState(() => _warmingUp = false);
+  }
+
   Future<void> _selectSection(int index) async {
     if (changingSection || index == section || index < 0 || index > 2) return;
     setState(() => changingSection = true);
     try {
       await _stopCurrentSection();
       if (!mounted) return;
-      if (index == 2) _prepareProsody();
-      if (mounted) setState(() => section = index);
+      setState(() {
+        section = index;
+        _warmingUp = index != 0;
+      });
     } finally {
       if (mounted) setState(() => changingSection = false);
     }
   }
 
   Future<void> _stopCurrentSection({bool forGuide = false}) async {
+    if (_warmingUp) return;
     if (section == 0 && session.active) await session.stop();
     if (section == 1) {
       await pronunciationSpeech?.stop();
@@ -323,7 +334,19 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
                 ),
               ),
               Expanded(
-                child: section == 2
+                child: _warmingUp
+                    ? PopScope(
+                        canPop: false,
+                        onPopInvokedWithResult: (didPop, _) {
+                          if (!didPop) unawaited(_selectSection(0));
+                        },
+                        child: TrainingWarmup(
+                          key: ValueKey(section),
+                          trainingName: section == 1 ? '발음 훈련' : '높낮이 연습',
+                          onComplete: _completeWarmup,
+                        ),
+                      )
+                    : section == 2
                     ? ProsodyScreen(
                         session: prosody!,
                         suspended: _showingGuide,
@@ -391,30 +414,13 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
                                                   ),
                                                 ),
                                                 Text(
-                                                  '목소리 입력 · 실험 버전',
+                                                  '목소리 연습',
                                                   style: smallCopy,
                                                 ),
                                               ],
                                             ),
                                           ),
                                           SizedBox(height: wide ? 40 : 28),
-                                          if (!meter)
-                                            Align(
-                                              alignment: Alignment.centerLeft,
-                                              child: TextButton.icon(
-                                                key: const Key(
-                                                  'open-training-guide-intro',
-                                                ),
-                                                onPressed: () =>
-                                                    _showTrainingGuide(context),
-                                                icon: const Icon(
-                                                  Icons.self_improvement,
-                                                ),
-                                                label: const Text(
-                                                  '처음이라면 준비 안내',
-                                                ),
-                                              ),
-                                            ),
                                           Material(
                                             color: Colors.transparent,
                                             child: ListenableBuilder(

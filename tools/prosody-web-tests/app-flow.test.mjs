@@ -564,7 +564,7 @@ test('region playback keeps short words whole and retry keeps the full sentence 
     assert.equal(ui.playedAudio.at(-1).playedAt,0,'short original recordings are not cut at arbitrary syllable positions');
     assert.match(el('playback-range-info').textContent,/전체를 재생/);
     assert.match(el('listening-status').textContent,/내 녹음.*전체/);
-    assert.match(el('region-boundary-note').textContent,/특정 글자나 단어를 인식한 위치는 아니/);
+    assert.match(el('region-boundary-note').textContent,/예시의 시간을 나눈 연습 구간/);
     assert.equal(el('result-phrase-text').textContent,'안녕하세요.');
     assert.equal(el('repeat-region').disabled,false);
     await el('repeat-region').fire('click');
@@ -886,7 +886,7 @@ test('recording context shows selected text and neighbors without claiming speec
     assert.equal(el('recording-phrase-text').textContent,'잠시 말씀드릴게요.');
     assert.equal(el('reading-next').disabled,true);
     assert.equal(el('script-session').hidden,false,'missing audio returns to guide preparation');
-    assert.match(ui.html,/말하고 있는 글자를 자동으로 인식하지는 않아요/);
+    assert.match(ui.html,/선택한 문장을 읽고, 이전·다음 구간 버튼으로 이동한다/);
     await ui.button('mode','guide').fire('click');
     assert.equal(el('script-reading-context').hidden,true);
     assert.equal(el('script-reading-after').hidden,true);

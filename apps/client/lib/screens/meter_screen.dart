@@ -43,7 +43,7 @@ class MeterScreen extends StatelessWidget {
             ? '입력 준비가 끝나면 측정을 시작한다.'
             : '브라우저의 권한 요청에서 마이크를 허용한다.',
       CaptureState.running => switch (session.settings['noiseReductionState']) {
-        'active' => '주변 소음을 줄인 입력이다. 다른 사람의 목소리가 남을 수 있다.',
+        'active' => '주변 소음을 줄인 입력이다.',
         'disabled' => '소음 억제가 꺼져 발화 막대를 표시하지 않는다.',
         'unavailable' => '소음 억제를 사용할 수 없어 발화 막대를 표시하지 않는다.',
         _ => '주변 소리도 함께 반영된다.',
@@ -196,13 +196,9 @@ class MeterScreen extends StatelessWidget {
             '이전에 측정한 환경 기준을 유지한다.',
             style: TextStyle(color: muted, fontSize: 14),
           ),
-        const Text(
-          '환경 참고범위는 실험적 기준이다. 실제 음압이나 검증된 발성 목표가 아니다.',
-          style: TextStyle(color: muted, fontSize: 14),
-        ),
         if (a['provenance'] == 'relative_input')
           const Text(
-            '실험적 상대 입력 기준 · 실제 음압 아님',
+            '주변 환경음의 상대 입력 기준',
             textAlign: TextAlign.left,
             style: TextStyle(color: muted, fontSize: 14),
           ),
@@ -243,7 +239,7 @@ class MeterScreen extends StatelessWidget {
             if (session.displayLevel != null || a['meterState'] != 'nonSpeech')
               Text(
                 session.displayLevel != null
-                    ? '발화로 판정된 입력이다. 다른 사람의 소리도 포함될 수 있다.'
+                    ? '말소리의 입력 크기를 표시하고 있다.'
                     : session.environmentCollecting
                     ? '환경음을 수집하는 동안 발화 막대를 비운다.'
                     : a['meterState'] == 'confirming'
@@ -259,7 +255,7 @@ class MeterScreen extends StatelessWidget {
                   'echoCancellation',
                 ].any((key) => session.settings[key] == true))
               Text(
-                '전처리 적용 · 막대는 상대 참고값이다.',
+                '브라우저 소리 처리 적용 중',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: muted, fontSize: 14, height: 1.7),
               ),
@@ -283,7 +279,7 @@ class MeterScreen extends StatelessWidget {
                       ? '하한 미만'
                       : double.parse(level.toStringAsFixed(1)) > range.upper
                       ? '상한 초과'
-                      : '범위 안'} · 척도 정합성 미검증',
+                      : '범위 안'}',
             ].join('\n'),
             textAlign: TextAlign.left,
             style: const TextStyle(color: muted, fontSize: 14, height: 1.7),
@@ -433,11 +429,6 @@ class MeterScreen extends StatelessWidget {
             style: const TextStyle(color: muted, fontSize: 14, height: 1.7),
           ),
         ),
-        if (a['provenance'] == 'relative_input')
-          const Text(
-            '상대 입력 추정은 브라우저 자동 이득 변화와 실제 소음 변화를 구분할 수 없다.',
-            style: TextStyle(fontSize: 14, color: muted, height: 1.8),
-          ),
         TextButton.icon(
           onPressed: () =>
               showLicensePage(context: context, applicationName: 'VoiceMate'),

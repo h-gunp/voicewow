@@ -139,6 +139,9 @@ Future<void> _mount(
     ),
   );
   await tester.pumpAndSettle();
+  await tester.ensureVisible(find.byKey(const Key('warmup-skip')));
+  await tester.tap(find.byKey(const Key('warmup-skip')));
+  await tester.pumpAndSettle();
 }
 
 Future<void> _finish(WidgetTester tester, _ScreenSession s) async {

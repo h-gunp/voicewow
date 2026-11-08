@@ -37,7 +37,7 @@ export function segmentObservation(segment, tab = 'pitch') {
   return {
     kind: 'observed', icon: '↔', badge: '측정한 차이', label: `${value}${unit} 차이`,
     observation: `이 구간에서 예시와 내 녹음의 상대적인 ${pitch ? '음높이' : '소리 크기'}는 평균 ${value}${unit} 차이가 나요.`,
-    detail: pitch ? '반음은 음높이 차이의 단위예요. 각 목소리의 중간 높이를 기준으로 비교했어요.' : '각 녹음의 중간 크기를 기준으로 비교했어요. 실제 소음계 데시벨이 아니에요.',
+    detail: pitch ? '반음은 음높이 차이의 단위예요. 각 목소리의 중간 높이를 기준으로 비교했어요.' : '각 녹음의 중간 크기를 기준으로 비교한 상대 dB 값이다.',
   };
 }
 

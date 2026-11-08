@@ -7,7 +7,7 @@ export const EVIDENCE = Object.freeze({
   url: 'https://sunahjun.humspace.ucla.edu/ktobi/K-tobi.html',
   title: 'K-ToBI: 한국어 억양의 형태 (§1.1, §3.3)',
   scope: '올라가기·내려가기 형태를 연습 목표로 선택하는 데 참고했어요.',
-  note: '같은 문장도 여러 억양으로 말할 수 있어요. 이 문서는 정답 곡선이나 합격 기준을 정하지 않아요.',
+  note: '같은 문장을 읽는 여러 억양 형태를 참고할 수 있다.',
 });
 
 // Engineering safeguards for estimating two endpoint-region medians. These
@@ -18,7 +18,7 @@ const MIN_ENDPOINT_FRAMES = 3;
 const MIN_ENDPOINT_SPAN = 0.04;
 const MAX_ENDPOINT_GAP = 0.08;
 const EPS = 1e-8;
-const ROUNDING_NOTE = '수치는 0.1 단위로 반올림했어요. 실제 목소리가 잡힌 앞·뒤 대표 구간의 비교이며 중간 흐름 전체를 뜻하지 않아요.';
+const ROUNDING_NOTE = '목소리가 확인된 앞·뒤 대표 구간을 비교한 값이며, 0.1 단위로 반올림한다.';
 
 function median(values) {
   const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
@@ -120,7 +120,7 @@ export function choosePracticeRegions(reference, { whole = false } = {}) {
   const segmentationNote = !supported
     ? '이 예시에서는 앞·뒤 변화를 안내할 자료가 부족해요. 전체 그래프를 보며 연습할 수 있어요.'
     : ranges.length === 3
-      ? '앞·중간·끝은 예시의 시간을 나눈 연습 구간이에요. 단어나 음절을 인식한 결과는 아니에요.'
+      ? '앞·중간·끝은 예시의 시간을 나눈 연습 구간이다.'
       : ranges.length === 2
         ? '예시의 목소리를 충분히 비교할 수 있도록 앞·뒤 두 구간으로 나눴어요.'
         : whole
@@ -208,7 +208,7 @@ export function describeSegmentPractice(reference, user, comparison, segment, ta
     title: '이 부분은 같이 살펴볼까요?',
     observation: '앱이 이 부분의 처음과 끝을 충분히 비교하지 못했어요.',
     action: '그래프를 보며 이 부분을 조금 더 길게 읽어 볼까요? 편한 속도로 해 주세요.',
-    detail: '서로 겹치지 않는 앞·뒤 음성 구간이 필요해요. 없는 목소리 값을 채우거나 성공·실패로 판단하지 않았어요.',
+    detail: '비교할 목소리가 앞·뒤 구간에 충분히 담기도록 다시 녹음한다.',
   };
   const r = data.reference, u = data.user;
   const regionLabel = typeof segment.label === 'string' && segment.label.trim() ? segment.label : '이 부분';
@@ -237,7 +237,7 @@ export function describeSegmentPractice(reference, user, comparison, segment, ta
       : (r.direction === 'rise' ? '키워서' : '줄여서');
     action = `파란 선을 보면서 끝 ${pitch ? '음을' : '소리를'} 조금 ${movement} 읽어 볼까요? 편하게 한 번 더 해 봐요.`;
   }
-  const note = `${ROUNDING_NOTE}${pitch ? '' : ' 크기는 각 녹음의 기준 크기에 대한 값이며 실제 소음계 데시벨이 아니에요.'}`;
+  const note = `${ROUNDING_NOTE}${pitch ? '' : ' 크기는 각 녹음의 기준 크기에 대한 상대 dB 값이다.'}`;
   return {
     tone, icon: u.direction === 'rise' ? '↗' : u.direction === 'fall' ? '↘' : '↔', cardLabel,
     title, observation,

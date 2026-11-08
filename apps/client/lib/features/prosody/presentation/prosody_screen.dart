@@ -320,11 +320,6 @@ class _ProsodyScreenState extends State<ProsodyScreen>
           s.phase == PracticePhase.generating)
         const LinearProgressIndicator(),
       _status(),
-      _copy(
-        '가이드는 한 가지 읽기 예시예요. 말하기 실력이나 자연스러움을 채점하지 않아요.',
-        size: 14,
-        color: const Color(0xff52647b),
-      ),
     ],
   );
 
@@ -528,11 +523,7 @@ class _ProsodyScreenState extends State<ProsodyScreen>
         const SizedBox(height: 8),
         _copy(s.phrase, size: 17),
         if (result.demo)
-          _copy(
-            '합성 시험 신호예요. 실제 사람의 녹음은 아니에요.',
-            size: 14,
-            color: const Color(0xff94662d),
-          ),
+          _copy('합성 신호 데모', size: 14, color: const Color(0xff94662d)),
         const SizedBox(height: 8),
         _featurePicker(),
         const SizedBox(height: 8),
@@ -585,10 +576,7 @@ class _ProsodyScreenState extends State<ProsodyScreen>
                     size: 14,
                   ),
                 ),
-              _copy(
-                '시간 구간을 비교한 것이며 단어나 음절을 자동으로 찾은 결과는 아니에요. 소리 크기는 각 녹음 안의 상대값이에요.',
-                size: 14,
-              ),
+              _copy('앞뒤 시간 구간을 비교한다. 소리 크기는 각 녹음 안의 상대값이다.', size: 14),
             ],
           ),
         ],
@@ -603,11 +591,6 @@ class _ProsodyScreenState extends State<ProsodyScreen>
           child: const Text('이 부분 내 목소리 듣기 · 선택', textAlign: TextAlign.center),
         ),
         _status(),
-        _copy(
-          '음성과 대본은 이 기기 안에서 처리해요. 재생에 필요한 앱 임시 파일을 사용해요.',
-          size: 14,
-          color: const Color(0xff52647b),
-        ),
       ],
     );
   }

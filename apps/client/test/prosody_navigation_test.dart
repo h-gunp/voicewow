@@ -34,6 +34,9 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('warmup-skip')));
+    await tester.tap(find.byKey(const Key('warmup-skip')));
+    await tester.pumpAndSettle();
     await practice.startRecording();
     await tester.pump();
     audio.cancelGate = Completer<void>();
@@ -67,6 +70,9 @@ void main() {
         VoiceMateApp(audioPort: port, prosodySession: practice),
       );
       await tester.tap(find.byKey(const Key('open-prosody')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('warmup-skip')));
+      await tester.tap(find.byKey(const Key('warmup-skip')));
       await tester.pumpAndSettle();
       expect(find.text('연습 준비'), findsOneWidget);
       await tester.binding.handlePopRoute();
@@ -103,6 +109,9 @@ void main() {
 
       await tester.tap(find.byKey(const Key('open-prosody')));
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('warmup-skip')));
+      await tester.tap(find.byKey(const Key('warmup-skip')));
+      await tester.pumpAndSettle();
       expect(find.byType(ProsodyScreen), findsOneWidget);
       expect(audio.recordingStarts, 0);
       expect(audio.guideGenerations, 0);
@@ -132,6 +141,9 @@ void main() {
       expect(port.starts, 0);
 
       await tester.tap(find.byKey(const Key('open-prosody')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('warmup-skip')));
+      await tester.tap(find.byKey(const Key('warmup-skip')));
       await tester.pumpAndSettle();
       expect(practice.reference, same(acceptedGuide));
       expect(practice.result, same(acceptedResult));
@@ -192,6 +204,9 @@ void main() {
 
     port.stopGate!.complete();
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('warmup-skip')));
+    await tester.tap(find.byKey(const Key('warmup-skip')));
+    await tester.pumpAndSettle();
     expect(find.byType(ProsodyScreen), findsOneWidget);
     expect(
       tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
@@ -209,9 +224,15 @@ void main() {
     audio.cancelGate!.complete();
     await tester.pumpAndSettle();
     expect(find.byType(ProsodyScreen), findsNothing);
+    await tester.ensureVisible(find.byKey(const Key('warmup-skip')));
+    await tester.tap(find.byKey(const Key('warmup-skip')));
+    await tester.pumpAndSettle();
     expect(find.byType(PronunciationScreen), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('open-prosody')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('warmup-skip')));
+    await tester.tap(find.byKey(const Key('warmup-skip')));
     await tester.pumpAndSettle();
     expect(
       tester.widget<ProsodyScreen>(find.byType(ProsodyScreen)).session,
@@ -248,6 +269,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('warmup-skip')));
+      await tester.tap(find.byKey(const Key('warmup-skip')));
+      await tester.pumpAndSettle();
       expect(find.byType(PronunciationScreen), findsOneWidget);
       expect(
         tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
@@ -256,6 +280,9 @@ void main() {
       expect(find.byType(NavigationDestination), findsNWidgets(3));
 
       await tester.tap(find.byKey(const Key('open-prosody')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('warmup-skip')));
+      await tester.tap(find.byKey(const Key('warmup-skip')));
       await tester.pumpAndSettle();
       expect(find.byType(PronunciationScreen), findsNothing);
       expect(find.byType(ProsodyScreen), findsOneWidget);

@@ -413,7 +413,7 @@ class PracticeSession extends ChangeNotifier {
     result = next;
     selected = 0;
     status = demo
-        ? '합성 시험 신호로 동작을 보여드려요. 실제 사람의 녹음은 아니에요.'
+        ? '합성 신호로 비교 결과를 보여주는 데모다.'
         : '녹음이 끝났어요. 내 목소리의 움직임을 함께 살펴봐요.';
   }
 

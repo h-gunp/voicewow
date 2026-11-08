@@ -88,7 +88,7 @@ class _PronunciationScreenState extends State<PronunciationScreen>
           value,
           _references(guide.pronunciation),
           approximate: true,
-          note: '규칙 기반 참고다. 이어 읽기·고유 명사·일부 예외는 실제 소리와 다를 수 있다.',
+          note: '기본 발음 규칙을 적용한 참고 읽기다.',
         ),
       ),
     );
@@ -107,7 +107,7 @@ class _PronunciationScreenState extends State<PronunciationScreen>
         item.text,
         _references(item.pronunciation),
         id: item.id,
-        note: '${item.explanation}\n어절별 참고 발음이며 말 사이의 이어 읽기는 비교 범위에서 제외한다.',
+        note: item.explanation,
       ),
     ),
   );

@@ -356,6 +356,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('warmup-skip')));
+      await tester.tap(find.byKey(const Key('warmup-skip')));
+      await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(Tab, '내 문장'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(ActionChip, '같이 가요'));
@@ -370,6 +373,9 @@ void main() {
       expect(speech.playback.value.phase, SpeechPhase.ready);
 
       await tester.tap(find.byKey(const Key('open-pronunciation')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('warmup-skip')));
+      await tester.tap(find.byKey(const Key('warmup-skip')));
       await tester.pumpAndSettle();
       expect(
         tester
@@ -407,6 +413,9 @@ void main() {
         startWithPronunciation: true,
       ),
     );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('warmup-skip')));
+    await tester.tap(find.byKey(const Key('warmup-skip')));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(Tab, '내 문장'));
     await tester.pumpAndSettle();

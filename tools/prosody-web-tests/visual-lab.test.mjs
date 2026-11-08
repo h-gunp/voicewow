@@ -78,7 +78,7 @@ test('observations show measurements without grades or correction advice',()=>{
   assert.doesNotMatch(mixed.observation,/높게|낮게|올라|내려/,'a difference is not a temporal direction');
   const level=segmentObservation({levelDelta:-5,levelError:5},'volume');
   assert.equal(level.label,'5.0dB 차이');
-  assert.match(level.detail,/소음계/);
+  assert.match(level.detail,/중간 크기를 기준으로 비교한 상대 dB/);
   assert.doesNotMatch(level.observation,/더 강조|힘을 빼/);
 });
 

@@ -98,11 +98,6 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
       ),
       const SizedBox(height: 12),
     ],
-    const SizedBox(height: 12),
-    const Text(
-      '음성과 분석 결과는 기기 안에서 처리한다. 모델이 추정한 발음을 비교하는 기능이며 실제 판별 정확도는 검증 전이다.',
-      style: smallCopy,
-    ),
   ];
 
   List<Widget> _expressions() {

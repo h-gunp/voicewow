@@ -10,9 +10,9 @@ export function createScriptTracking({document,cancelTts}){
   function stop(){ticket++;ready=false;captureAbort?.abort();captureAbort=null;bridge?.stop();bridge=null;client?.stop();client=null;tracker=null;clear();}
   function render(result){
     clear();
-    if(!result.range){message(result.status==='ambiguous'?'같은 문구가 반복돼 위치를 구분하지 못했어요.':'읽은 위치를 확인 중이에요. 대본과 다른 말은 표시하지 않아요.');return;}
+    if(!result.range){message(result.status==='ambiguous'?'같은 문구가 반복돼 위치를 구분하지 못했어요.':'대본과 일치하는 위치를 찾고 있다.');return;}
     el('asr-before').textContent=result.before;el('asr-match').textContent=result.text;el('asr-after').textContent=result.after;
-    message(result.status==='uncertain-tail'?'표시한 부분은 앞서 인식된 문구예요. 그 뒤의 현재 위치는 불확실해요.':'인식된 말과 일치하는 대본 범위예요. 정확한 발음·글자별 시점을 뜻하지 않아요.');
+    message(result.status==='uncertain-tail'?'표시한 부분은 앞서 인식된 문구예요. 그 뒤의 현재 위치는 불확실해요.':'인식된 말과 일치하는 대본 범위를 표시한다.');
   }
   return {
     get ready(){return ready;},

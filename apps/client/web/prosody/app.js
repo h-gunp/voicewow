@@ -84,7 +84,7 @@ function renderGuideRegions(){
     const time=document.createElement('span');time.textContent=rangeLabel(region);
     item.append(title,time);box.append(item);
   }
-  setText('guide-boundary-note','위 범위는 소리의 시간을 나눈 거예요. 글자별 위치는 아직 구별하지 않아요.');
+  setText('guide-boundary-note','가이드 소리의 시간을 나눈 연습 구간이다.');
 }
 
 function stopPlayback(){if(playback){playback.pause();playback=null;}clearTimeout(playbackTimer);playbackTimer=null;if(ttsUtterance){ttsUtterance=null;window.speechSynthesis?.cancel();}$('listening-status').hidden=true;}
@@ -148,7 +148,7 @@ function refresh(){
   refreshPreparation();
   $('change-mode').disabled=busy;
   pager?.refresh();
-  setText('flow-navigation-note',busy?'작업 중에는 화면을 넘기지 않아요. 마치거나 취소한 뒤 이동해 주세요.':!guide.analysis?'이 문장의 가이드를 준비하면 녹음 화면으로 갈 수 있어요.':'좌우로 넘기거나 이전·다음 버튼을 눌러 주세요.');
+  setText('flow-navigation-note',busy?'진행 중인 작업을 마치거나 취소한 뒤 이동한다.':!guide.analysis?'이 문장의 가이드를 준비하면 녹음 화면으로 갈 수 있어요.':'좌우로 넘기거나 이전·다음 버튼을 눌러 주세요.');
 }
 function paintPractice(trace=[],progress=null,options={}){
   if(state==='recording'&&session&&!options.live){paintLive(session);return;}
@@ -156,7 +156,7 @@ function paintPractice(trace=[],progress=null,options={}){
   if(finished&&!trace.length)trace=result.trace;
   $('practice-graph-card').dataset.phase=live?'recording':finished?'result':'guide';
   setText('practice-view-label',live?'실시간 · 시간 기준':finished?'녹음 후 · 속도 맞춤':'가이드 미리보기');
-  setText('practice-chart-help',live?'파란 점선은 가이드, 굵은 주황색 선·점은 지금 측정한 내 목소리예요. 녹음 중에는 실제 경과 시간으로 보여줘요.':!guide.analysis?'대본에 맞는 AI 가이드를 만들거나 같은 문장의 참고 음성을 넣어 주세요.':finished?'결과창과 같은 비교예요. 파란 점선은 가이드, 주황색 선은 내 목소리예요.':practiceTab==='pitch'?'위쪽은 각 목소리의 중간값보다 높은 음, 아래쪽은 낮은 음이에요. 목소리 크기와는 달라요.':'위쪽은 각 녹음의 중간값보다 큰 소리, 아래쪽은 작은 소리예요. 한 녹음 안의 강약을 볼 수 있어요.');
+  setText('practice-chart-help',live?'파란 점선은 가이드, 굵은 주황색 선·점은 지금 측정한 내 목소리예요. 녹음 중에는 실제 경과 시간으로 보여줘요.':!guide.analysis?'대본에 맞는 AI 가이드를 만들거나 같은 문장의 참고 음성을 넣어 주세요.':finished?'결과창과 같은 비교예요. 파란 점선은 가이드, 주황색 선은 내 목소리예요.':practiceTab==='pitch'?'위쪽은 각 목소리의 중간값보다 높은 음, 아래쪽은 낮은 음이에요.':'위쪽은 각 녹음의 중간값보다 큰 소리, 아래쪽은 작은 소리예요. 한 녹음 안의 강약을 볼 수 있어요.');
   if(!live){$('live-status').dataset.voice='idle';setText('live-status',finished?'녹음이 끝났어요. 내 목소리의 움직임을 함께 살펴봐요.':'녹음을 시작하면 주황색 선으로 내 목소리가 나타나요.');}
   paintChart('practice-chart',{reference:guide.analysis,trace,field:field(practiceTab),progress,regions:result?.summary.segments||previewRegions,timeAxis:Boolean(wholeGuide),...options});
   paintChart('guide-chart',{reference:guide.analysis,regions:previewRegions,progress:live?null:progress});
@@ -259,7 +259,7 @@ function renderResult(){
     const {reference:r,user:u}=result.summary.duration,max=Math.max(r,u,.1);
     setText('reference-duration',`${r.toFixed(2)}초`);setText('user-duration',`${u.toFixed(2)}초`);
     $('reference-duration-bar').style.width=`${r/max*100}%`;$('user-duration-bar').style.width=`${u/max*100}%`;
-    const delta=u-r;setText('duration-delta',Math.abs(delta)<.05?'확인된 목소리의 시간 차이가 0.05초 미만이에요.':`확인된 목소리가 예시보다 ${Math.abs(delta).toFixed(2)}초 ${delta>0?'길어요':'짧아요'}. 이 차이만으로 빠르거나 느리다고 판단하지 않아요.`);
+    const delta=u-r;setText('duration-delta',Math.abs(delta)<.05?'확인된 목소리의 시간 차이가 0.05초 미만이에요.':`확인된 목소리가 예시보다 ${Math.abs(delta).toFixed(2)}초 ${delta>0?'길어요':'짧아요'}.`);
   }else paintChart('result-chart',{reference:guide.analysis,trace:result.trace,field:field(resultTab),selected:result.summary.segments[selectedIndex],regions:result.summary.segments,timeAxis:Boolean(wholeGuide),onSelect:selectResultRegion});
   const feedback=result.summary.segments.map(s=>segmentObservation(s,resultTab));
   const practiceMessages=result.summary.segments.map(s=>describeSegmentPractice(guide.analysis,result.user,result.comparison,s,resultTab));
@@ -289,21 +289,21 @@ function renderResult(){
   const referenceRange=playbackRange(guide.analysis,selected);
   setText('segment-play',!userRange?'해당 구간의 녹음 위치를 찾지 못했어요':userRange.whole?'▷ 내 녹음 전체 듣기':`▷ ${selected.label} · 앞뒤 함께 듣기`);
   setText('reference-segment-play',referenceRange.whole?'▷ 가이드 전체 듣기':`▷ 가이드 ${selected.label} · 앞뒤 함께 듣기`);
-  setText('region-boundary-note',`${result.summary.segmentationNote||'가이드의 시간 길이를 기준으로 나눈 구간이에요.'} 특정 글자나 단어를 인식한 위치는 아니에요.`);
-  setText('playback-range-info',`선택 범위 · 가이드 ${seconds(referenceRange.coreStart)}–${seconds(referenceRange.coreEnd)}${userRange?`, 내 녹음 ${seconds(userRange.coreStart)}–${seconds(userRange.coreEnd)}`:' · 내 녹음에서는 대응 위치를 확인하기 어려워요'}. ${userRange?.whole?'짧은 말은 끊기지 않도록 전체를 재생해요.':'듣기에는 앞뒤 약 0.25초를 함께 넣어요. 단어의 경계를 찾아 자른 것은 아니에요.'}`);
+  setText('region-boundary-note',result.summary.segmentationNote||'가이드의 시간 길이를 기준으로 나눈 구간이다.');
+  setText('playback-range-info',`선택 범위 · 가이드 ${seconds(referenceRange.coreStart)}–${seconds(referenceRange.coreEnd)}${userRange?`, 내 녹음 ${seconds(userRange.coreStart)}–${seconds(userRange.coreEnd)}`:' · 내 녹음에서는 대응 위치를 확인하기 어려워요'}. ${userRange?.whole?'짧은 말은 끊기지 않도록 전체를 재생해요.':'선택한 시간 구간에 앞뒤 약 0.25초를 더해 재생한다.'}`);
   const values=$('measurement-values');values.replaceChildren();
   for(const segment of result.summary.segments){
     const line=document.createElement('p');
     const measurement=(value,unit)=>Number.isFinite(value)?`${value.toFixed(1)}${unit}`:'비교 보류';
     line.textContent=`${segment.label} 평균 차이 · 높낮이 ${measurement(segment.pitchError,'반음')} / 강약 ${measurement(segment.levelError,'dB')}`;values.append(line);
   }
-  const notes=[wholeGuide?'선택한 시간 구간을 하나의 짧은 가이드로 비교했어요. 음절을 인식한 결과가 아니에요.':'앞·중간·끝은 시간 구간이며, 음절을 인식한 결과가 아니에요.'];
-  notes.push('차이는 대응하는 측정값 사이 거리의 평균이에요. 오르내리는 방향이나 말하기의 좋고 나쁨을 뜻하지 않아요.');
+  const notes=[wholeGuide?'선택한 시간 구간을 하나의 가이드로 비교한다.':'앞·중간·끝은 가이드의 시간을 나눈 구간이다.'];
+  notes.push('차이는 대응하는 측정값 사이 거리의 평균이다.');
   notes.push('전체 음높이와 크기를 맞춘 상대 비교예요. 제외한 시간에는 무성 자음과 확인이 어려운 소리도 포함돼요.');
   if(!result.summary.pitchReliable)notes.push('높낮이 추정이 부족해 해당 측정값을 표시하지 않았어요.');
   if(result.summary.duration.user/result.summary.duration.reference>2||result.summary.duration.user/result.summary.duration.reference<.5)notes.push('두 발화의 길이 차이가 커서 대응 위치가 부정확할 수 있어요.');
   notes.push(...result.comparison.warnings);
-  if(clip?.demo)notes.push('데모는 높낮이·크기를 일부 바꾼 합성 신호예요. 실제 사람의 말이 아니에요.');
+  if(clip?.demo)notes.push('데모는 높낮이·크기를 일부 바꾼 합성 신호다.');
   setText('result-detail',notes.join(' '));refresh();
 }
 async function decode(blob){
@@ -598,7 +598,7 @@ function readScript(){
   const voice=selectLocalKoreanVoice(window.speechSynthesis?.getVoices()||[]);
   if(!voice||!window.SpeechSynthesisUtterance){setText('practice-status','이 기기에서 설치된 한국어 읽기 음성을 찾지 못했어요. 대본을 직접 읽거나 참고 음성 파일을 넣어 연습해 주세요.');return;}
   const utterance=new SpeechSynthesisUtterance(guide.text);utterance.voice=voice;utterance.lang=voice.lang;utterance.rate=.9;ttsUtterance=utterance;
-  setText('practice-status','기기의 한국어 음성으로 읽고 있어요. 읽어주기 소리는 비교할 음성 파일로 저장되지 않아요.');
+  setText('practice-status','기기의 한국어 음성으로 읽는다. 그래프 비교에는 AI 가이드 만들기나 참고 음성 넣기를 사용한다.');
   utterance.onend=()=>{if(ttsUtterance!==utterance)return;ttsUtterance=null;setText('practice-status','이제 같은 문장을 읽어보세요. 녹음 시작을 누르면 돼요.');};
   utterance.onerror=()=>{if(ttsUtterance!==utterance)return;ttsUtterance=null;setText('practice-status','기기 읽어주기를 실행하지 못했어요. 직접 읽거나 참고 음성을 넣어 연습해 주세요.');};
   window.speechSynthesis.speak(utterance);

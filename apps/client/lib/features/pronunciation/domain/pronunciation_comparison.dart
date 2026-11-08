@@ -39,9 +39,9 @@ PronunciationComparison comparePronunciation({
       )) {
     throw ArgumentError('음소는 1000개, 참고 발음은 300자씩 16개 이내여야 한다.');
   }
-  final notes = <String>{'색상은 추정 음소와 참고 발음의 비교이며 실제 발음 정확도를 뜻하지 않는다.'};
+  final notes = <String>{};
   if (referenceIsApproximate) {
-    notes.add('규칙 기반 참고 읽기와의 실험적 비교다. 모든 허용 발음과 음운 변화를 반영하지 못한다.');
+    notes.add('규칙 기반 참고 발음과 비교했다.');
   }
   final observed = _observe(phones, notes);
   var reference = references.first;
@@ -392,7 +392,7 @@ _Reading _observe(List<String> phones, Set<String> notes) {
     if (start > 0 &&
         _vowels.containsKey(phones[start - 1]) &&
         _codas.containsKey(current)) {
-      notes.add('초성·종성 배치는 추정 표기이며 색상은 음소열의 일치와 차이를 비교한다.');
+      notes.add('초성·종성 표기와 관계없이 소리의 순서를 비교한다.');
     }
     i++;
     var finalJamo = ' ';
@@ -400,7 +400,7 @@ _Reading _observe(List<String> phones, Set<String> notes) {
       if (_onsets.containsKey(phones[i]) &&
           i + 1 < phones.length &&
           _vowels.containsKey(phones[i + 1])) {
-        notes.add('초성·종성 배치는 추정 표기이며 색상은 음소열의 일치와 차이를 비교한다.');
+        notes.add('초성·종성 표기와 관계없이 소리의 순서를 비교한다.');
       } else {
         finalJamo = _codas[phones[i++]]!;
       }

@@ -141,7 +141,6 @@ footer{font-size:calc(0.875 * var(--text-unit))}
 .feedback-card strong{font-size:calc(0.875 * var(--text-unit))}
 .feedback-card small{margin-top:4px;font-weight:650;color:var(--muted)}
 .feedback-card.uncertain small{color:var(--muted)}
-.guide-context{font-size:calc(0.875 * var(--text-unit));line-height:1.8;color:var(--muted);margin:16px 0}
 .measurement-details{border-top:1px solid var(--border);padding-top:14px;font-size:calc(0.875 * var(--text-unit));color:var(--muted);line-height:1.85}
 .measurement-details summary{cursor:pointer;font-weight:700;color:var(--muted)}
 .measurement-details p{margin:9px 0}
