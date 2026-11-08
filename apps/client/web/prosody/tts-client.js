@@ -1,4 +1,5 @@
 // Lazy browser worker: importing this file performs no downloads or synthesis.
+export function createTtsClient() {
 let worker = null, pending = null, nextId = 0;
 const REQUEST_TIMEOUT_MS = 6 * 60 * 1000;
 
@@ -21,7 +22,7 @@ function finish(error, value) {
 /** Stop CPU/network work as well as discarding a stale result. Public immutable
  * model cache entries may survive; scripts and audio are never persisted here.
  */
-export function cancelGuide() {
+function cancelGuide() {
   stopWorker();
   finish(abortError());
 }
@@ -66,7 +67,7 @@ function startWorker() {
 /** Produces actual PCM samples for this sentence. It does not create a pitch
  * curve from text or claim that the generated intonation is uniquely correct.
  */
-export async function generateGuide(text, { onProgress } = {}) {
+async function generateGuide(text, { onProgress } = {}) {
   if (typeof text !== 'string' || !text.trim()) throw new Error('가이드를 만들 문장을 먼저 입력해 주세요.');
   const sentence = text.trim();
   if (Array.from(sentence).length > 100) throw new Error('한 번에 100자 이하의 문장으로 가이드를 만들어 주세요.');
@@ -82,4 +83,7 @@ export async function generateGuide(text, { onProgress } = {}) {
     try { activeWorker.postMessage({ type: 'generate', id, text: sentence }); }
     catch { stopWorker(); finish(new Error('음성 엔진을 시작하지 못했어요. 다시 시도해 주세요.')); }
   });
+}
+
+return { generateGuide, cancelGuide };
 }

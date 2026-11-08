@@ -55,18 +55,21 @@ async function setup({microphone=false, holdResume=false, holdPermission=false, 
     const key=name.replace(/-([a-z])/g,(_,c)=>c.toUpperCase());
     groups[name]=[...html.matchAll(new RegExp(`data-${name}="([^"]+)"`,'g'))].map(m=>{const e=new Element();e.dataset[key]=m[1];return e;});
   }
-  const practice=new Element(),coverage=new Element(),windowEvents={},documentEvents={},workers=[],playedAudio=[];
+  const practice=new Element(),coverage=new Element(),windowEvents={},documentEvents={},speechEvents={},workers=[],playedAudio=[];
+  const add=(events,name,fn)=>(events[name]??=new Set()).add(fn);
+  const remove=(events,name,fn)=>events[name]?.delete(fn);
+  const dispatch=(events,name,event)=>{for(const fn of events[name]||[])fn(event);};
   const body=new Element();
   const document={body,hidden:false,getElementById:id=>elements.get(id),createElement:()=>new Element(),
     querySelector:selector=>selector==='.practice'?practice:coverage,
     querySelectorAll:selector=>selector.split(',').flatMap(s=>{const list=groups[s.trim().slice(6,-1)]||[];return s==='[data-flow-step]'&&body.dataset.flowStep!==undefined?[body,...list]:list;}),
-    addEventListener:(name,fn)=>{documentEvents[name]=fn;}};
+    addEventListener:(name,fn)=>add(documentEvents,name,fn),removeEventListener:(name,fn)=>remove(documentEvents,name,fn)};
   const original={location:globalThis.location,window:globalThis.window,document:globalThis.document,Worker:globalThis.Worker,Audio:globalThis.Audio,MediaRecorder:globalThis.MediaRecorder};
   const navigatorDescriptor=Object.getOwnPropertyDescriptor(globalThis,'navigator');
   let microphoneRequests=0,liveVoice=true,trackStopped=false,liveReads=0,contextOpens=0, resumeStarted=false, releaseResume;
   const resumeGate=new Promise(resolve=>{releaseResume=resolve;});
   let releasePermission;const permissionGate=new Promise(resolve=>{releasePermission=resolve;});
-  const track={stop(){trackStopped=true;},addEventListener(){}};
+  const track={stop(){trackStopped=true;},addEventListener(){},removeEventListener(){}};
   const stream={getTracks:()=>[track],getAudioTracks:()=>[track]};
   Object.defineProperty(globalThis,'navigator',{configurable:true,value:{mediaDevices:{async getUserMedia(){
     microphoneRequests++;
@@ -84,6 +87,7 @@ async function setup({microphone=false, holdResume=false, holdPermission=false, 
   globalThis.Audio=class {
     constructor(url){Object.assign(this,{url,currentTime:0,playedAt:null,paused:false,listeners:{}});playedAudio.push(this);}
     addEventListener(name,listener){this.listeners[name]=listener;}
+    removeEventListener(name,listener){if(this.listeners[name]===listener)delete this.listeners[name];}
     load(){this.listeners.loadedmetadata?.();}
     async play(){this.playedAt=this.currentTime;}
     pause(){this.paused=true;}
@@ -112,12 +116,13 @@ async function setup({microphone=false, holdResume=false, holdPermission=false, 
     }};}
     async decodeAudioData(bytes){const samples=new Float32Array(bytes);return {duration:samples.length/16000,length:samples.length,numberOfChannels:1,sampleRate:16000,getChannelData:()=>samples};}
     async close(){this.state='closed';}
-  },speechSynthesis:{getVoices:()=>[],addEventListener(){},cancel(){}},addEventListener:(name,fn)=>{windowEvents[name]=fn;}};
+  },speechSynthesis:{getVoices:()=>[],addEventListener:(name,fn)=>add(speechEvents,name,fn),removeEventListener:(name,fn)=>remove(speechEvents,name,fn),cancel(){}},addEventListener:(name,fn)=>add(windowEvents,name,fn),removeEventListener:(name,fn)=>remove(windowEvents,name,fn)};
   globalThis.window.parent={};
   const el=id=>elements.get(id),button=(group,value)=>groups[group].find(e=>Object.values(e.dataset).includes(value));
   const audio=new Blob([voicePayload().buffer],{type:'application/test-audio'});audio.name='test-reference.wav';
-  await import(`../../apps/client/web/prosody/app.js?flow=${Date.now()}-${Math.random()}`);
-  return {el,button,workers,playedAudio,html,
+  const {createProsodyApp}=await import('../../apps/client/web/prosody/app.js');
+  const app=createProsodyApp({document,window:globalThis.window,baseUrl:'https://voicemate.test/team/prosody/app.js'});
+  return {el,button,workers,playedAudio,html,app,
     async inputAudio(id,file=audio){el(id).files=[file];await el(id).fire('change');},
     microphoneRequests:()=>microphoneRequests,
     contextOpens:()=>contextOpens,
@@ -125,12 +130,13 @@ async function setup({microphone=false, holdResume=false, holdPermission=false, 
     setLiveVoice(value){liveVoice=Boolean(value);},
     trackStopped:()=>trackStopped,
     resumeStarted:()=>resumeStarted, releaseResume, releasePermission,
-    resize(){windowEvents.resize?.();},
-    message(event){windowEvents.message?.(event);},
-    hostCleanup(){window.voiceMateProsodyCleanup();},
+    resize(){dispatch(windowEvents,'resize');},
+    message(event){dispatch(windowEvents,'message',event);},
+    hostCleanup(){app.pause();},
+    listenerCount:()=>[windowEvents,documentEvents,speechEvents].reduce((total,events)=>total+Object.values(events).reduce((n,list)=>n+list.size,0),0),
     async prepareScript(){await button('mode','script').fire('click');el('script-input').value='안녕하세요. 잠시 말씀드릴게요.';await el('apply-script').fire('click');},
-    hide(){document.hidden=true;documentEvents.visibilitychange?.();},
-    cleanup(){windowEvents.pagehide?.();for(const [key,value] of Object.entries(original)){if(value===undefined)delete globalThis[key];else globalThis[key]=value;}if(navigatorDescriptor)Object.defineProperty(globalThis,'navigator',navigatorDescriptor);else delete globalThis.navigator;},
+    hide(){document.hidden=true;dispatch(documentEvents,'visibilitychange');},
+    cleanup(){app.dispose();for(const [key,value] of Object.entries(original)){if(value===undefined)delete globalThis[key];else globalThis[key]=value;}if(navigatorDescriptor)Object.defineProperty(globalThis,'navigator',navigatorDescriptor);else delete globalThis.navigator;},
   };
 }
 
@@ -146,6 +152,64 @@ test('first entry and choosing a bundled guide need no worker, audio context or 
     assert.equal(ui.microphoneRequests(),0);
     assert.equal(ui.el('record').disabled,false);
     assert.equal(ui.el('guide-preparation').hidden,true);
+  }finally{ui.cleanup();}
+});
+
+test('disposing removes global and DOM listeners and stale controls cannot restart audio',async()=>{
+  const ui=await setup({microphone:true});
+  try{
+    assert.ok(ui.listenerCount()>0);
+    ui.app.dispose();ui.app.dispose();ui.app.pause();ui.app.resize();
+    assert.equal(ui.listenerCount(),0);
+    await ui.el('record').fire('click');
+    assert.equal(ui.microphoneRequests(),0);
+    assert.equal(ui.workers.length,0);
+    assert.equal(globalThis.window.voiceMateProsodyCleanup,undefined);
+  }finally{ui.cleanup();}
+});
+
+test('a disposed app cannot cancel another mount and both own their guide state',async()=>{
+  const old=await setup();
+  let next;
+  try{
+    await old.prepareScript();
+    const oldGeneration=old.el('generate-guide').fire('click');
+    await settle(()=>old.workers.length===1);
+    next=await setup();
+    await next.prepareScript();
+    const newGeneration=next.el('generate-guide').fire('click');
+    await settle(()=>next.workers.length===1);
+    old.app.dispose();await oldGeneration;
+    old.app.pause();old.app.dispose();
+    assert.equal(old.workers[0].terminated,true);
+    const worker=next.workers[0];
+    assert.equal(worker.terminated,false);
+    worker.emit({type:'complete',id:worker.requests[0].id,samples:voicePayload(),sampleRate:16000});
+    await settle(()=>worker.requests.length===2);
+    worker.emit({type:'complete',id:worker.requests[1].id,samples:voicePayload(),sampleRate:16000});
+    await newGeneration;
+    assert.match(next.el('guide-ready-count').textContent,/2 \/ 2/);
+    assert.equal(next.el('record').disabled,false);
+  }finally{next?.cleanup();old.cleanup();}
+});
+
+test('bundled audio resolves against the module path under a nested deployment',async()=>{
+  const ui=await setup();
+  try{
+    await ui.button('mode','guide').fire('click');
+    await ui.el('guide-play').fire('click');
+    assert.equal(ui.playedAudio.at(-1).url,'https://voicemate.test/team/prosody/guides/hello.wav');
+  }finally{ui.cleanup();}
+});
+
+test('a failed mount removes the listeners it installed before returning no handle',async()=>{
+  const ui=await setup();
+  try{
+    const {createProsodyApp}=await import('../../apps/client/web/prosody/app.js');
+    const before=ui.listenerCount();
+    const document={...globalThis.document,getElementById(id){if(id==='flow-previous')throw Error('missing navigation');return globalThis.document.getElementById(id);}};
+    assert.throws(()=>createProsodyApp({document,window:globalThis.window}),/missing navigation/);
+    assert.equal(ui.listenerCount(),before);
   }finally{ui.cleanup();}
 });
 
@@ -559,7 +623,7 @@ test('host cleanup during the pre-analysis delay cannot open a new audio decoder
   }finally{ui.cleanup();}
 });
 
-test('same-origin host cleanup stops a live microphone and untrusted messages do not',async()=>{
+test('only the direct host handle can pause a live microphone, not ambient messages',async()=>{
   const ui=await setup({microphone:true}),{el,inputAudio}=ui;
   try{
     await ui.prepareScript();await inputAudio('reference-file');await settle(()=>!el('record').disabled);
@@ -569,6 +633,8 @@ test('same-origin host cleanup stops a live microphone and untrusted messages do
     ui.message({origin:location.origin,source:{},data:{type:'voicemate:prosody:cleanup'}});
     assert.equal(ui.trackStopped(),false);
     ui.message({origin:location.origin,source:window.parent,data:{type:'voicemate:prosody:cleanup'}});
+    assert.equal(ui.trackStopped(),false);
+    ui.hostCleanup();
     assert.equal(ui.trackStopped(),true);
     assert.equal(el('record').textContent,'● 녹음 시작');
     ui.hostCleanup();

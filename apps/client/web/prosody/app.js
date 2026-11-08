@@ -3,7 +3,7 @@ import { analyzeAudio, analyzeFrame, trimAnalysis, compareAnalyses } from './aud
 import { alignedTrace, wavBytes, segmentObservation } from './lab-utils.js';
 import { drawGraph, graphSegmentAt } from './charts.js';
 import { parsePracticeScript, selectLocalKoreanVoice, splitRegionText } from './script-utils.js';
-import { generateGuide, cancelGuide } from './tts-client.js';
+import { createTtsClient } from './tts-client.js';
 import { describeSegmentPractice, buildPracticeSummary, choosePracticeRegions } from './practice-feedback.js';
 import { playbackRange } from './practice-region.js';
 import { createLiveView } from './live-view.js';
@@ -11,6 +11,15 @@ import { createFlowPager } from './flow-pager.js';
 import { runGuideBatch } from './guide-batch.js';
 import { createScriptTracking } from './script-tracking-ui.js';
 
+export function createProsodyApp({document=globalThis.document,window=globalThis.window,embedded=false,onExit=()=>{},baseUrl=import.meta.url}={}) {
+const {generateGuide,cancelGuide}=createTtsClient();
+const cleanups=[];
+let disposed=false;
+function listen(target,type,listener,options){
+  if(!target)return;
+  target.addEventListener(type,listener,options);
+  cleanups.push(()=>target.removeEventListener(type,listener,options));
+}
 const $=id=>document.getElementById(id);
 const scriptTracking=createScriptTracking({document,cancelTts:cancelGuide});
 let guide=GUIDES[0],practiceTab='pitch',resultTab='pitch',state='idle',clip=null,result=null,session=null;
@@ -23,7 +32,7 @@ let guideBatch=null,guideNotice='';
 const scriptReferences=new Map(),practicedSentences=new Set();
 const guideFailures=new Map();
 const field=tab=>tab==='volume'?'relativeDb':'relativePitch';
-const isBusy=()=>['requesting','recording','processing','generating','asr-loading'].includes(state);
+const isBusy=()=>disposed||['requesting','recording','processing','generating','asr-loading'].includes(state);
 const setText=(id,text)=>{$(id).textContent=text;};
 const draftPending=()=>practiceMode==='script'&&scriptLines.length>0&&$('script-input').value!==appliedScript;
 const seconds=value=>`${value.toFixed(2)}초`;
@@ -53,7 +62,7 @@ function paintChart(id, options) {
         script.textContent = captions[i];
         if (onSelect) {
           item.type = 'button';
-          item.addEventListener('click', () => onSelect(i));
+          listen(item,'click', () => onSelect(i));
         }
         item.append(name, script);
         return item;
@@ -203,7 +212,7 @@ function repeatSelectedRegion(){
   stopPlayback();stopPreview();
   pager?.goTo(1);
   setText('practice-status',`‘${guide.text}’ 전체를 다시 읽어 보세요. ${segment.label}(${rangeLabel(segment)})의 움직임을 조금 더 살펴보면 좋아요. 새 녹음이 준비될 때까지 이전 결과는 보관해요.`);
-  $('record').scrollIntoView({behavior:'smooth',block:'center'});$('record').focus({preventScroll:true});
+  $('record').focus({preventScroll:true});
 }
 function leaveRegion(){if(isBusy()||!wholeGuide)return;selectGuide();$('region-practice').hidden=true;}
 function showCoaching(message){
@@ -273,7 +282,7 @@ function renderResult(){
     const title=document.createElement('strong');title.textContent=message.cardLabel;
     const time=document.createElement('small');time.textContent=rangeLabel(segment);
     button.setAttribute('aria-label',`${segment.label} 가이드 ${rangeLabel(segment)}: ${message.cardLabel}. ${message.observation}`);
-    button.append(tag,time,symbol,title);button.addEventListener('click',()=>selectResultRegion(i));box.append(button);
+    button.append(tag,time,symbol,title);listen(button,'click',()=>selectResultRegion(i));box.append(button);
   });
   const selected=result.summary.segments[selectedIndex];
   const userRange=userPlaybackRange(selected,result.user);
@@ -372,8 +381,8 @@ async function record(){
       if(ticket!==generation||document.hidden){releaseSession(s);return;}
     }
     const recorder=new MediaRecorder(stream),chunks=[];Object.assign(s,{recorder,failed:false,cancelled:false,frames:[],firstVoice:null,view:createLiveView(guide.analysis)});
-    recorder.addEventListener('dataavailable',e=>{if(e.data.size)chunks.push(e.data);});
-    recorder.addEventListener('error',()=>{s.failed=true;if(recorder.state!=='inactive')recorder.stop();else finish();},{once:true});
+    listen(recorder,'dataavailable',e=>{if(e.data.size)chunks.push(e.data);});
+    listen(recorder,'error',()=>{s.failed=true;if(recorder.state!=='inactive')recorder.stop();else finish();},{once:true});
     let finished=false;
     function finish(){
       if(finished)return;finished=true;releaseSession(s);if(session===s)session=null;
@@ -383,7 +392,7 @@ async function record(){
       if(!blob.size){state='idle';retryFailure('녹음된 소리를 읽지 못했어요. 다시 시도해 주세요.');return;}
       processClip(blob);
     }
-    recorder.addEventListener('stop',finish,{once:true});
+    listen(recorder,'stop',finish,{once:true});
     recorder.start();state='recording';s.started=performance.now();refresh();paintLive(s);
     setText('practice-status','주황색 선과 점을 보며 같은 문구를 읽어 보세요. 녹음을 마치면 말하는 속도를 맞춰 다시 비교해요.');
     const data=new Float32Array(analyser.fftSize);
@@ -397,18 +406,19 @@ async function record(){
       paintLive(s);
     },40);
     s.timeout=setTimeout(()=>{if(recorder.state!=='inactive')recorder.stop();},20000);
-    stream.getAudioTracks()[0]?.addEventListener('ended',()=>{if(recorder.state!=='inactive')recorder.stop();},{once:true});
+    listen(stream.getAudioTracks()[0],'ended',()=>{if(recorder.state!=='inactive')recorder.stop();},{once:true});
   }catch(error){if(s)releaseSession(s);else stream?.getTracks().forEach(t=>t.stop());if(ticket!==generation)return;if(session===s)session=null;state='idle';retryFailure(error.name==='NotAllowedError'?'마이크 접근이 허용되지 않았어요. 브라우저에서 권한을 바꾸거나 음성 파일로 시험해 보세요.':'마이크를 시작하지 못했어요. 연결을 확인하거나 음성 파일로 시험해 보세요.');}
 }
 async function playUrl(url,start=0,end=null,label=''){
-  stopPlayback();const audio=new Audio(url);playback=audio;
+  if(disposed)return;
+  stopPlayback();const audio=new Audio(new URL(url,baseUrl).href);playback=audio;
   try{
-    if(start>0)await new Promise((resolve,reject)=>{audio.addEventListener('loadedmetadata',resolve,{once:true});audio.addEventListener('error',reject,{once:true});audio.load();});
+    if(start>0)await new Promise((resolve,reject)=>{listen(audio,'loadedmetadata',resolve,{once:true});listen(audio,'error',reject,{once:true});audio.load();});
     if(playback!==audio)return;
     audio.currentTime=start;await audio.play();
     if(playback!==audio){audio.pause();return;}
     if(label){$('listening-status').hidden=false;setText('listening-status',`${label} · ${seconds(start)}${end===null?'':`–${seconds(end)}`} 재생 중`);}
-    audio.addEventListener('ended',()=>{if(playback===audio)stopPlayback();},{once:true});
+    listen(audio,'ended',()=>{if(playback===audio)stopPlayback();},{once:true});
     if(end!==null)playbackTimer=setTimeout(()=>{if(playback===audio)stopPlayback();},Math.max(.1,end-start)*1000);
   }catch{setText('practice-status','소리를 재생하지 못했어요. 브라우저의 소리 설정을 확인해 주세요.');}
 }
@@ -436,7 +446,7 @@ function updateScriptStatus(){
     const preparation=guideBatch?.currentId===i?'만드는 중':scriptReferences.has(i)?'가이드 준비됨':guideFailures.has(i)?'다시 준비':'준비 전';
     status.textContent=`${i===scriptIndex?'선택 · ':''}${practicedSentences.has(i)?'녹음함':preparation}`;
     if(guideFailures.has(i))button.title=guideFailures.get(i);
-    button.append(number,label,status);button.addEventListener('click',()=>chooseSentence(i));list.append(button);
+    button.append(number,label,status);listen(button,'click',()=>chooseSentence(i));list.append(button);
   });
   const ref=scriptReferences.get(scriptIndex);
   setText('reference-status',ref?`${ref.generated?'생성한 가이드':'연결한 파일'}: ${ref.name} · ${ref.analysis.voicedDuration.toFixed(1)}초의 목소리 확인. 대본과 같은 문장의 음성인지 확인해 주세요.`:'AI 가이드를 만들거나 같은 문장을 읽은 참고 파일을 연결해 주세요.');
@@ -470,7 +480,7 @@ function switchMode(mode){
     // The workflow was hidden; clientWidth now reflects the displayed layout.
     // Redraw without replacing the selected guide, recording, or comparison.
     paintPractice();renderResult();
-    $('flow-deck').scrollIntoView({block:'start'});
+    $('flow-prepare').scrollTop=0;
     document.querySelectorAll('[data-flow-step]')[pager?.index||0]?.focus({preventScroll:true});
     return;
   }
@@ -482,7 +492,7 @@ function switchMode(mode){
 function chooseSentence(index){
   if(isBusy()||draftPending()||index<0||index>=scriptLines.length)return;
   scriptIndex=index;$('script-sentence-select').value=String(index);selectGuide();updateScriptStatus();
-  $('sentence-current-card').scrollIntoView({block:'nearest'});
+  $('flow-prepare').scrollTop=0;
 }
 function applyScript(){
   if(isBusy())return;
@@ -492,7 +502,7 @@ function applyScript(){
     scriptReferences.clear();practicedSentences.clear();guideFailures.clear();guideNotice='';scriptLines=parsed;scriptUnits=units;scriptIndex=0;appliedScript=$('script-input').value;
     const select=$('script-sentence-select');select.replaceChildren();
     parsed.forEach((text,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent=`${i+1}. ${text.length>40?text.slice(0,40)+'…':text}`;select.append(option);});
-    prepareView='build';$('script-session').hidden=false;chooseSentence(0);$('guide-batch-panel').scrollIntoView({block:'nearest'});
+    prepareView='build';$('script-session').hidden=false;chooseSentence(0);$('flow-prepare').scrollTop=0;
   }catch(error){setText('script-status',error.message);}
 }
 function syncScriptReference(){
@@ -593,63 +603,78 @@ function readScript(){
   utterance.onerror=()=>{if(ttsUtterance!==utterance)return;ttsUtterance=null;setText('practice-status','기기 읽어주기를 실행하지 못했어요. 직접 읽거나 참고 음성을 넣어 연습해 주세요.');};
   window.speechSynthesis.speak(utterance);
 }
+function cancelRecording(){if(disposed)return;scriptTracking.stop();const run=guideBatch;guideBatch=null;generation++;run?.controller.abort();cancelGuide();if(session){const s=session;s.cancelled=true;session=null;if(s.recorder&&s.recorder.state!=='inactive')s.recorder.stop();releaseSession(s);}state='idle';stopPreview();stopPlayback();if(run){guideNotice=`가이드 준비를 멈췄어요. 준비된 ${scriptReferences.size}개는 그대로 보관했어요.`;syncScriptReference();}paintStoredRecording();renderResult();refresh();}
+function dispose(){
+  if(disposed)return;
+  try { cancelRecording(); } finally {
+  disposed=true;
+  pager?.destroy();
+  cleanups.splice(0).forEach(remove=>remove());
+  clearClip();
+  for(const ref of scriptReferences.values())URL.revokeObjectURL(ref.audioUrl);
+  scriptReferences.clear();
+  }
+}
+function resize(){if(!disposed){paintPractice();renderResult();}}
+function pageHide(event){if(event?.persisted)cancelRecording();else dispose();}
+function pageShow(event){if(event.persisted&&!disposed)resize();}
+function visibilityChanged(){
+  if(!document.hidden)return;
+  const busy=isBusy(),generating=state==='generating';
+  cancelRecording();
+  if(busy)setText(generating?'generation-status':'practice-status',generating?'화면을 벗어나 가이드 생성을 중지했어요. 다시 시도해 주세요.':'화면을 벗어나 녹음을 중지했어요. 다시 시작해 주세요.');
+}
+try {
 for(const g of GUIDES){const option=document.createElement('option');option.value=g.id;option.textContent=`${g.kind==='word'?'단어':'구절'} · ${g.text}`;$('guide-select').append(option);}
-$('guide-select').addEventListener('change',selectGuide);
-$('prepare-asr').addEventListener('click',async()=>{
+listen($('guide-select'),'change',selectGuide);
+listen($('prepare-asr'),'click',async()=>{
   if(isBusy()||practiceMode!=='script'||!$('asr-enabled').checked)return;
   const ticket=++generation;state='asr-loading';refresh();
   try{await scriptTracking.prepare();}catch{if(ticket===generation)setText('asr-status','모델 준비를 완료하지 못했어요. 연결·메모리를 확인하고 다시 시도해 주세요.');}
   finally{if(ticket===generation){state='idle';refresh();}}
 });
-$('cancel-asr').addEventListener('click',()=>{
+listen($('cancel-asr'),'click',()=>{
   scriptTracking.stop();$('asr-enabled').checked=false;
   if(state==='asr-loading'){generation++;state='idle';}
   setText('asr-status','음성 위치 표시를 껐어요.');refresh();
 });
-$('asr-enabled').addEventListener('change',()=>{if(!$('asr-enabled').checked)scriptTracking.stop();refresh();});
-$('record').addEventListener('click',record);
-$('guide-preview').addEventListener('click',preview);
-$('result-chart').addEventListener('click',event=>{if(!result||resultTab==='duration'||wholeGuide)return;const index=graphSegmentAt($('result-chart'),guide.analysis,event.clientX,event.clientY,result.summary.segments);if(index!==null)selectResultRegion(index);});
-$('guide-play').addEventListener('click',()=>{if(!guide.audioUrl){readScript();return;}stopPreview();paintPractice();const start=wholeGuide?(guide.analysis.startTime||0):0;playUrl(guide.audioUrl,start,wholeGuide?start+guide.analysis.duration:null);});
-$('user-file').addEventListener('change',e=>{const file=e.target.files[0];if(file)processClip(file);e.target.value='';});
-$('user-play').addEventListener('click',()=>{if(clip)playUrl(clip.url);});
-$('segment-play').addEventListener('click',()=>{if(!clip||!result)return;const segment=result.summary.segments[selectedIndex],range=userPlaybackRange(segment,result.user);if(range)playUrl(clip.url,range.start,range.end,`내 녹음 · ${range.whole?'전체':segment.label}`);});
-$('reference-segment-play').addEventListener('click',()=>{if(!result||!guide.audioUrl)return;const segment=result.summary.segments[selectedIndex],range=playbackRange(guide.analysis,segment);playUrl(guide.audioUrl,range.start,range.end,`가이드 · ${range.whole?'전체':segment.label}`);});
-$('repeat-region').addEventListener('click',repeatSelectedRegion);
-$('next-sentence-result').addEventListener('click',()=>chooseSentence(scriptIndex+1));
-$('leave-region').addEventListener('click',leaveRegion);
-$('reset').addEventListener('click',selectGuide);
-$('retry').addEventListener('click',()=>{stopPlayback();pager?.goTo(1);$('record').scrollIntoView({behavior:'smooth',block:'center'});$('record').focus({preventScroll:true});setText('practice-status','같은 예시로 다시 연습해 보세요. 새 녹음의 분석에 성공하면 결과를 바꿔 드려요.');});
-for(const button of document.querySelectorAll('[data-practice-tab]'))button.addEventListener('click',()=>{practiceTab=button.dataset.practiceTab;paintPractice();refresh();});
-for(const button of document.querySelectorAll('[data-result-tab]'))button.addEventListener('click',()=>{
+listen($('asr-enabled'),'change',()=>{if(!$('asr-enabled').checked)scriptTracking.stop();refresh();});
+listen($('record'),'click',record);
+listen($('guide-preview'),'click',preview);
+listen($('result-chart'),'click',event=>{if(!result||resultTab==='duration'||wholeGuide)return;const index=graphSegmentAt($('result-chart'),guide.analysis,event.clientX,event.clientY,result.summary.segments);if(index!==null)selectResultRegion(index);});
+listen($('guide-play'),'click',()=>{if(!guide.audioUrl){readScript();return;}stopPreview();paintPractice();const start=wholeGuide?(guide.analysis.startTime||0):0;playUrl(guide.audioUrl,start,wholeGuide?start+guide.analysis.duration:null);});
+listen($('user-file'),'change',e=>{const file=e.target.files[0];if(file)processClip(file);e.target.value='';});
+listen($('user-play'),'click',()=>{if(clip)playUrl(clip.url);});
+listen($('segment-play'),'click',()=>{if(!clip||!result)return;const segment=result.summary.segments[selectedIndex],range=userPlaybackRange(segment,result.user);if(range)playUrl(clip.url,range.start,range.end,`내 녹음 · ${range.whole?'전체':segment.label}`);});
+listen($('reference-segment-play'),'click',()=>{if(!result||!guide.audioUrl)return;const segment=result.summary.segments[selectedIndex],range=playbackRange(guide.analysis,segment);playUrl(guide.audioUrl,range.start,range.end,`가이드 · ${range.whole?'전체':segment.label}`);});
+listen($('repeat-region'),'click',repeatSelectedRegion);
+listen($('next-sentence-result'),'click',()=>chooseSentence(scriptIndex+1));
+listen($('leave-region'),'click',leaveRegion);
+listen($('reset'),'click',selectGuide);
+listen($('retry'),'click',()=>{stopPlayback();pager?.goTo(1);$('record').focus({preventScroll:true});setText('practice-status','같은 예시로 다시 연습해 보세요. 새 녹음의 분석에 성공하면 결과를 바꿔 드려요.');});
+for(const button of document.querySelectorAll('[data-practice-tab]'))listen(button,'click',()=>{practiceTab=button.dataset.practiceTab;paintPractice();refresh();});
+for(const button of document.querySelectorAll('[data-result-tab]'))listen(button,'click',()=>{
   resultTab=button.dataset.resultTab;stopPlayback();renderResult();
 });
-for(const [id,delta] of [['reading-prev',-1],['reading-next',1]])$(id).addEventListener('click',()=>{chooseSentence(scriptIndex+delta);if(guide.analysis)pager?.goTo(1);else showPreparation('build');});
-$('change-mode').addEventListener('click',()=>{if(isBusy())return;stopPlayback();stopPreview();$('practice-workflow').hidden=true;$('mode-choice').hidden=false;$('mode-choice-heading').focus({preventScroll:true});});
-for(const view of ['edit','build','preview'])$('prepare-'+view).addEventListener('click',()=>showPreparation(view));
-for(const button of document.querySelectorAll('[data-mode]'))button.addEventListener('click',()=>switchMode(button.dataset.mode));
-$('generate-guide').addEventListener('click',()=>makeScriptGuide());
-$('regenerate-guide').addEventListener('click',()=>makeScriptGuide({replaceSelected:true}));
-$('cancel-guide').addEventListener('click',cancelScriptGuide);
-$('script-input').addEventListener('input',()=>{setText('script-count',`${Array.from($('script-input').value).length.toLocaleString()} / 2,000자`);refresh();});
-$('apply-script').addEventListener('click',applyScript);
-$('script-sentence-select').addEventListener('change',()=>chooseSentence(Number($('script-sentence-select').value)));
-$('sentence-prev').addEventListener('click',()=>chooseSentence(scriptIndex-1));$('sentence-next').addEventListener('click',()=>chooseSentence(scriptIndex+1));
-$('reference-file').addEventListener('change',event=>{const file=event.target.files[0];if(file)loadReference(file);event.target.value='';});
-$('remove-reference').addEventListener('click',()=>{const ref=scriptReferences.get(scriptIndex);if(!ref||isBusy()||draftPending())return;URL.revokeObjectURL(ref.audioUrl);scriptReferences.delete(scriptIndex);guideFailures.delete(scriptIndex);guideNotice='';selectGuide();updateScriptStatus();});
-window.speechSynthesis?.addEventListener('voiceschanged',refresh);
-function cancelRecording(){scriptTracking.stop();const run=guideBatch;guideBatch=null;generation++;run?.controller.abort();cancelGuide();if(session){const s=session;s.cancelled=true;session=null;if(s.recorder&&s.recorder.state!=='inactive')s.recorder.stop();releaseSession(s);}state='idle';stopPreview();stopPlayback();if(run){guideNotice=`가이드 준비를 멈췄어요. 준비된 ${scriptReferences.size}개는 그대로 보관했어요.`;syncScriptReference();}paintStoredRecording();renderResult();refresh();}
-// The Flutter host calls this synchronously before removing the same-origin
-// frame. A queued postMessage alone can be lost during immediate disposal.
-window.voiceMateProsodyCleanup=cancelRecording;
-window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===window.parent&&event.data?.type==='voicemate:prosody:cleanup')cancelRecording();});
-window.addEventListener('pagehide',()=>{cancelRecording();clearClip();for(const ref of scriptReferences.values())URL.revokeObjectURL(ref.audioUrl);scriptReferences.clear();});
-window.addEventListener('pageshow',event=>{if(event.persisted){selectGuide();updateScriptStatus();}});
-window.addEventListener('resize',()=>{paintPractice();renderResult();});
-document.addEventListener('visibilitychange',()=>{if(document.hidden)scriptTracking.stop();if(document.hidden&&!isBusy()){stopPreview();stopPlayback();paintStoredRecording();}if(document.hidden&&isBusy()){const generating=state==='generating';cancelRecording();setText(generating?'generation-status':'practice-status',generating?'화면을 벗어나 가이드 생성을 중지했어요. 다시 시도해 주세요.':'화면을 벗어나 녹음을 중지했어요. 다시 시작해 주세요.');}});
-if(new URLSearchParams(location.search).get('embedded')==='1'){
-  document.body.classList.add('embedded');
-}
+for(const [id,delta] of [['reading-prev',-1],['reading-next',1]])listen($(id),'click',()=>{chooseSentence(scriptIndex+delta);if(guide.analysis)pager?.goTo(1);else showPreparation('build');});
+listen($('change-mode'),'click',()=>{if(isBusy())return;stopPlayback();stopPreview();$('practice-workflow').hidden=true;$('mode-choice').hidden=false;$('mode-choice-heading').focus({preventScroll:true});});
+for(const view of ['edit','build','preview'])listen($('prepare-'+view),'click',()=>showPreparation(view));
+for(const button of document.querySelectorAll('[data-mode]'))listen(button,'click',()=>switchMode(button.dataset.mode));
+listen($('generate-guide'),'click',()=>makeScriptGuide());
+listen($('regenerate-guide'),'click',()=>makeScriptGuide({replaceSelected:true}));
+listen($('cancel-guide'),'click',cancelScriptGuide);
+listen($('script-input'),'input',()=>{setText('script-count',`${Array.from($('script-input').value).length.toLocaleString()} / 2,000자`);refresh();});
+listen($('apply-script'),'click',applyScript);
+listen($('script-sentence-select'),'change',()=>chooseSentence(Number($('script-sentence-select').value)));
+listen($('sentence-prev'),'click',()=>chooseSentence(scriptIndex-1));listen($('sentence-next'),'click',()=>chooseSentence(scriptIndex+1));
+listen($('reference-file'),'change',event=>{const file=event.target.files[0];if(file)loadReference(file);event.target.value='';});
+listen($('remove-reference'),'click',()=>{const ref=scriptReferences.get(scriptIndex);if(!ref||isBusy()||draftPending())return;URL.revokeObjectURL(ref.audioUrl);scriptReferences.delete(scriptIndex);guideFailures.delete(scriptIndex);guideNotice='';selectGuide();updateScriptStatus();});
+listen(window.speechSynthesis,'voiceschanged',refresh);
+listen(window,'pagehide',pageHide);
+listen(window,'pageshow',pageShow);
+listen(window,'resize',resize);
+listen(document,'visibilitychange',visibilityChanged);
+if(embedded)document.body.classList.add('embedded');
 if(document.body)document.body.dataset.currentFlow='0';
 pager=createFlowPager({
   pages:[$('flow-prepare'),$('flow-record'),$('flow-results')],
@@ -657,6 +682,13 @@ pager=createFlowPager({
   previousButton:$('flow-previous'),nextButton:$('flow-next'),positionLabel:$('flow-position'),gestureTarget:$('flow-deck'),
   canEnter:index=>index===0||(index===1&&Boolean(guide.analysis)&&!draftPending())||(index===2&&Boolean(result)),
   canMove:()=>!isBusy(),
-  onChanged:index=>{if(document.body)document.body.dataset.currentFlow=String(index);if(document.activeElement?.closest('.flow-page'))document.activeElement.blur();stopPlayback();stopPreview();paintPractice();renderResult();$('flow-deck').scrollIntoView({block:'start'});},
+  onChanged:index=>{if(document.body)document.body.dataset.currentFlow=String(index);if(document.activeElement?.closest('.flow-page'))document.activeElement.blur();stopPlayback();stopPreview();paintPractice();renderResult();$(['flow-prepare','flow-record','flow-results'][index]).scrollTop=0;},
 });
 selectGuide();
+
+return {pause:cancelRecording,dispose,resize};
+} catch(error) {
+  try { dispose(); } catch {}
+  throw error;
+}
+}

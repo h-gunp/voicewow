@@ -23,7 +23,7 @@ test('web keeps compact mode rows, accessible mobile toolbar and flow layout con
   assert.match(css, /grid-template-columns:48px minmax\(0,1fr\) 24px/);
   assert.match(css, /\.practice-toolbar #change-mode\s*\{[^}]*width: 44px;[^}]*min-height: 44px/);
   assert.match(css, /\.mode-back-label\s*\{[^}]*clip-path: inset\(50%\)/);
-  assert.match(css, /\.embedded main.shell\{height:100dvh/);
+  assert.match(css, /\.embedded main.shell\{height:var\(--surface-height,100dvh\)/);
   assert.match(css, /\.embedded \.flow-deck\{flex:1;min-height:0;height:auto/);
   for (const feature of ['prefers-reduced-motion','prefers-contrast','forced-colors',':focus-visible']) assert.ok(css.includes(feature), feature);
 });

@@ -15,6 +15,7 @@
     try {
       await import('./audio/capture-bridge.mjs');
       await import('./pronunciation/bridge.mjs');
+      await import('./prosody/bridge.mjs');
       const bootstrap=document.createElement('script');
       bootstrap.src='flutter_bootstrap.js';
       document.body.append(bootstrap);

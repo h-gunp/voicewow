@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import '../practice_feedback.dart';
 import '../practice_session.dart';
 import '../widgets/prosody_chart.dart';
-import 'prosody_web_frame.dart';
+import 'prosody_web_surface.dart';
 
 enum ProsodyStep { prepare, record, result }
 
@@ -666,7 +666,7 @@ class _ProsodyScreenState extends State<ProsodyScreen>
   @override
   Widget build(BuildContext context) {
     if (kIsWeb) {
-      return ProsodyWebFrame(
+      return ProsodyWebSurface(
         onExit: widget.onExit,
         suspended: widget.suspended,
       );

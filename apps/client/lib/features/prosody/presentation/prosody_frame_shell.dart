@@ -21,7 +21,7 @@ class ProsodyFrameShell extends StatelessWidget {
   Widget build(BuildContext context) => Stack(
     fit: StackFit.expand,
     children: [
-      // Platform views must paint once to attach their DOM and load the iframe.
+      // Platform views must paint once to attach their DOM and finish loading.
       ExcludeSemantics(
         excluding: !ready,
         child: IgnorePointer(ignoring: !ready, child: frame),

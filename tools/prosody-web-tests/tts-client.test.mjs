@@ -14,8 +14,9 @@ async function fixture() {
   }
   globalThis.Worker = MockWorker;
   globalThis.isSecureContext = true;
-  const client = await import(`../../apps/client/web/prosody/tts-client.js?test=${++sequence}`);
-  return { client, workers, restore() {
+  const { createTtsClient } = await import(`../../apps/client/web/prosody/tts-client.js?test=${++sequence}`);
+  const client = createTtsClient();
+  return { client, createTtsClient, workers, restore() {
     client.cancelGuide();
     for (const [key, value] of Object.entries(original)) {
       if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
@@ -43,6 +44,26 @@ test('TTS is lazy, returns real samples and reuses an initialized worker', async
     assert.equal(worker.messages[1].text, '다른 문장입니다.');
     worker.complete(); await second;
   } finally { restore(); }
+});
+
+test('separate sessions own their worker and old cleanup cannot cancel the new session', async () => {
+  const { client, createTtsClient, workers, restore } = await fixture();
+  const next = createTtsClient();
+  try {
+    const oldRequest = client.generateGuide('기존 문장.');
+    const rejected = assert.rejects(oldRequest, error => error.name === 'AbortError');
+    const newRequest = next.generateGuide('새 문장.');
+    assert.equal(workers.length, 2);
+    client.cancelGuide();
+    await rejected;
+    assert.equal(workers[0].terminated, true);
+    assert.equal(workers[1].terminated, false);
+    workers[0].complete();
+    client.cancelGuide();
+    assert.equal(workers[1].terminated, false);
+    workers[1].complete();
+    assert.equal((await newRequest).sampleRate, 16000);
+  } finally { next.cancelGuide(); restore(); }
 });
 
 test('cancel stops worker work, rejects pending request and ignores a late result', async () => {
