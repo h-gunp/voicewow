@@ -91,6 +91,21 @@ void main() {
     expect(audio.disposed, isTrue);
   });
 
+  test('paired diagnostic arguments exist only in an opted-in build', () async {
+    const enabled = bool.fromEnvironment('VOICEMATE_LOCAL_AUDIO_DIAGNOSTICS');
+    final audio = _Audio()..diagnostics = Uint8List.fromList([1, 2, 3, 4]);
+    final recorder = NativePronunciationRecorder(audio: audio);
+    await recorder.prepare();
+    await recorder.start(onLimit: () {}, onError: (_) {});
+    await recorder.finish();
+    final args =
+        calls.singleWhere((call) => call.method == 'recognize').arguments
+            as Map;
+    expect(args['diagnosticRawPcm48'], enabled ? audio.diagnostics : isNull);
+    expect(args['diagnosticSpeech'], enabled ? [1] : isNull);
+    await recorder.dispose();
+  });
+
   test('voice activity deduplicates states and drops stale samples', () async {
     final audio = _Audio();
     final recorder = NativePronunciationRecorder(audio: audio);
@@ -232,6 +247,7 @@ class _Audio extends DeviceAudioService {
   Completer<void>? playback;
   Completer<void>? starting;
   String? activity;
+  Uint8List? diagnostics;
   void Function(List<double>)? samplesCallback;
   @override
   String? get recentVoiceActivity => activity;
@@ -256,6 +272,8 @@ class _Audio extends DeviceAudioService {
     sampleRate: 16000,
     path: 'memory.wav',
     bytes: Uint8List(0),
+    diagnosticsPcm48: diagnostics,
+    speechFrames: const [1],
   );
   @override
   Future<void> cancel() async {}

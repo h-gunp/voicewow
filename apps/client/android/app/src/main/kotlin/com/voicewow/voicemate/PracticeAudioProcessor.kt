@@ -6,8 +6,9 @@ import kotlin.math.sin
 
 internal data class PracticeAudioChunk(val samples: FloatArray, val speech: IntArray)
 
-/** Continuous 48 kHz PCM16 input, delayed RNNoise frames, then 16 kHz output. */
-internal class PracticeAudioProcessor(private val denoise: (ShortArray) -> FloatArray) {
+/** Continuous 48 kHz PCM16 input, optional RNNoise, then 16 kHz output. */
+internal class PracticeAudioProcessor(private val noiseReductionEnabled: Boolean = true,
+    private val denoise: (ShortArray) -> FloatArray) {
     private val frame = ShortArray(480)
     private val resampler = PracticeDownsampler()
     private var filled = 0
@@ -59,7 +60,7 @@ internal class PracticeAudioProcessor(private val denoise: (ShortArray) -> Float
             frame.fill(0, filled)
             processFrame(filled, output, speech)
         }
-        if (primed) {
+        if (noiseReductionEnabled && primed) {
             frame.fill(0)
             processFrame(0, output, speech)
         }
@@ -71,16 +72,17 @@ internal class PracticeAudioProcessor(private val denoise: (ShortArray) -> Float
 
     private fun processFrame(valid: Int, output: MutableList<Float>, speech: MutableList<Int>) {
         val processed = denoise(frame)
-        if (!primed) {
+        if (noiseReductionEnabled && !primed) {
             check(processed.isEmpty()) { "RNNoise priming frame must not be emitted" }
             primed = true
         } else {
             check(processed.size == 481 && processed.all { it.isFinite() })
             val decision = processed[0].toInt()
             check(decision in 0..2 && processed[0] == decision.toFloat())
-            if (pendingValid > 0) {
+            val validOutput = if (noiseReductionEnabled) pendingValid else valid
+            if (validOutput > 0) {
                 speech.add(decision)
-                for (index in 1..pendingValid) resampler.add(processed[index], output)
+                for (index in 1..validOutput) resampler.add(processed[index], output)
             }
         }
         pendingValid = valid

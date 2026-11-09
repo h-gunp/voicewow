@@ -6,7 +6,7 @@ class ProcessedAudioChunk {
   final List<int> speech;
 }
 
-/// One independent RNNoise/VAD state. Cancellation never reuses its native id.
+/// One independent audio/VAD state. Cancellation never reuses its native id.
 class NativePracticeAudioSession {
   static const _channel = MethodChannel('voicemate/practice_audio');
   static int _nextId = 0;
@@ -28,9 +28,12 @@ class NativePracticeAudioSession {
     ),
   );
 
-  Future<void> create() async {
+  Future<void> create({bool noiseReductionEnabled = true}) async {
     final result = await _bounded(
-      _channel.invokeMapMethod<Object?, Object?>('create', {'session': _id}),
+      _channel.invokeMapMethod<Object?, Object?>('create', {
+        'session': _id,
+        'noiseReductionEnabled': noiseReductionEnabled,
+      }),
     );
     if (result?['inputSampleRate'] != 48000 || result?['sampleRate'] != 16000) {
       throw StateError('Unexpected practice audio format');

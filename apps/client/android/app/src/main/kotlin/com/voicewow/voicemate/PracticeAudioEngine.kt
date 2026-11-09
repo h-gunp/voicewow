@@ -8,7 +8,7 @@ import java.util.concurrent.Executors
 
 internal object NativePracticeAudio {
     init { System.loadLibrary("voicemate_audio") }
-    external fun create(): Long
+    external fun create(noiseReductionEnabled: Boolean): Long
     external fun process(handle: Long, pcm: ShortArray): FloatArray
     external fun destroy(handle: Long)
 }
@@ -19,8 +19,8 @@ class PracticeAudioEngine(private val channel: MethodChannel) : MethodChannel.Me
     private val worker = Executors.newSingleThreadExecutor()
     private val sessions = mutableMapOf<Long, Session>()
     @Volatile private var closed = false
-    private class Session(val handle: Long) {
-        val processor = PracticeAudioProcessor { NativePracticeAudio.process(handle, it) }
+    private class Session(val handle: Long, noiseReductionEnabled: Boolean) {
+        val processor = PracticeAudioProcessor(noiseReductionEnabled) { NativePracticeAudio.process(handle, it) }
         var nextSequence = 0
     }
 
@@ -40,9 +40,11 @@ class PracticeAudioEngine(private val channel: MethodChannel) : MethodChannel.Me
                 val response: Any? = when (call.method) {
                     "create" -> {
                         require(!sessions.containsKey(id))
-                        val handle = NativePracticeAudio.create()
+                        val noiseReductionEnabled = arguments?.get("noiseReductionEnabled") ?: true
+                        require(noiseReductionEnabled is Boolean)
+                        val handle = NativePracticeAudio.create(noiseReductionEnabled)
                         check(handle != 0L)
-                        sessions[id] = Session(handle)
+                        sessions[id] = Session(handle, noiseReductionEnabled)
                         mapOf("inputSampleRate" to 48000, "sampleRate" to 16000)
                     }
                     "process" -> {

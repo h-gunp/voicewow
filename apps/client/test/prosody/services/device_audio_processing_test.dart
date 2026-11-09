@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:record/record.dart';
+import 'package:voicemate/features/pronunciation/data/pronunciation_recorder_native.dart';
 import 'package:voicemate/features/prosody/audio/wav.dart';
 import 'package:voicemate/features/prosody/services/device_audio.dart';
 import 'package:voicemate/features/prosody/services/practice_audio_processor.dart';
@@ -47,6 +48,7 @@ void main() {
       final live = <double>[];
       processor.release = Completer<void>();
       await service.start(onSamples: live.addAll);
+      expect(processor.noiseReductionSelections, [true]);
       expect(capture.config!.sampleRate, 48000);
       expect(
         capture.config!.androidConfig.audioSource,
@@ -82,6 +84,43 @@ void main() {
   );
 
   test(
+    'pronunciation alone disables suppression and retains PCM and VAD',
+    () async {
+      const pronunciation = MethodChannel('voicemate/pronunciation');
+      Float32List? recognized;
+      messenger.setMockMethodCallHandler(pronunciation, (call) async {
+        if (call.method == 'recognize') {
+          recognized = (call.arguments as Map)['samples'] as Float32List;
+          return ['a'];
+        }
+        return null;
+      });
+      final recorder = NativePronunciationRecorder();
+      addTearDown(() async {
+        await recorder.dispose();
+        messenger.setMockMethodCallHandler(pronunciation, null);
+      });
+      final activities = <String>[];
+      await recorder.prepare();
+      await recorder.start(
+        onLimit: () {},
+        onError: (_) {},
+        onVoiceActivity: activities.add,
+      );
+      expect(processor.noiseReductionSelections, [false]);
+      capture.emit(9600);
+      await Future<void>.delayed(Duration.zero);
+      expect(activities, ['speech']);
+      expect(await recorder.finish(), ['A']);
+      expect(recognized, Float32List.fromList(List<double>.filled(3200, .125)));
+      expect(processor.flags, 20);
+      expect(capture.config!.autoGain, isFalse);
+      expect(capture.config!.echoCancel, isFalse);
+      expect(capture.config!.noiseSuppress, isFalse);
+    },
+  );
+
+  test(
     'VAD non-speech alone never removes a weak consonant recording',
     () async {
       processor.decision = 0;
@@ -92,6 +131,36 @@ void main() {
       expect(result.samples.length, 160);
       expect(result.speechFrames, [0]);
       expect(service.recentVoiceActivity, 'nonSpeech');
+    },
+  );
+
+  test(
+    'local diagnostics are opt-in and keep only accepted current raw bytes',
+    () async {
+      const enabled = bool.fromEnvironment('VOICEMATE_LOCAL_AUDIO_DIAGNOSTICS');
+      await service.start(onSamples: (_) {});
+      final expected = Uint8List.fromList(
+        List<int>.generate(1440 * 2, (i) => i.isEven ? 0 : 96),
+      );
+      for (final chunk in [
+        expected.sublist(0, 7),
+        expected.sublist(7, 1008),
+        expected.sublist(1008),
+      ]) {
+        capture.stream!.add(Uint8List.fromList(chunk));
+      }
+      final first = await service.stop();
+      expect(first.diagnosticsPcm48, enabled ? expected : isNull);
+      await service.start(onSamples: (_) {});
+      capture.emit(960);
+      await service.cancel();
+      await service.start(onSamples: (_) {});
+      capture.emit(480);
+      final next = await service.stop();
+      expect(
+        next.diagnosticsPcm48,
+        enabled ? expected.sublist(0, 960) : isNull,
+      );
     },
   );
 
@@ -240,29 +309,39 @@ class _Capture extends RecordPlatform {
 
 class _Processor {
   final methods = <String>[], createdIds = <int>[];
+  final noiseReductionSelections = <bool?>[];
+  bool noiseReductionEnabled = true;
   final started = Completer<void>();
   Completer<void>? release;
-  int input = 0, output = 0, flags = 0, decision = 1;
+  int input = 0, output = 0, flags = 0, decision = 1, capturedBytes = 0;
   double variance = .01;
   Future<Object?> handle(MethodCall call) async {
     methods.add(call.method);
     final args = call.arguments as Map;
     if (call.method == 'create') {
       createdIds.add(args['session'] as int);
-      input = output = flags = 0;
+      noiseReductionSelections.add(args['noiseReductionEnabled'] as bool?);
+      noiseReductionEnabled = args['noiseReductionEnabled'] as bool? ?? true;
+      input = output = flags = capturedBytes = 0;
       return {'inputSampleRate': 48000, 'sampleRate': 16000};
     }
     if (call.method == 'cancel') return null;
     if (call.method == 'process') {
       if (!started.isCompleted) started.complete();
       await release?.future;
-      input += (args['pcm'] as Uint8List).length ~/ 2;
+      capturedBytes += (args['pcm'] as Uint8List).length;
+      input = capturedBytes ~/ 2;
     }
     final finished = call.method == 'finish';
     final readyFrames = finished
         ? (input + 479) ~/ 480
-        : (input ~/ 480 - 1).clamp(0, 2000);
-    final nextOutput = finished ? (input + 2) ~/ 3 : readyFrames * 160;
+        : (input ~/ 480 - (noiseReductionEnabled ? 1 : 0)).clamp(0, 2000);
+    final nextOutput = finished
+        ? (input + 2) ~/ 3
+        : (readyFrames * 160 - (noiseReductionEnabled ? 0 : 10)).clamp(
+            0,
+            320000,
+          );
     final samples = Float32List.fromList(
       List<double>.filled(nextOutput - output, .125),
     );

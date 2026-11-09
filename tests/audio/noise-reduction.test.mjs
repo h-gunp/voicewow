@@ -73,6 +73,24 @@ test('processed capture requires VAD and forwards duration without changing the 
   assert.equal(await pending, h.nodes[0]);
 });
 
+test('pronunciation raw capture loads VAD without requesting RNNoise', async t => {
+  const h = harness(t);
+  h.replace('fetch', async (url, options) => {
+    h.requests.push({url, options});
+    return {ok: true, arrayBuffer: async () => new ArrayBuffer(4)};
+  });
+  const abort = new AbortController();
+  t.after(() => abort.abort());
+  const pending = createProcessedCaptureNode(h.context, abort.signal, 10, false);
+  pending.catch(() => {});
+  await settle();
+  assert.deepEqual(h.requests.map(request => new URL(request.url).pathname.split('/vendor/')[1]), ['libfvad/libfvad.wasm']);
+  assert.equal(h.nodes[0].options.processorOptions.noiseReductionEnabled, false);
+  assert.equal(h.nodes[0].options.processorOptions.wasmBinary, null);
+  h.nodes[0].port.onmessage({data: {type: 'ready', vadStatus: 'ready'}});
+  assert.equal(await pending, h.nodes[0]);
+});
+
 test('processed capture rejects VAD download failure instead of disabling speech classification', async t => {
   const h = harness(t); let calls = 0;
   h.replace('fetch', async () => ({ok: ++calls !== 2, arrayBuffer: async () => new ArrayBuffer(4)}));

@@ -79,4 +79,40 @@ class PracticeAudioProcessorTest {
         assertTrue(rms(2000.0) > .3)
         assertTrue(rms(12000.0) < .005)
     }
+
+    @Test fun rawPronunciationHasImmediateVADAndNoPrimingOrDrainFrame() {
+        var calls = 0
+        val engine = PracticeAudioProcessor(noiseReductionEnabled = false) { frame ->
+            calls++
+            FloatArray(481) { index -> if (index == 0) 0f else frame[index - 1] / 32768f }
+        }
+        val first = engine.add(bytes(ShortArray(480) { 12000 }))
+        assertEquals(150, first.samples.size)
+        assertArrayEquals(intArrayOf(0), first.speech)
+        assertTrue(first.samples.any { it > .3f })
+        val tail = engine.finish()
+        assertEquals(10, tail.samples.size)
+        assertArrayEquals(intArrayOf(), tail.speech)
+        assertEquals(1, calls)
+        assertEquals(160, engine.outputSamples)
+    }
+
+    @Test fun rawPronunciationOddChunksAndPartialTailMatchTheSameDryFir() {
+        val pcm = bytes(ShortArray(1433) { (sin(it * .07) * 20000).toInt().toShort() })
+        var calls = 0
+        val raw = PracticeAudioProcessor(noiseReductionEnabled = false) { frame ->
+            calls++
+            FloatArray(481) { index -> if (index == 0) 1f else frame[index - 1] / 32768f }
+        }
+        val actual = mutableListOf<Float>()
+        for (start in pcm.indices step 317) {
+            actual.addAll(raw.add(pcm.copyOfRange(start, minOf(start + 317, pcm.size))).samples.toList())
+        }
+        actual.addAll(raw.finish().samples.toList())
+        val delayedDry = processor()
+        val expected = delayedDry.add(pcm).samples.toList() + delayedDry.finish().samples.toList()
+        assertArrayEquals(expected.toFloatArray(), actual.toFloatArray(), 0f)
+        assertEquals(478, actual.size)
+        assertEquals(3, calls)
+    }
 }

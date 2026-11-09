@@ -3,9 +3,40 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import * as reducers from '../../apps/client/web/audio/noise-reducer.mjs';
 import createEngine from '../../apps/client/web/audio/vendor/rnnoise/rnnoise.mjs';
+import {createCaptureProcessor} from '../../apps/client/web/audio/capture-processor.mjs';
 
 const wasmBinary = await readFile(new URL('../../apps/client/web/audio/vendor/rnnoise/rnnoise.wasm', import.meta.url));
 const flatten = frames => Float32Array.from(frames.flatMap(frame => [...frame.samples]));
+
+test('raw capture preserves frame-boundary tails, pauses and weak samples without RNNoise initialization', async () => {
+  for (const length of [1, 479, 480, 481, 959, 960, 14437]) {
+    const input = Float32Array.from({length}, (_, i) => i % 2000 < 1000 ? 0 : .0001 * Math.sin(i));
+    let decisions = 0, disposals = 0;
+    const processor = await createCaptureProcessor(new Uint8Array([0]), {
+      process(frame) { assert.equal(frame.length, 480); decisions++; return false; },
+      dispose() { disposals++; },
+    }, 48000, false);
+    const frames = [];
+    for (let offset = 0; offset < input.length; offset += 128) frames.push(...processor.push(input.subarray(offset, offset + 128)));
+    frames.push(...processor.finish());
+    assert.deepEqual(flatten(frames), input);
+    assert.equal(decisions, Math.ceil(length / 480));
+    assert.ok(frames.every(frame => frame.speech === 'nonSpeech'));
+    assert.deepEqual(processor.finish(), []);
+    assert.throws(() => processor.push(input), /finished/);
+    processor.dispose(); processor.dispose();
+    assert.equal(disposals, 1);
+  }
+});
+
+test('raw capture rejects invalid rates, samples and VAD results', async () => {
+  await assert.rejects(createCaptureProcessor(null, {}, 44100, false), /48000/);
+  const processor = await createCaptureProcessor(null, {process: () => 1, dispose() {}}, 48000, false);
+  try {
+    assert.throws(() => processor.push(Float32Array.of(NaN)), /finite/);
+    assert.throws(() => processor.push(new Float32Array(480)), /VAD/);
+  } finally { processor.dispose(); }
+});
 
 async function expected(input) {
   const engine = await createEngine({ wasmBinary });

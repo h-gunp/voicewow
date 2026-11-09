@@ -51,8 +51,12 @@ Java_com_voicewow_voicemate_NativeNoiseMeter_destroy(JNIEnv *env, jobject object
 }
 
 JNIEXPORT jlong JNICALL
-Java_com_voicewow_voicemate_NativePracticeAudio_create(JNIEnv *env, jobject object) {
-    return Java_com_voicewow_voicemate_NativeNoiseMeter_create(env, object);
+Java_com_voicewow_voicemate_NativePracticeAudio_create(JNIEnv *env, jobject object,
+                                                    jboolean noise_reduction_enabled) {
+    (void)object;
+    VoiceMateNoiseMeter *meter = voicemate_meter_create_with_noise_reduction(noise_reduction_enabled == JNI_TRUE);
+    if (!meter) fail(env, "java/lang/IllegalStateException", "Practice audio initialization failed");
+    return (jlong)(intptr_t)meter;
 }
 
 JNIEXPORT jfloatArray JNICALL

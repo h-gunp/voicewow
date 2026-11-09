@@ -4,6 +4,53 @@
 #include <string.h>
 #include "noise_meter.h"
 #include "rnnoise.h"
+#include "fvad.h"
+
+static void test_raw_pronunciation_pcm(void) {
+    assert(voicemate_meter_create_with_noise_reduction(-1) == NULL);
+    VoiceMateNoiseMeter *meter = voicemate_meter_create_with_noise_reduction(0);
+    Fvad *reference = fvad_new();
+    assert(meter && reference);
+    assert(fvad_set_mode(reference, 2) == 0);
+    assert(fvad_set_sample_rate(reference, 48000) == 0);
+    int16_t pcm[480] = {0};
+    float output[480];
+    VoiceMateAudioFrame frame;
+    int non_speech_with_audio = 0;
+    for (int sequence = 0; sequence < 201; ++sequence) {
+        for (int i = 0; i < 480; ++i) {
+            const int position = sequence * 480 + i;
+            pcm[i] = sequence == 0 ? 0 : sequence > 100
+                ? (int16_t)((int)(((uint32_t)position * 1103515245u + 12345u) >> 24) - 128)
+                : (int16_t)(12000 * sin(position * .037) + 5000 * sin(position * .091));
+        }
+        const int expected_speech = fvad_process(reference, pcm, 480);
+        assert(voicemate_meter_process_pcm(meter, pcm, &frame, output) == 1);
+        assert(frame.sequence == sequence && frame.speech == expected_speech);
+        double energy = 0, peak = 0;
+        for (int i = 0; i < 480; ++i) {
+            assert(output[i] == pcm[i] / 32768.0f);
+            const double value = pcm[i] / 32768.0;
+            energy += value * value;
+            peak = fmax(peak, fabs(value));
+        }
+        assert(fabs(frame.power - energy / 480.0) < 1e-14);
+        assert(fabs(frame.rms - sqrt(energy / 480.0)) < 1e-12);
+        assert(frame.peak == peak && frame.clipped == (peak >= .999));
+        if (frame.speech == 0 && energy > 0) non_speech_with_audio++;
+    }
+    assert(non_speech_with_audio > 0);
+    for (int i = 0; i < 480; ++i) pcm[i] = i % 2 ? -32768 : 32767;
+    assert(voicemate_meter_process_pcm(meter, pcm, &frame, output) == 1);
+    assert(frame.sequence == 201 && frame.clipped == 1 && frame.peak == 1);
+    for (int i = 0; i < 480; ++i) assert(output[i] == pcm[i] / 32768.0f);
+    assert(voicemate_meter_process_pcm(NULL, pcm, &frame, output) == -1);
+    assert(voicemate_meter_process_pcm(meter, NULL, &frame, output) == -1);
+    assert(voicemate_meter_process_pcm(meter, pcm, NULL, output) == -1);
+    assert(voicemate_meter_process_pcm(meter, pcm, &frame, NULL) == 1);
+    voicemate_meter_destroy(meter);
+    fvad_free(reference);
+}
 
 static void test_processed_pcm(void) {
     VoiceMateNoiseMeter *legacy = voicemate_meter_create();
@@ -57,6 +104,7 @@ static void test_processed_pcm(void) {
 }
 
 int main(void) {
+    test_raw_pronunciation_pcm();
     VoiceMateNoiseMeter *meter = voicemate_meter_create();
     assert(meter);
     VoiceMateAudioFrame frame;
@@ -86,6 +134,6 @@ int main(void) {
     voicemate_meter_destroy(meter);
     voicemate_meter_destroy(NULL);
     test_processed_pcm();
-    puts("Native noise meter: silence, delayed input, clipping, reset, PCM parity and ungated tail passed");
+    puts("Native audio: raw pronunciation PCM/VAD parity and default RNNoise delay, clipping, reset and ungated tail passed");
     return 0;
 }

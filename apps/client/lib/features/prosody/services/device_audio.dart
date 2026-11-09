@@ -13,6 +13,10 @@ import '../audio/wav.dart';
 import 'practice_audio_processor.dart';
 import '../../../shared/native_tts_coordinator.dart';
 
+const localAudioDiagnosticsEnabled = bool.fromEnvironment(
+  'VOICEMATE_LOCAL_AUDIO_DIAGNOSTICS',
+);
+
 /// A local device/permission failure, rather than a judgement of speaking skill.
 class DeviceAudioException implements Exception {
   const DeviceAudioException(this.message);
@@ -35,14 +39,16 @@ class RecordedAudio {
     required this.path,
     required this.bytes,
     this.speechFrames,
+    this.diagnosticsPcm48,
   });
   final List<double> samples;
   final int sampleRate;
   final String path;
   final Uint8List bytes;
 
-  /// 10 ms RNNoise/VAD decisions: 0 non-speech, 1 speech, 2 uncertain.
+  /// 10 ms VAD decisions: 0 non-speech, 1 speech, 2 uncertain.
   final List<int>? speechFrames;
+  final Uint8List? diagnosticsPcm48;
 }
 
 /// Android's TTS plugin encodes booleans as strings ("0" / "1"). A voice
@@ -87,6 +93,9 @@ class Pcm16StreamDecoder {
 /// permission, opens the microphone or downloads/sends a script. Recordings and
 /// synthesized examples live in one app-temporary directory, removed on dispose.
 class DeviceAudioService {
+  DeviceAudioService({this.noiseReductionEnabled = true});
+
+  final bool noiseReductionEnabled;
   static const int recordingSampleRate = 16000;
   static const int maxRecordingSeconds = 20;
   static const int _maxSamples = recordingSampleRate * maxRecordingSeconds;
@@ -110,6 +119,7 @@ class DeviceAudioService {
   Completer<void>? _captureDone;
   void Function(List<double>)? _onSamples;
   int _capturedBytes = 0;
+  BytesBuilder? _diagnosticsRaw;
   Future<RecordedAudio>? _stopFuture;
   Future<void>? _cancelFuture;
   Completer<void>? _guideCancelled;
@@ -427,13 +437,16 @@ class DeviceAudioService {
       _samples.clear();
       _speechFrames.clear();
       _capturedBytes = 0;
+      _diagnosticsRaw = localAudioDiagnosticsEnabled
+          ? BytesBuilder(copy: false)
+          : null;
       _captureDone = Completer<void>();
       _processing = Future<void>.value();
       _onSamples = onSamples;
       _recordError = null;
       _stopFuture = null;
       final processor = _processor = NativePracticeAudioSession();
-      await processor.create();
+      await processor.create(noiseReductionEnabled: noiseReductionEnabled);
       if (_disposed || ticket != _recordGeneration) {
         await processor.cancel();
         return;
@@ -501,6 +514,7 @@ class DeviceAudioService {
           }
           final accepted = Uint8List.fromList(bytes.take(remaining).toList());
           _capturedBytes += accepted.length;
+          _diagnosticsRaw?.add(accepted);
           _processing = _processing
               .then((_) async {
                 if (_disposed ||
@@ -514,7 +528,7 @@ class DeviceAudioService {
               .catchError((Object error) {
                 if (_disposed || ticket != _recordGeneration) return;
                 _recordError = error;
-                onError?.call('소음 처리를 마치지 못했어요. 다시 녹음해 주세요.');
+                onError?.call('음성 처리를 마치지 못했어요. 다시 녹음해 주세요.');
                 unawaited(cancel());
               });
           if (_capturedBytes >= _maxCaptureBytes) unawaited(endAtLimit());
@@ -644,6 +658,7 @@ class DeviceAudioService {
       path: path,
       bytes: bytes,
       speechFrames: List<int>.unmodifiable(_speechFrames),
+      diagnosticsPcm48: _diagnosticsRaw?.takeBytes(),
     );
   }
 
@@ -683,6 +698,7 @@ class DeviceAudioService {
     await pendingStart?.catchError((Object _) {});
     await pendingStop?.then<void>((_) {}, onError: (Object _) {});
     _samples.clear();
+    _diagnosticsRaw = null;
     _speechFrames.clear();
     _onSamples = null;
     _stopFuture = null;

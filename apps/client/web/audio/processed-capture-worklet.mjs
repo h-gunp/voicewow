@@ -1,7 +1,7 @@
-import { createNoiseProcessor } from './noise-reducer.mjs';
+import { createCaptureProcessor } from './capture-processor.mjs';
 import { createVoiceActivity } from './voice-activity.mjs';
 
-// Muted output keeps the graph running; continuous clean PCM travels over the port.
+// Muted output keeps the graph running; continuous PCM travels over the port.
 class ProcessedCapture extends AudioWorkletProcessor {
   constructor(options) {
     super();
@@ -11,7 +11,7 @@ class ProcessedCapture extends AudioWorkletProcessor {
     this.hasInput = false;
     this.buffer = new Float32Array(4800);
     this.speech = {speechFrames: 0, nonSpeechFrames: 0, uncertainFrames: 0, totalFrames: 0};
-    const {wasmBinary, vadBinary, maxSeconds = 10} = options.processorOptions;
+    const {wasmBinary, vadBinary, maxSeconds = 10, noiseReductionEnabled = true} = options.processorOptions;
     this.maxFrames = Math.floor(sampleRate * maxSeconds);
     this.port.onmessage = ({data}) => {
       if (data?.type === 'cancel' || data?.type === 'dispose') { this.dispose(); return; }
@@ -19,16 +19,16 @@ class ProcessedCapture extends AudioWorkletProcessor {
       if (data?.type === 'finish') this.finish(false);
       else this.fail('Invalid recording command');
     };
-    this.prepare(wasmBinary, vadBinary);
+    this.prepare(wasmBinary, vadBinary, noiseReductionEnabled);
   }
 
-  async prepare(wasmBinary, vadBinary) {
+  async prepare(wasmBinary, vadBinary, noiseReductionEnabled) {
     let vad;
     try {
       if (sampleRate !== 48000 || !Number.isFinite(this.maxFrames) || this.maxFrames < 1 || this.maxFrames > 960000) throw new Error('Unsupported processed capture settings');
       vad = await createVoiceActivity(vadBinary);
       if (this.stopped) { vad.dispose(); return; }
-      const processor = await createNoiseProcessor(wasmBinary, vad, sampleRate);
+      const processor = await createCaptureProcessor(wasmBinary, vad, sampleRate, noiseReductionEnabled);
       if (this.stopped) { processor.dispose(); return; }
       this.processor = processor;
       this.port.postMessage({type: 'ready', vadStatus: 'ready'});

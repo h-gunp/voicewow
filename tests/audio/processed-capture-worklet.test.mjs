@@ -52,6 +52,35 @@ test('real RNNoise/VAD capture emits continuous clean PCM, metadata and final ta
   assert.equal(capture.process([], [[]]), false);
 });
 
+test('pronunciation bypass emits the first raw frame immediately and preserves every sample with real VAD', async () => {
+  const capture = new Processor({processorOptions: {wasmBinary: new Uint8Array([0]), vadBinary, maxSeconds: 10, noiseReductionEnabled: false}});
+  const initialized = await Promise.race([capture.port.next('ready'), capture.port.next('error')]);
+  assert.equal(initialized.type, 'ready', 'raw capture must not initialize the invalid RNNoise binary');
+  const input = Float32Array.from({length: 12037}, (_, i) => i > 4800 && i < 9600 ? 0 : .1 * Math.sin(i * .17));
+  capture.process([[input.subarray(0, 480)]], [[new Float32Array(480)]]);
+  assert.equal(capture.speech.totalFrames, 1, 'the first frame must not wait for RNNoise priming');
+  for (let i = 480; i < input.length; i += 128) capture.process([[input.subarray(i, i + 128)]], [[new Float32Array(128)]]);
+  capture.port.onmessage({data: {type: 'finish'}});
+  const final = await capture.port.next('finished');
+  const actual = capture.port.messages.filter(message => message.type === 'pcm').flatMap(message => [...message.samples]);
+  assert.deepEqual(actual, [...input]);
+  assert.equal(final.frames, input.length);
+  assert.equal(final.speech.totalFrames, 26);
+  assert.equal(final.speech.uncertainFrames, 0);
+  const vad = await createVoiceActivity(vadBinary);
+  let speechFrames = 0;
+  try {
+    for (let offset = 0; offset < input.length; offset += 480) {
+      const frame = new Float32Array(480);
+      frame.set(input.subarray(offset, offset + 480));
+      if (vad.process(frame)) speechFrames++;
+    }
+  } finally { vad.dispose(); }
+  assert.equal(final.speech.speechFrames, speechFrames);
+  assert.equal(final.speech.nonSpeechFrames, 26 - speechFrames);
+  assert.equal(capture.port.messages.at(-1).type, 'finished');
+});
+
 test('automatic limit flushes a partial RNNoise frame without padding duration or VAD count', async () => {
   const capture = create(961.1 / 48000);
   await capture.port.next('ready');

@@ -80,6 +80,12 @@ internal class PronunciationLease {
         generation++
         return true
     }
+    @Synchronized fun withCurrent(session: Long, ticket: Long, action: () -> Unit): Boolean {
+        if (!current(session, ticket)) return false
+        action()
+        return true
+    }
+    @Synchronized fun retire() { owner = -1; generation++ }
 }
 
 internal fun removeInterruptedModelParts(directory: File) {
@@ -93,7 +99,8 @@ internal fun removeInterruptedModelParts(directory: File) {
     }
 }
 
-class PronunciationEngine(private val cacheRoot: File, private val channel: MethodChannel) :
+class PronunciationEngine(private val cacheRoot: File, private val channel: MethodChannel,
+    private val diagnosticsRoot: File? = null) :
     MethodChannel.MethodCallHandler {
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
@@ -148,6 +155,8 @@ class PronunciationEngine(private val cacheRoot: File, private val channel: Meth
                 pending = operation
                 val samples = arguments["samples"] as? FloatArray
                 val sampleRate = (arguments["sampleRate"] as? Number)?.toInt()
+                val diagnosticRaw = arguments["diagnosticRawPcm48"] as? ByteArray
+                val diagnosticSpeech = arguments["diagnosticSpeech"] as? IntArray
                 worker.execute {
                     try {
                         checkCurrent(operation)
@@ -156,7 +165,7 @@ class PronunciationEngine(private val cacheRoot: File, private val channel: Meth
                             null
                         } else {
                             require(samples != null && sampleRate != null) { "녹음된 소리를 읽지 못했다." }
-                            recognize(samples, sampleRate, operation)
+                            recognize(samples, sampleRate, operation, diagnosticRaw, diagnosticSpeech)
                         }
                         complete(operation, value, null)
                     } catch (error: Exception) {
@@ -248,7 +257,8 @@ class PronunciationEngine(private val cacheRoot: File, private val channel: Meth
         }
     }
 
-    private fun recognize(samples: FloatArray, sampleRate: Int, operation: Pending): List<String> {
+    private fun recognize(samples: FloatArray, sampleRate: Int, operation: Pending,
+        diagnosticRaw: ByteArray?, diagnosticSpeech: IntArray?): List<String> {
         val prepared = PronunciationPcm.prepareSamples(samples, sampleRate)
         val session = checkNotNull(model) { "분석 모델을 먼저 준비해야 한다." }
         val labels = checkNotNull(vocab)
@@ -262,7 +272,18 @@ class PronunciationEngine(private val cacheRoot: File, private val channel: Meth
                 val buffer = tensor.floatBuffer
                 val logits = FloatArray(buffer.remaining())
                 buffer.get(logits)
-                return PronunciationPcm.decode(logits, tensor.info.shape, labels)
+                val phones = PronunciationPcm.decode(logits, tensor.info.shape, labels)
+                val directory = diagnosticsRoot
+                if (diagnosticRaw != null && directory != null) {
+                    // Optional local storage must never change a completed recognition result.
+                    runCatching {
+                        lease.withCurrent(operation.session, operation.ticket) {
+                            if (!closed) LocalAudioDiagnostics(directory).save(diagnosticRaw, prepared, logits,
+                                tensor.info.shape, diagnosticSpeech, labels, phones, REVISION)
+                        }
+                    }
+                }
+                return phones
             }
         }
     }
@@ -340,8 +361,11 @@ class PronunciationEngine(private val cacheRoot: File, private val channel: Meth
     }
 
     fun close() {
-        if (closed) return
-        closed = true
+        synchronized(lease) {
+            if (closed) return
+            closed = true
+            lease.retire()
+        }
         pending?.cancelled()
         pending = null
         connection?.disconnect()

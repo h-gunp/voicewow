@@ -3,7 +3,9 @@ const DELIVERY_TIMEOUT_MS = 3000;
 const FINAL_TIMEOUT_MS = 1000;
 const START_TIMEOUT_MS = 15000;
 const aborted = () => new DOMException('Recording cancelled', 'AbortError');
-const unsupportedRate = () => Object.assign(new Error('이 브라우저에서 48kHz 소음 억제를 시작하지 못했다. 다른 브라우저에서 다시 시도해야 한다.'), {captureReason: 'unsupported_sample_rate'});
+const unsupportedRate = enabled => Object.assign(new Error(enabled
+  ? '이 브라우저에서 48kHz 소음 억제를 시작하지 못했다. 다른 브라우저에서 다시 시도해야 한다.'
+  : '이 브라우저에서 48kHz 녹음을 시작하지 못했다. 다른 브라우저에서 다시 시도해야 한다.'), {captureReason: 'unsupported_sample_rate'});
 const active = session => ['starting', 'recording', 'stopping'].includes(session.phase);
 const stopTracks = stream => { for (const track of stream?.getTracks() || []) track.stop(); };
 const speechKeys = ['speechFrames', 'nonSpeechFrames', 'uncertainFrames'];
@@ -20,11 +22,12 @@ function releaseNode(node) {
 /** A user gesture must call start(). stop() waits for the final PCM acknowledgment.
  * onLimit fires after automatic stop begins; stop() then returns the same result.
  * Startup errors reject start(); later failures also call onError once.
- * PCM is continuous RNNoise output at 48kHz. VAD never crops or gates frames.
+ * PCM is continuous at 48kHz; pronunciation disables RNNoise. VAD never crops or gates frames.
  * onChunk owns a copy that it may mutate/transfer without changing stop()'s result.
  */
-export function createProcessedRecorder({ maxSeconds = 10, onChunk = () => {}, onLimit = () => {}, onError = () => {} } = {}) {
+export function createProcessedRecorder({ maxSeconds = 10, noiseReductionEnabled = true, onChunk = () => {}, onLimit = () => {}, onError = () => {} } = {}) {
   if (!Number.isFinite(maxSeconds) || maxSeconds <= 0 || maxSeconds > 20) throw new RangeError('Capture duration must be at most 20 seconds');
+  if (typeof noiseReductionEnabled !== 'boolean') throw new TypeError('Noise reduction setting must be boolean');
   let current;
 
   function cleanup(session) {
@@ -137,10 +140,10 @@ export function createProcessedRecorder({ maxSeconds = 10, onChunk = () => {}, o
       if (!globalThis.navigator?.mediaDevices?.getUserMedia || typeof Context !== 'function'
         || typeof globalThis.AudioWorkletNode !== 'function') throw new Error('Microphone AudioWorklet capture unavailable');
       try { session.context = new Context({sampleRate: 48000}); }
-      catch (error) { if (error?.name === 'NotSupportedError') throw unsupportedRate(); throw error; }
+      catch (error) { if (error?.name === 'NotSupportedError') throw unsupportedRate(noiseReductionEnabled); throw error; }
       const context = session.context;
       if (!context.audioWorklet) throw new Error('Microphone AudioWorklet capture unavailable');
-      if (context.sampleRate !== 48000) throw unsupportedRate();
+      if (context.sampleRate !== 48000) throw unsupportedRate(noiseReductionEnabled);
       session.maxFrames = Math.floor(context.sampleRate * maxSeconds);
       session.startupTimer = setTimeout(() => fail(session, new Error('Recording initialization timed out')), START_TIMEOUT_MS);
       // Resume and request permission in the start gesture, before awaiting either.
@@ -162,7 +165,7 @@ export function createProcessedRecorder({ maxSeconds = 10, onChunk = () => {}, o
       context.onstatechange = () => {
         if (active(session) && context.state !== 'running') fail(session, new Error('Audio context interrupted'));
       };
-      const prepared = createProcessedCaptureNode(context, session.loading.signal, maxSeconds).then(node => {
+      const prepared = createProcessedCaptureNode(context, session.loading.signal, maxSeconds, noiseReductionEnabled).then(node => {
         // Cancellation can win after loader readiness but before this await resumes.
         if (!active(session)) { releaseNode(node); throw aborted(); }
         session.node = node;

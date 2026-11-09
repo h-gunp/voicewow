@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import vm from 'node:vm';
+import {createCaptureProcessor} from '../../apps/client/web/audio/capture-processor.mjs';
 
 const deferred = () => {
   let resolve, reject;
@@ -14,7 +15,7 @@ async function browser(t, options = {}) {
   const { createRecorder } = await import('./recording.mjs');
   const { createProcessedRecorder } = await import('../../apps/client/web/audio/processed-capture.mjs');
   const workletSource = (await readFile(new URL('../../apps/client/web/audio/processed-capture-worklet.mjs', import.meta.url), 'utf8')).replace(/^import .*;$/gm, '');
-  const nodes = [], contexts = [], requests = [];
+  const nodes = [], contexts = [], requests = [], assetRequests = [];
   class Track extends EventTarget {
     readyState = 'live';
     stop() { this.readyState = 'ended'; }
@@ -67,8 +68,9 @@ async function browser(t, options = {}) {
       const owner = this;
       vm.runInNewContext(workletSource, {
         Float32Array, sampleRate: context.sampleRate,
-        createVoiceActivity: async () => ({ dispose() {} }),
-        createNoiseProcessor: async () => {
+        createVoiceActivity: async () => ({ process: () => (options.decision || 'speech') === 'speech', dispose() {} }),
+        createCaptureProcessor: async (wasmBinary, vad, rate, noiseReductionEnabled) => {
+          if (noiseReductionEnabled === false) return createCaptureProcessor(wasmBinary, vad, rate, false);
           let pending = [], previous;
           const decision = options.decision || 'speech';
           return {
@@ -122,11 +124,11 @@ async function browser(t, options = {}) {
   Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { mediaDevices: {
     getUserMedia: constraints => { requests.push(constraints); return typeof permission === 'function' ? permission() : permission; },
   } } });
-  globalThis.fetch = async () => ({ok: true, arrayBuffer: async () => new ArrayBuffer(4)});
+  globalThis.fetch = async url => { assetRequests.push(url); return {ok: true, arrayBuffer: async () => new ArrayBuffer(4)}; };
   globalThis.AudioContext = Context;
   globalThis.AudioWorkletNode = WorkletNode;
   const errors = [], limits = [];
-  const recorder = (options.maxSeconds ? createProcessedRecorder : createRecorder)({ maxSeconds: options.maxSeconds, onChunk: options.onChunk, onError: error => errors.push(error), onLimit: () => limits.push(true) });
+  const recorder = (options.maxSeconds ? createProcessedRecorder : createRecorder)({ maxSeconds: options.maxSeconds, noiseReductionEnabled: options.noiseReductionEnabled, onChunk: options.onChunk, onError: error => errors.push(error), onLimit: () => limits.push(true) });
   t.after(async () => {
     await recorder.cancel();
     for (const [key, descriptor] of original) {
@@ -134,8 +136,17 @@ async function browser(t, options = {}) {
       else delete globalThis[key];
     }
   });
-  return { recorder, nodes, contexts, requests, stream, track, errors, limits };
+  return { recorder, nodes, contexts, requests, assetRequests, stream, track, errors, limits };
 }
+
+test('pronunciation always bypasses RNNoise while preserving its VAD capture contract', async t => {
+  const b = await browser(t, {noiseReductionEnabled: true});
+  await b.recorder.start();
+  assert.deepEqual(b.assetRequests.map(url => new URL(url).pathname.split('/vendor/')[1]), ['libfvad/libfvad.wasm']);
+  assert.equal(b.nodes[0].settings.processorOptions.noiseReductionEnabled, false);
+  b.nodes[0].feed([Float32Array.of(.125, -.25, .5)]);
+  assert.deepEqual([...(await b.recorder.stop()).samples], [.125, -.25, .5]);
+});
 
 test('only start requests the mic and stop retains the final partial mono PCM', async t => {
   const b = await browser(t);
@@ -424,6 +435,8 @@ test('a browser rejecting the requested 48k context reports the rate-specific re
 test('common capture supports the twenty-second prosody cap', async t => {
   const b = await browser(t, {maxSeconds: 20});
   await b.recorder.start();
+  assert.deepEqual(b.assetRequests.map(url => new URL(url).pathname.split('/vendor/')[1]), ['rnnoise/rnnoise.wasm', 'libfvad/libfvad.wasm']);
+  assert.notEqual(b.nodes[0].settings.processorOptions.noiseReductionEnabled, false);
   b.nodes[0].feed([new Float32Array(960017).fill(.1)]);
   await flush();
   assert.equal((await b.recorder.stop()).samples.length, 960000);

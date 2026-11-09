@@ -17,12 +17,13 @@ export async function createNoiseReductionNode(context, signal) {
   return createNode(context, signal, false);
 }
 
-export async function createProcessedCaptureNode(context, signal, maxSeconds = 10) {
+export async function createProcessedCaptureNode(context, signal, maxSeconds = 10, noiseReductionEnabled = true) {
   if (!Number.isFinite(maxSeconds) || maxSeconds <= 0 || maxSeconds > 20) throw new RangeError('Capture duration must be at most 20 seconds');
-  return createNode(context, signal, true, maxSeconds);
+  if (typeof noiseReductionEnabled !== 'boolean') throw new TypeError('Noise reduction setting must be boolean');
+  return createNode(context, signal, true, maxSeconds, noiseReductionEnabled);
 }
 
-async function createNode(context, signal, capture, maxSeconds) {
+async function createNode(context, signal, capture, maxSeconds, noiseReductionEnabled = true) {
   if (signal?.aborted) throw new DOMException('Noise reduction cancelled', 'AbortError');
   if (context.sampleRate !== 48000) throw failure('unsupported_sample_rate');
   if (typeof globalThis.AudioWorkletNode !== 'function'
@@ -65,14 +66,14 @@ async function createNode(context, signal, capture, maxSeconds) {
         };
         // Independent cold downloads share the initialization deadline.
         const [wasmBinary, vadBinary] = await Promise.all([
-          download('./vendor/rnnoise/rnnoise.wasm'),
+          noiseReductionEnabled ? download('./vendor/rnnoise/rnnoise.wasm') : Promise.resolve(null),
           download('./vendor/libfvad/libfvad.wasm').catch(error => { if (capture) throw error; return null; }),
           Promise.resolve().then(() => context.audioWorklet.addModule(new URL(capture ? './processed-capture-worklet.mjs' : './noise-reduction-worklet.mjs', import.meta.url).href)),
         ]);
         if (finished) return;
         node = new AudioWorkletNode(context, capture ? 'voicemate-processed-capture' : 'voicemate-noise-meter', {
           numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1],
-          processorOptions: {wasmBinary, vadBinary, ...(capture ? {maxSeconds} : {})},
+          processorOptions: {wasmBinary, vadBinary, ...(capture ? {maxSeconds, ...(!noiseReductionEnabled ? {noiseReductionEnabled: false} : {})} : {})},
         });
         if (finished) { dispose(node); return; }
         node.port.onmessage = ({data}) => {

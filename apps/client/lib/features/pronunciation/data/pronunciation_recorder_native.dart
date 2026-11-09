@@ -15,7 +15,7 @@ PronunciationRecorder createPronunciationRecorder() => Platform.isAndroid
 
 class NativePronunciationRecorder implements PronunciationRecorder {
   NativePronunciationRecorder({DeviceAudioService? audio})
-    : _audio = audio ?? DeviceAudioService() {
+    : _audio = audio ?? DeviceAudioService(noiseReductionEnabled: false) {
     if (!_handlerInstalled) {
       _handlerInstalled = true;
       _channel.setMethodCallHandler((call) async {
@@ -154,6 +154,12 @@ class NativePronunciationRecorder implements PronunciationRecorder {
         ..._arguments(ticket),
         'samples': Float32List.fromList(recording.samples),
         'sampleRate': recording.sampleRate,
+        if (localAudioDiagnosticsEnabled &&
+            recording.diagnosticsPcm48 != null) ...{
+          'diagnosticRawPcm48': recording.diagnosticsPcm48,
+          if (recording.speechFrames != null)
+            'diagnosticSpeech': Int32List.fromList(recording.speechFrames!),
+        },
       });
       _check(ticket);
       if (phones == null) throw const DeviceAudioException('분석 결과를 읽지 못했다.');

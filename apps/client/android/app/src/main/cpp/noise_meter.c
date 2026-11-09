@@ -22,11 +22,16 @@ void voicemate_meter_destroy(VoiceMateNoiseMeter *meter) {
 }
 
 VoiceMateNoiseMeter *voicemate_meter_create(void) {
+    return voicemate_meter_create_with_noise_reduction(1);
+}
+
+VoiceMateNoiseMeter *voicemate_meter_create_with_noise_reduction(int enabled) {
+    if (enabled != 0 && enabled != 1) return NULL;
     VoiceMateNoiseMeter *meter = calloc(1, sizeof(*meter));
     if (!meter) return NULL;
-    meter->noise = rnnoise_create(NULL);
+    if (enabled) meter->noise = rnnoise_create(NULL);
     meter->vad = fvad_new();
-    if (!meter->noise || !meter->vad || rnnoise_get_frame_size() != 480 ||
+    if ((enabled && (!meter->noise || rnnoise_get_frame_size() != 480)) || !meter->vad ||
         fvad_set_mode(meter->vad, 2) != 0 ||
         fvad_set_sample_rate(meter->vad, 48000) != 0) {
         voicemate_meter_destroy(meter);
@@ -43,6 +48,24 @@ int voicemate_meter_process(VoiceMateNoiseMeter *meter, const int16_t pcm[480],
 int voicemate_meter_process_pcm(VoiceMateNoiseMeter *meter, const int16_t pcm[480],
                                VoiceMateAudioFrame *result, float clean[480]) {
     if (!meter || !pcm || !result) return -1;
+    if (!meter->noise) {
+        double energy = 0, peak = 0;
+        for (int i = 0; i < 480; ++i) {
+            const double value = pcm[i] / 32768.0;
+            if (clean) clean[i] = (float)value;
+            energy += value * value;
+            peak = fmax(peak, fabs(value));
+        }
+        const int speech = fvad_process(meter->vad, pcm, 480);
+        if (speech != 0 && speech != 1) return -1;
+        result->sequence = (double)meter->sequence++;
+        result->power = energy / 480.0;
+        result->clipped = peak >= .999;
+        result->rms = sqrt(energy / 480.0);
+        result->speech = speech;
+        result->peak = peak;
+        return 1;
+    }
     float input[480], output[480];
     int16_t vad_input[480];
     double energy = 0, peak = 0, processed_energy = 0, processed_peak = 0;
