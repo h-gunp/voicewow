@@ -1,3 +1,4 @@
 apps/client/web/audio/vendor/rnnoise/** -text
 apps/client/web/pronunciation/vendor/** -text
 apps/client/android/app/src/main/cpp/vendor/** -text
+tools/pronunciation-spike/fixtures/ipa-vocab.json -text
