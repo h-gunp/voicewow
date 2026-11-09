@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-enum ComparisonMark { match, different, uncertain }
+enum ComparisonMark { match, similar, different, uncertain }
 
 class PronunciationSpan {
   const PronunciationSpan({required this.text, required this.mark});
@@ -134,14 +134,20 @@ PronunciationComparison comparePronunciation({
   }
   final differences = <String>{};
   for (var index = 0; index < expected.units.length; index++) {
-    if (expectedMarks[index] != ComparisonMark.different) continue;
+    final mark = expectedMarks[index];
+    if (mark != ComparisonMark.different && mark != ComparisonMark.similar)
+      continue;
     final unit = expected.units[index];
     final counterparts = <int>{};
     for (var phone = unit.start; phone < unit.end; phone++) {
       final paired = alignment.expectedPairs[phone];
       if (paired >= 0) counterparts.add(observed.owners[paired]);
     }
-    if (counterparts.isEmpty) {
+    if (mark == ComparisonMark.similar) {
+      differences.add(
+        '기준 ${unit.text} ↔ 인식 ${counterparts.map((i) => observed.units[i].text).join()}: 비슷한 소리',
+      );
+    } else if (counterparts.isEmpty) {
       differences.add('기준 ${unit.text}: 인식에서 누락');
     } else if (counterparts.every(
       (i) => observedMarks[i] != ComparisonMark.uncertain,
@@ -358,6 +364,14 @@ bool _known(String phone) =>
     _codas.containsKey(phone) ||
     _vowels.containsKey(phone);
 
+bool _similar(String left, String right) => const [
+  {'G', 'GG', 'Kh'},
+  {'D', 'DD', 'Th'},
+  {'B', 'BB', 'Ph'},
+  {'S', 'SS'},
+  {'J', 'JJ', 'CHh'},
+].any((group) => group.contains(left) && group.contains(right));
+
 // This mirrors the spike display; reference spelling must never repair the observation.
 _Reading _observe(List<String> phones, Set<String> notes) {
   final reading = _Reading();
@@ -563,6 +577,7 @@ List<ComparisonMark> _marks(
       (() {
         var uncertain = unit.uncertain || unit.start == unit.end;
         var different = false;
+        var similarSubstitutions = 0;
         var unambiguousSubstitution = false;
         var unresolved = unit.unresolved;
         for (var i = unit.start; i < unit.end; i++) {
@@ -587,6 +602,11 @@ List<ComparisonMark> _marks(
               token++
             ) {
               if (otherAmbiguous[token]) unresolved = true;
+              final mapped = otherPairs[token];
+              if (mapped >= 0 &&
+                  reading.units[reading.owners[mapped]].unresolved) {
+                unresolved = true;
+              }
               if (otherPairs[token] < 0 && _known(other.phones[token])) {
                 if (other.wordBoundaryPhones.contains(token)) {
                   uncertain = true;
@@ -601,6 +621,8 @@ List<ComparisonMark> _marks(
               if (reading.wordBoundaryPhones.contains(i) ||
                   other.wordBoundaryPhones.contains(paired)) {
                 uncertain = true;
+              } else if (_similar(label, other.phones[paired])) {
+                similarSubstitutions++;
               } else {
                 different = true;
                 unambiguousSubstitution =
@@ -615,6 +637,9 @@ List<ComparisonMark> _marks(
         if (unambiguousSubstitution) return ComparisonMark.different;
         if (unresolved) return ComparisonMark.uncertain;
         if (different) return ComparisonMark.different;
+        if (similarSubstitutions > 1) return ComparisonMark.different;
+        if (similarSubstitutions == 1 && !uncertain)
+          return ComparisonMark.similar;
         return uncertain ? ComparisonMark.uncertain : ComparisonMark.match;
       })(),
   ];

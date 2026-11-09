@@ -425,6 +425,64 @@ void main() {
   );
 
   testWidgets(
+    'similar consonants use amber without changing the recognized pronunciation',
+    (tester) async {
+      final recorder = FakePronunciationRecorder()
+        ..phones = [
+          'M',
+          'A',
+          'D',
+          'I',
+          't',
+          'GG',
+          'E',
+          'M',
+          'EO',
+          'GG',
+          'EO',
+          'SS',
+          'EO',
+        ];
+      await pumpPractice(tester, recorder);
+      await tap(tester, 'pronunciation-prepare');
+      await tester.pumpAndSettle();
+      await tap(tester, 'pronunciation-mic');
+      await tap(tester, 'pronunciation-mic');
+      await tester.pumpAndSettle();
+      final observed = tester.widget<Text>(
+        find.byKey(const Key('pronunciation-observed')),
+      );
+      final spans = (observed.textSpan! as TextSpan).children!.cast<TextSpan>();
+      expect(spans.map((span) => span.text).join(), '마딛께머꺼써');
+      final similar = spans.singleWhere((span) => span.text == '꺼');
+      expect(similar.style!.color, const Color(0xff8a5a00));
+      expect(similar.style!.decoration, isNull);
+      expect(
+        spans.singleWhere((span) => span.text == '마').style!.color,
+        accent,
+      );
+      final expected = tester.widget<Text>(
+        find.byKey(const Key('pronunciation-expected')),
+      );
+      final expectedSpans = (expected.textSpan! as TextSpan).children!
+          .cast<TextSpan>();
+      expect(
+        expectedSpans.singleWhere((span) => span.text == '거').style!.color,
+        const Color(0xff8a5a00),
+      );
+      await tester.scrollUntilVisible(find.text('≈ 비슷함'), 180);
+      expect(
+        tester.widget<Text>(find.text('≈ 비슷함')).style!.color,
+        const Color(0xff8a5a00),
+      );
+      expect(find.text('… 불확실'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('기준 거 ↔ 인식 꺼: 비슷한 소리'), 180);
+      expect(find.text('기준 거 ↔ 인식 꺼: 비슷한 소리'), findsOneWidget);
+      expect(find.text('기준 거 → 인식 꺼'), findsNothing);
+    },
+  );
+
+  testWidgets(
     'uncertain recognition keeps its gray color and legend without replacing its text',
     (tester) async {
       final recorder = FakePronunciationRecorder()

@@ -6,6 +6,8 @@ import '../data/pronunciation_recorder_contract.dart';
 import '../domain/pronunciation_comparison.dart';
 import 'speech_controls.dart';
 
+const _similarColor = Color(0xff8a5a00);
+
 enum _Phase {
   idle,
   preparing,
@@ -422,6 +424,7 @@ class _PronunciationPracticeViewState extends State<PronunciationPracticeView>
         runSpacing: 8,
         children: [
           Text('● 일치', style: TextStyle(color: accent)),
+          Text('≈ 비슷함', style: TextStyle(color: _similarColor)),
           Text('− 차이', style: TextStyle(color: red)),
           Text('… 불확실', style: TextStyle(color: muted)),
         ],
@@ -475,6 +478,7 @@ class _PronunciationPracticeViewState extends State<PronunciationPracticeView>
             style: TextStyle(
               color: switch (span.mark) {
                 ComparisonMark.match => accent,
+                ComparisonMark.similar => _similarColor,
                 ComparisonMark.different => red,
                 ComparisonMark.uncertain => muted,
               },

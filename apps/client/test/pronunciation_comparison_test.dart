@@ -103,12 +103,12 @@ void main() {
   test(
     'a known consonant difference inside a boundary syllable remains different',
     () {
-      final result = compare('Ph A p G U', ['밥 구']);
+      final result = compare('Kh A p G U', ['밥 구']);
       expect(result.observed.map((span) => span.mark), [
         ComparisonMark.different,
         ComparisonMark.match,
       ]);
-      expect(result.differences, contains('기준 밥 → 인식 팝'));
+      expect(result.differences, contains('기준 밥 → 인식 캅'));
     },
   );
 
@@ -157,7 +157,7 @@ void main() {
   test(
     'an unresolved reference phone does not hide a unique known substitution',
     () {
-      for (final fixture in [('G A', '밟', '가'), ('Ph A', '밟', '파')]) {
+      for (final fixture in [('G A', '밟', '가'), ('Kh A', '밟', '카')]) {
         final result = compare(fixture.$1, [fixture.$2]);
         expect(textOf(result.observed), fixture.$3);
         expect(result.observed.single.mark, ComparisonMark.different);
@@ -173,8 +173,8 @@ void main() {
   test(
     'a unique consonant substitution remains explained beside an unknown phone',
     () {
-      final result = compare('Ph A [UNK] G U', ['밥구']);
-      expect(textOf(result.observed), '파□구');
+      final result = compare('Kh A [UNK] G U', ['밥구']);
+      expect(textOf(result.observed), '카□구');
       expect(result.observed.map((span) => span.mark), [
         ComparisonMark.different,
         ComparisonMark.uncertain,
@@ -317,11 +317,11 @@ void main() {
   });
 
   test(
-    'approximate references still permit experimental known-phone comparison',
+    'approximate references keep a nearby consonant distinct from a full match',
     () {
       final result = compare('G A DD A', ['가다'], approximate: true);
       expect(result.observed.first.mark, ComparisonMark.match);
-      expect(result.observed.last.mark, ComparisonMark.different);
+      expect(result.observed.last.mark, ComparisonMark.similar);
       expect(result.notes.any((note) => note.contains('규칙 기반 참고')), isTrue);
     },
   );
@@ -374,6 +374,68 @@ void main() {
           throwsArgumentError,
         );
       }
+    },
+  );
+  test('one nearby consonant changes to similar without becoming a match', () {
+    const groups = [
+      {'G': '가', 'GG': '까', 'Kh': '카'},
+      {'D': '다', 'DD': '따', 'Th': '타'},
+      {'B': '바', 'BB': '빠', 'Ph': '파'},
+      {'S': '사', 'SS': '싸'},
+      {'J': '자', 'JJ': '짜', 'CHh': '차'},
+    ];
+    for (final group in groups) {
+      for (final observed in group.entries) {
+        for (final expected in group.entries) {
+          if (observed.key == expected.key) continue;
+          final result = compare('${observed.key} A', [expected.value]);
+          expect(textOf(result.observed), observed.value);
+          expect(result.observed.single.mark, ComparisonMark.similar);
+          expect(result.expected.single.mark, ComparisonMark.similar);
+          expect(result.differences.single, contains('비슷한 소리'));
+        }
+      }
+    }
+  });
+
+  test(
+    'different consonant families, vowel changes and missing codas stay different',
+    () {
+      for (final fixture in [
+        ('DD A', '까'),
+        ('DD EO', '써'),
+        ('G U', '가'),
+        ('Ph A', '밥'),
+        ('B A', '밥'),
+        ('Kh A', '나'),
+      ]) {
+        final result = compare(fixture.$1, [fixture.$2]);
+        expect(result.observed.single.mark, ComparisonMark.different);
+        expect(result.expected.single.mark, ComparisonMark.different);
+      }
+    },
+  );
+
+  test(
+    'similarity does not override merged vowels, unknown phones or ambiguous alignment',
+    () {
+      for (final fixture in [
+        ('G E', '께'),
+        ('Ph A', '밟'),
+        ('Ph A [UNK]', '밥'),
+      ]) {
+        final result = compare(fixture.$1, [fixture.$2]);
+        expect(
+          result.observed.any((span) => span.mark == ComparisonMark.similar),
+          isFalse,
+        );
+        expect(result.observed.first.mark, ComparisonMark.uncertain);
+      }
+      final ambiguous = compare('G A G A', ['카가가']);
+      expect(
+        ambiguous.observed.any((span) => span.mark == ComparisonMark.similar),
+        isFalse,
+      );
     },
   );
 }
