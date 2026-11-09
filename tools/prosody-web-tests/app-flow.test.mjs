@@ -55,7 +55,7 @@ async function setup({microphone=false, holdResume=false, holdPermission=false, 
     const key=name.replace(/-([a-z])/g,(_,c)=>c.toUpperCase());
     groups[name]=[...html.matchAll(new RegExp(`data-${name}="([^"]+)"`,'g'))].map(m=>{const e=new Element();e.dataset[key]=m[1];return e;});
   }
-  const practice=new Element(),coverage=new Element(),windowEvents={},documentEvents={},speechEvents={},workers=[],playedAudio=[];
+  const practice=new Element(),coverage=new Element(),windowEvents={},documentEvents={},speechEvents={},workers=[],playedAudio=[],captures=[];
   const add=(events,name,fn)=>(events[name]??=new Set()).add(fn);
   const remove=(events,name,fn)=>events[name]?.delete(fn);
   const dispatch=(events,name,event)=>{for(const fn of events[name]||[])fn(event);};
@@ -92,21 +92,7 @@ async function setup({microphone=false, holdResume=false, holdPermission=false, 
     async play(){this.playedAt=this.currentTime;}
     pause(){this.paused=true;}
   };
-  const FakeRecorder=class {
-    constructor(){this.state='inactive';this.mimeType='application/test-audio';this.listeners={};}
-    addEventListener(name,listener){(this.listeners[name]??=[]).push(listener);}
-  removeEventListener(name,listener){this.listeners[name]=(this.listeners[name]||[]).filter(fn=>fn!==listener);}
-  removeAttribute(name){delete this.attributes[name];}
-    start(){this.state='recording';}
-    stop(){
-      if(this.state==='inactive')return;
-      this.state='inactive';
-      for(const listener of this.listeners.dataavailable||[])listener({data:new Blob([voicePayload().buffer],{type:this.mimeType})});
-      for(const listener of this.listeners.stop||[])listener();
-    }
-  };
-  globalThis.MediaRecorder=FakeRecorder;
-  globalThis.window={innerWidth:1000,MediaRecorder:FakeRecorder,AudioContext:class {
+  globalThis.window={innerWidth:1000,AudioContext:class {
     constructor(){contextOpens++;this.sampleRate=48000;this.state='suspended';}
     async resume(){resumeStarted=true;if(holdResume)await resumeGate;if(rejectResume)throw new Error('resume failed');if(this.state!=='closed')this.state='running';}
     createMediaStreamSource(){return {connect(){},disconnect(){}};}
@@ -121,8 +107,31 @@ async function setup({microphone=false, holdResume=false, holdPermission=false, 
   const el=id=>elements.get(id),button=(group,value)=>groups[group].find(e=>Object.values(e.dataset).includes(value));
   const audio=new Blob([voicePayload().buffer],{type:'application/test-audio'});audio.name='test-reference.wav';
   const {createProsodyApp}=await import('../../apps/client/web/prosody/app.js');
-  const app=createProsodyApp({document,window:globalThis.window,baseUrl:'https://voicemate.test/team/prosody/app.js'});
-  return {el,button,workers,playedAudio,html,app,
+  const createRecorder=options=>{
+    let stopped=false,ownedStream,context,timer,frames=0;
+    const chunks=[],speech={speechFrames:0,nonSpeechFrames:0,uncertainFrames:0,totalFrames:0};
+    function emit(){
+      if(stopped)return;liveReads++;
+      const samples=new Float32Array(4800);
+      for(let i=0;i<samples.length;i++)samples[i]=liveVoice?.2*Math.sin(2*Math.PI*220*(frames+i)/48000):0;
+      speech[liveVoice?'speechFrames':'nonSpeechFrames']+=10;speech.totalFrames+=10;
+      chunks.push(samples);options.onChunk({samples:samples.slice(),sampleRate:48000,startFrame:frames,speech:{...speech}});frames+=samples.length;
+    }
+    function cancel(){stopped=true;clearInterval(timer);ownedStream?.getTracks().forEach(track=>track.stop());void context?.close();}
+    const capture={...options,cancel,
+      async start(){
+        ownedStream=await navigator.mediaDevices.getUserMedia({audio:true});
+        if(stopped){cancel();return;}
+        context=new window.AudioContext();await context.resume();
+        if(stopped)return;
+        timer=setInterval(emit,40);
+      },
+      async stop(){cancel();const samples=new Float32Array(frames);let offset=0;for(const chunk of chunks){samples.set(chunk,offset);offset+=chunk.length;}return {samples,sampleRate:48000,speech:{...speech}};},
+    };
+    captures.push(capture);return capture;
+  };
+  const app=createProsodyApp({document,window:globalThis.window,baseUrl:'https://voicemate.test/team/prosody/app.js',createRecorder});
+  return {el,button,workers,playedAudio,captures,html,app,
     async inputAudio(id,file=audio){el(id).files=[file];await el(id).fire('change');},
     microphoneRequests:()=>microphoneRequests,
     contextOpens:()=>contextOpens,
@@ -239,28 +248,18 @@ test('prepared ASR is terminated on hidden page and late ready cannot revive it'
   }finally{ui.cleanup();}
 });
 
-test('late old PCM failure cannot terminate freshly prepared ASR',async()=>{
+test('a late old capture failure cannot stop freshly prepared ASR',async()=>{
   const ui=await setup({microphone:true}),{el}=ui;
-  const oldContext=globalThis.AudioContext,oldNode=globalThis.AudioWorkletNode;
-  let releaseClose,closing=false;
-  const closeGate=new Promise(resolve=>{releaseClose=resolve;});
-  globalThis.AudioWorkletNode=class{};
-  globalThis.AudioContext=class{
-    constructor(){this.sampleRate=48000;this.audioWorklet={addModule:async()=>{throw Error('old bridge failure');}};}
-    close(){closing=true;return closeGate;}
-  };
   try{
     await ui.prepareScript();await ui.inputAudio('reference-file');await settle(()=>!el('record').disabled);
     el('asr-enabled').checked=true;await el('asr-enabled').fire('change');
     const first=el('prepare-asr').fire('click');await settle(()=>ui.workers.length===1);ui.workers[0].emit({type:'ready'});await first;
-    const recording=el('record').fire('click');await settle(()=>closing);
-    ui.hostCleanup();
+    await el('record').fire('click');const oldCapture=ui.captures[0];ui.hostCleanup();
     const second=el('prepare-asr').fire('click');await settle(()=>ui.workers.length===2);
     const fresh=ui.workers[1];fresh.emit({type:'ready'});await second;
+    oldCapture.onError(Error('late failure'));
     assert.equal(fresh.terminated,false);
-    releaseClose();await recording;
-    assert.equal(fresh.terminated,false,'old capture rejection must not kill the newer recognizer');
-  }finally{releaseClose();ui.cleanup();if(oldContext===undefined)delete globalThis.AudioContext;else globalThis.AudioContext=oldContext;if(oldNode===undefined)delete globalThis.AudioWorkletNode;else globalThis.AudioWorkletNode=oldNode;}
+  }finally{ui.cleanup();}
 });
 
 test('reference practice keeps per-sentence guides and chosen segments without grades',async()=>{
@@ -994,4 +993,29 @@ test('current playback failure reports the audio error',async()=>{
     await new Promise(resolve=>setImmediate(resolve));
     assert.match(ui.el('practice-status').textContent,/소리를 재생하지 못했어요/);
   }finally{ui.cleanup();}
+});
+
+test('unsupported processing rate gives a browser recovery path and releases capture',async()=>{
+  const ui=await setup({microphone:true});
+  try{
+    await ui.el('record').fire('click');
+    ui.captures[0].onError(Object.assign(Error('rate'),{captureReason:'unsupported_sample_rate'}));
+    assert.equal(ui.trackStopped(),true);
+    assert.match(ui.el('practice-status').textContent,/다른 브라우저/);
+    assert.equal(ui.el('record').disabled,false);
+  }finally{ui.cleanup();}
+});
+
+test('cancelling a pending final PCM result cannot replace the next practice session',async()=>{
+  const ui=await setup({microphone:true});let release;
+  try{
+    await ui.el('record').fire('click');await settle(()=>ui.liveReads()>=3);
+    const old=ui.captures[0],stop=old.stop;
+    const gate=new Promise(resolve=>{release=resolve;});
+    old.stop=async()=>{const audio=await stop();await gate;return audio;};
+    const pending=ui.el('record').fire('click');ui.hostCleanup();
+    await ui.el('record').fire('click');release();await pending;
+    assert.equal(ui.el('record').textContent,'■ 녹음 마치기');
+    assert.notEqual(ui.el('result-badge').textContent,'내 녹음');
+  }finally{release?.();ui.cleanup();}
 });

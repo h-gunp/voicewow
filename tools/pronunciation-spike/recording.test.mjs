@@ -12,7 +12,8 @@ const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve()
 
 async function browser(t, options = {}) {
   const { createRecorder } = await import('./recording.mjs');
-  const workletSource = await readFile(new URL('../../apps/client/web/pronunciation/capture-worklet.mjs', import.meta.url), 'utf8');
+  const { createProcessedRecorder } = await import('../../apps/client/web/audio/processed-capture.mjs');
+  const workletSource = (await readFile(new URL('../../apps/client/web/audio/processed-capture-worklet.mjs', import.meta.url), 'utf8')).replace(/^import .*;$/gm, '');
   const nodes = [], contexts = [], requests = [];
   class Track extends EventTarget {
     readyState = 'live';
@@ -28,14 +29,14 @@ async function browser(t, options = {}) {
     disconnect() { this.connected = false; }
   }
   class Context {
-    sampleRate = options.sampleRate || 8000;
+    sampleRate = options.sampleRate || 48000;
     state = 'suspended';
     destination = {};
     audioWorklet = { addModule: async () => {
       if (options.moduleError) throw options.moduleError;
       if (options.moduleWait) await options.moduleWait;
     } };
-    constructor() { contexts.push(this); }
+    constructor(settings) { if (options.contextError) throw options.contextError; this.settings = settings; contexts.push(this); }
     createMediaStreamSource() { this.source = new Connection(); return this.source; }
     createGain() { this.mute = new Connection(); this.mute.gain = { value: 1 }; return this.mute; }
     async resume() {
@@ -66,11 +67,39 @@ async function browser(t, options = {}) {
       const owner = this;
       vm.runInNewContext(workletSource, {
         Float32Array, sampleRate: context.sampleRate,
+        createVoiceActivity: async () => ({ dispose() {} }),
+        createNoiseProcessor: async () => {
+          let pending = [], previous;
+          const decision = options.decision || 'speech';
+          return {
+            push(samples) {
+              const frames = [];
+              for (const sample of samples) {
+                pending.push(sample);
+                if (pending.length === 480) {
+                  if (previous) frames.push({samples: previous, speech: decision});
+                  previous = Float32Array.from(pending); pending = [];
+                }
+              }
+              return frames;
+            },
+            finish() {
+              const frames = [];
+              if (previous) frames.push({samples: previous, speech: decision});
+              if (pending.length) frames.push({samples: Float32Array.from(pending), speech: decision});
+              previous = undefined; pending = []; return frames;
+            },
+            dispose() { previous = undefined; pending = []; },
+          };
+        },
         AudioWorkletProcessor: class {
           constructor() {
             this.port = {
               onmessage: null,
-              postMessage: data => queueMicrotask(() => owner.port.onmessage?.({ data })),
+              postMessage: data => queueMicrotask(() => {
+                owner.port.onmessage?.({ data });
+                if (data.type === 'ready') options.afterReady?.();
+              }),
             };
           }
         },
@@ -89,14 +118,15 @@ async function browser(t, options = {}) {
     }
     emit(data) { this.port.onmessage?.({ data }); }
   }
-  const original = new Map(['navigator', 'AudioContext', 'AudioWorkletNode'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+  const original = new Map(['navigator', 'AudioContext', 'AudioWorkletNode', 'fetch'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
   Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { mediaDevices: {
     getUserMedia: constraints => { requests.push(constraints); return typeof permission === 'function' ? permission() : permission; },
   } } });
+  globalThis.fetch = async () => ({ok: true, arrayBuffer: async () => new ArrayBuffer(4)});
   globalThis.AudioContext = Context;
   globalThis.AudioWorkletNode = WorkletNode;
   const errors = [], limits = [];
-  const recorder = createRecorder({ onError: error => errors.push(error), onLimit: () => limits.push(true) });
+  const recorder = (options.maxSeconds ? createProcessedRecorder : createRecorder)({ maxSeconds: options.maxSeconds, onChunk: options.onChunk, onError: error => errors.push(error), onLimit: () => limits.push(true) });
   t.after(async () => {
     await recorder.cancel();
     for (const [key, descriptor] of original) {
@@ -123,7 +153,8 @@ test('only start requests the mic and stop retains the final partial mono PCM', 
   assert.equal(resolved, false, 'stop must wait for the worklet tail and final acknowledgment');
   const result = await stopped;
   assert.deepEqual([...result.samples], [0.375, -0.375, 0.5]);
-  assert.equal(result.sampleRate, 8000);
+  assert.equal(result.sampleRate, 48000);
+  assert.equal(b.contexts[0].settings.sampleRate, 48000);
   assert.equal(b.track.readyState, 'ended');
   assert.equal(b.contexts[0].state, 'closed');
   assert.equal(b.nodes[0].closed, true);
@@ -177,10 +208,10 @@ test('cancel discards samples and an in-flight stop cannot resolve with stale PC
 test('10-second worklet cap truncates a crossing frame and stops even without a consumer callback', async t => {
   const b = await browser(t);
   await b.recorder.start();
-  b.nodes[0].feed([new Float32Array(80017).fill(0.125)]);
+  b.nodes[0].feed([new Float32Array(480017).fill(0.125)]);
   await flush();
   const result = await b.recorder.stop();
-  assert.equal(result.samples.length, 80000);
+  assert.equal(result.samples.length, 480000);
   assert.equal(result.samples.at(-1), 0.125);
   assert.equal(b.limits.length, 1);
   assert.equal(b.track.readyState, 'ended');
@@ -191,13 +222,13 @@ test('wall deadline requests final PCM even when fewer than 10 seconds of audio 
   t.mock.timers.enable({ apis: ['setTimeout'] });
   await b.recorder.start();
   for (let i = 0; i < 10; i++) {
-    b.nodes[0].feed([new Float32Array(800).fill(0.125)]);
+    b.nodes[0].feed([new Float32Array(4800).fill(0.125)]);
     await flush();
     t.mock.timers.tick(1000);
   }
   await flush();
   assert.equal(b.limits.length, 1);
-  assert.equal((await b.recorder.stop()).samples.length, 8000);
+  assert.equal((await b.recorder.stop()).samples.length, 48000);
   assert.equal(b.track.readyState, 'ended');
 });
 
@@ -216,7 +247,7 @@ test('missing final acknowledgment fails within one second and closes the microp
 for (const failure of ['resume', 'module']) {
   test(`${failure} setup failure closes all opened resources and rejects start`, async t => {
     const b = await browser(t, { [`${failure}Error`]: new Error(`${failure} failed`) });
-    await assert.rejects(b.recorder.start(), new RegExp(`${failure} failed`));
+    await assert.rejects(b.recorder.start(), failure === 'module' ? {captureReason: 'load_failed'} : /resume failed/);
     await flush();
     assert.equal(b.track.readyState, 'ended');
     assert.ok(b.contexts.every(context => context.state === 'closed'));
@@ -245,7 +276,7 @@ test('missing PCM delivery is an error while actual zero-valued PCM is valid tra
   t.mock.timers.enable({ apis: ['setTimeout'] });
   await b.recorder.start();
   for (let i = 0; i < 4; i++) {
-    b.nodes[0].feed([new Float32Array(800)]);
+    b.nodes[0].feed([new Float32Array(4800)]);
     await flush();
     t.mock.timers.tick(1000);
   }
@@ -338,5 +369,83 @@ test('invalid final frame count rejects the entire recording', async t => {
   const rejected = assert.rejects(result, /final PCM acknowledgment/i);
   b.nodes[0].emit({ type: 'finished', sequence: 0, frames: 1 });
   await rejected;
+  assert.equal(b.track.readyState, 'ended');
+});
+
+test('live consumer transfer cannot detach final PCM and the last partial arrives before stop resolves', async t => {
+  const received = [], order = [];
+  const b = await browser(t, {onChunk: chunk => {
+    order.push('chunk');
+    const owned = structuredClone(chunk.samples, {transfer: [chunk.samples.buffer]});
+    received.push(...owned);
+  }});
+  await b.recorder.start();
+  const input = Float32Array.from({length: 10007}, (_, i) => .001 * Math.sin(i));
+  b.nodes[0].feed([input]);
+  const result = await b.recorder.stop();
+  order.push('done');
+  assert.deepEqual([...result.samples], [...input]);
+  assert.deepEqual(received, [...input]);
+  assert.deepEqual(order, ['chunk', 'chunk', 'chunk', 'done']);
+  assert.equal(result.speech.totalFrames, Math.ceil(input.length / 480));
+});
+
+test('only near-constant raw silence is rejected; VAD-negative weak PCM survives unchanged', async t => {
+  const b = await browser(t, {decision: 'nonSpeech'});
+  await b.recorder.start();
+  b.nodes[0].feed([new Float32Array(9600)]);
+  await assert.rejects(b.recorder.stop(), {captureReason: 'no_speech'});
+  const track = new EventTarget();
+  track.readyState = 'live'; track.stop = () => { track.readyState = 'ended'; };
+  Object.defineProperty(globalThis, 'navigator', {configurable: true, value: {mediaDevices: {
+    getUserMedia: async () => ({getTracks: () => [track], getAudioTracks: () => [track]}),
+  }}});
+  await b.recorder.start();
+  const weak = Float32Array.from({length: 9600}, (_, i) => .0001 * Math.sin(i));
+  b.nodes.at(-1).feed([weak]);
+  const result = await b.recorder.stop();
+  assert.deepEqual([...result.samples], [...weak]);
+  assert.equal(result.speech.nonSpeechFrames, 20);
+});
+
+test('unsupported context rate closes its context before opening the microphone', async t => {
+  const b = await browser(t, {sampleRate: 44100});
+  await assert.rejects(b.recorder.start(), {captureReason: 'unsupported_sample_rate'});
+  assert.equal(b.requests.length, 0);
+  assert.equal(b.contexts[0].state, 'closed');
+});
+
+test('a browser rejecting the requested 48k context reports the rate-specific recovery', async t => {
+  const b = await browser(t, {contextError: new DOMException('Rate unavailable', 'NotSupportedError')});
+  await assert.rejects(b.recorder.start(), {captureReason: 'unsupported_sample_rate'});
+  assert.equal(b.requests.length, 0);
+});
+
+test('common capture supports the twenty-second prosody cap', async t => {
+  const b = await browser(t, {maxSeconds: 20});
+  await b.recorder.start();
+  b.nodes[0].feed([new Float32Array(960017).fill(.1)]);
+  await flush();
+  assert.equal((await b.recorder.stop()).samples.length, 960000);
+  assert.equal(b.limits.length, 1);
+});
+
+test('a non-480-aligned cap preserves its entire final partial frame', async t => {
+  const b = await browser(t, {maxSeconds: 481.1 / 48000});
+  await b.recorder.start();
+  const input = Float32Array.from({length: 600}, (_, i) => .1 * Math.sin(i));
+  b.nodes[0].feed([input]);
+  await flush();
+  assert.deepEqual([...(await b.recorder.stop()).samples], [...input.slice(0, 481)]);
+});
+
+test('cancellation at the ready-node handoff closes the late node', async t => {
+  let b;
+  b = await browser(t, {afterReady: () => { void b.recorder.cancel(); }});
+  await assert.rejects(b.recorder.start(), {name: 'AbortError'});
+  await flush();
+  assert.equal(b.nodes.length, 1);
+  assert.equal(b.nodes[0].closed, true);
+  assert.equal(b.nodes[0].connected, false);
   assert.equal(b.track.readyState, 'ended');
 });

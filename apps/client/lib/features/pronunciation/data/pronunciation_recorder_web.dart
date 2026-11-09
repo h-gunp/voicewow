@@ -48,6 +48,7 @@ class WebPronunciationRecorder implements PronunciationRecorder {
   Future<void> start({
     required void Function() onLimit,
     required void Function(String) onError,
+    void Function(String)? onVoiceActivity,
   }) => _run(() async {
     final ticket = ++_generation;
     await _bridge
@@ -57,6 +58,10 @@ class WebPronunciationRecorder implements PronunciationRecorder {
           }).toJS,
           ((JSString message) {
             if (!_disposed && ticket == _generation) onError(message.toDart);
+          }).toJS,
+          ((JSString activity) {
+            if (!_disposed && ticket == _generation)
+              onVoiceActivity?.call(activity.toDart);
           }).toJS,
         )
         .toDart;
@@ -100,7 +105,11 @@ extension type _PronunciationBridge._(JSObject _) implements JSObject {
 
 extension type _PronunciationSession._(JSObject _) implements JSObject {
   external JSPromise<JSAny?> prepare(JSFunction progress);
-  external JSPromise<JSAny?> start(JSFunction onLimit, JSFunction onError);
+  external JSPromise<JSAny?> start(
+    JSFunction onLimit,
+    JSFunction onError,
+    JSFunction onVoiceActivity,
+  );
   external JSPromise<JSArray<JSString>> finish();
   external JSPromise<JSAny?> play();
   external JSPromise<JSAny?> cancel();

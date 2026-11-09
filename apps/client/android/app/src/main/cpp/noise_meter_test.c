@@ -3,6 +3,58 @@
 #include <stdio.h>
 #include <string.h>
 #include "noise_meter.h"
+#include "rnnoise.h"
+
+static void test_processed_pcm(void) {
+    VoiceMateNoiseMeter *legacy = voicemate_meter_create();
+    VoiceMateNoiseMeter *practice = voicemate_meter_create();
+    DenoiseState *reference = rnnoise_create(NULL);
+    assert(legacy && practice && reference);
+    int16_t input[480];
+    float clean[480], reference_input[480], reference_output[480];
+    VoiceMateAudioFrame before, after;
+    int non_speech_with_audio = 0;
+    for (int frame = 0; frame < 201; ++frame) {
+        for (int i = 0; i < 480; ++i) {
+            const int position = frame * 480 + i;
+            input[i] = frame == 200 ? 0 : frame >= 100
+                ? (int16_t)((int)(((uint32_t)position * 1103515245u + 12345u) >> 24) - 128)
+                : (int16_t)(12000 * sin(position * .037) + 5000 * sin(position * .091));
+            reference_input[i] = input[i];
+            clean[i] = NAN;
+        }
+        rnnoise_process_frame(reference, reference_output, reference_input);
+        const int old_status = voicemate_meter_process(legacy, input, &before);
+        const int status = voicemate_meter_process_pcm(practice, input, &after, clean);
+        assert(status == old_status && status == (frame != 0));
+        if (!status) continue;
+        assert(before.sequence == after.sequence && before.power == after.power);
+        assert(before.clipped == after.clipped && before.rms == after.rms);
+        assert(before.speech == after.speech && before.peak == after.peak);
+        double energy = 0;
+        for (int i = 0; i < 480; ++i) {
+            assert(isfinite(clean[i]));
+            assert(clean[i] == reference_output[i] / 32768.0f);
+            energy += clean[i] * clean[i];
+        }
+        if (after.speech == 0 && energy > 0) non_speech_with_audio++;
+        if (frame == 200) assert(energy > 0); /* Last real frame survives zero flush. */
+    }
+    assert(non_speech_with_audio > 0); /* Classification must not gate PCM. */
+    assert(voicemate_meter_process_pcm(NULL, input, &after, clean) == -1);
+    assert(voicemate_meter_process_pcm(practice, NULL, &after, clean) == -1);
+    assert(voicemate_meter_process_pcm(practice, input, NULL, clean) == -1);
+    rnnoise_destroy(reference);
+    voicemate_meter_destroy(legacy);
+    voicemate_meter_destroy(practice);
+
+    practice = voicemate_meter_create();
+    memset(input, 0, sizeof(input));
+    assert(voicemate_meter_process_pcm(practice, input, &after, clean) == 0);
+    assert(voicemate_meter_process_pcm(practice, input, &after, clean) == 1);
+    for (int i = 0; i < 480; ++i) assert(clean[i] == 0);
+    voicemate_meter_destroy(practice);
+}
 
 int main(void) {
     VoiceMateNoiseMeter *meter = voicemate_meter_create();
@@ -33,6 +85,7 @@ int main(void) {
     assert(voicemate_meter_process(NULL, samples, &frame) == -1);
     voicemate_meter_destroy(meter);
     voicemate_meter_destroy(NULL);
-    puts("Native noise meter: silence, delayed input, clipping, reset passed");
+    test_processed_pcm();
+    puts("Native noise meter: silence, delayed input, clipping, reset, PCM parity and ungated tail passed");
     return 0;
 }

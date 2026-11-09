@@ -15,6 +15,8 @@ export async function to16kHz(samples, sampleRate) {
   const source = context.createBufferSource(); source.buffer = buffer;
   source.connect(context.destination); source.start();
   const result = (await context.startRendering()).getChannelData(0).slice();
+  // Resampling can overshoot around full-scale edges; retain normalized PCM.
+  for (let i = 0; i < result.length; i++) if (Number.isFinite(result[i])) result[i] = Math.max(-1, Math.min(1, result[i]));
   validate(result, 16000);
   return result;
 }

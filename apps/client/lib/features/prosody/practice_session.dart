@@ -45,6 +45,9 @@ class PracticeResult {
 AudioAnalysis _analyse((List<double>, int) input) =>
     trimAnalysis(analyzeSamples(input.$1, input.$2));
 
+AudioAnalysis _analyseRecorded((List<double>, int, List<int>?) input) =>
+    trimAnalysis(analyzeSamples(input.$1, input.$2, speechFrames: input.$3));
+
 /// Stateful native practice flow. Audio permissions belong to the service;
 /// neither a failed retry nor a failed guide replaces an accepted recording.
 class PracticeSession extends ChangeNotifier {
@@ -309,11 +312,14 @@ class PracticeSession extends ChangeNotifier {
     _liveSamples.addAll(samples);
     while (_nextFrameEnd <= _liveSamples.length) {
       final time = _nextFrameEnd / 16000;
-      final frame = analyzeFrame(
+      var frame = analyzeFrame(
         _liveSamples.sublist(_nextFrameEnd - 800, _nextFrameEnd),
         16000,
         time: time,
       );
+      if (audio.speechInRange(_nextFrameEnd - 800, _nextFrameEnd) == false) {
+        frame = frame.copyWith(active: false, pitchHz: null);
+      }
       if (_firstVoice == null && frame.active) _firstVoice = time;
       if (_firstVoice != null) {
         _liveFrames.add(frame.copyWith(time: time - _firstVoice!));
@@ -383,9 +389,10 @@ class PracticeSession extends ChangeNotifier {
     int ticket, {
     bool demo = false,
   }) async {
-    final user = await compute(_analyse, (
+    final user = await compute(_analyseRecorded, (
       recorded.samples,
       recorded.sampleRate,
+      recorded.speechFrames,
     ));
     if (_closed || ticket != _generation) return;
     if (user.voicedFrames < 8 || user.pitchMedian == null) {

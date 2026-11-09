@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
 import '../audio/wav.dart';
+import 'practice_audio_processor.dart';
 import '../../../shared/native_tts_coordinator.dart';
 
 /// A local device/permission failure, rather than a judgement of speaking skill.
@@ -33,11 +34,15 @@ class RecordedAudio {
     required this.sampleRate,
     required this.path,
     required this.bytes,
+    this.speechFrames,
   });
   final List<double> samples;
   final int sampleRate;
   final String path;
   final Uint8List bytes;
+
+  /// 10 ms RNNoise/VAD decisions: 0 non-speech, 1 speech, 2 uncertain.
+  final List<int>? speechFrames;
 }
 
 /// Android's TTS plugin encodes booleans as strings ("0" / "1"). A voice
@@ -85,6 +90,9 @@ class DeviceAudioService {
   static const int recordingSampleRate = 16000;
   static const int maxRecordingSeconds = 20;
   static const int _maxSamples = recordingSampleRate * maxRecordingSeconds;
+  static const int _captureSampleRate = 48000;
+  static const int _maxCaptureBytes =
+      _captureSampleRate * maxRecordingSeconds * 2;
 
   AudioRecorder? _recorder;
   FlutterTts? _tts;
@@ -92,16 +100,23 @@ class DeviceAudioService {
   AudioPlayer? _player;
   Future<Directory>? _directory;
   final StreamController<String> _errors = StreamController<String>.broadcast();
-  final Pcm16StreamDecoder _decoder = Pcm16StreamDecoder();
   StreamSubscription<Uint8List>? _stream;
   Timer? _recordLimit;
   final List<double> _samples = <double>[];
+  final List<int> _speechFrames = <int>[];
+  NativePracticeAudioSession? _processor;
+  Future<void> _processing = Future<void>.value();
+  Future<void>? _startFuture;
+  Completer<void>? _captureDone;
+  void Function(List<double>)? _onSamples;
+  int _capturedBytes = 0;
   Future<RecordedAudio>? _stopFuture;
   Future<void>? _cancelFuture;
   Completer<void>? _guideCancelled;
   bool _disposed = false,
       _starting = false,
       _recording = false,
+      _stopping = false,
       _guideBusy = false;
   int _recordGeneration = 0,
       _guideGeneration = 0,
@@ -112,6 +127,25 @@ class DeviceAudioService {
   bool get isRecording => _recording;
   bool get isGenerating => _guideBusy;
   Stream<String> get errors => _errors.stream;
+
+  String? get recentVoiceActivity {
+    if (_speechFrames.isEmpty) return null;
+    final recent = _speechFrames.skip(
+      _speechFrames.length > 10 ? _speechFrames.length - 10 : 0,
+    );
+    if (recent.any((decision) => decision == 1)) return 'speech';
+    return recent.every((decision) => decision == 0)
+        ? 'nonSpeech'
+        : 'uncertain';
+  }
+
+  bool? speechInRange(int start, int end) {
+    if (_processor == null) return null;
+    final first = start ~/ 160;
+    final last = (end + 159) ~/ 160;
+    if (first < 0 || last > _speechFrames.length || first >= last) return null;
+    return _speechFrames.sublist(first, last).any((decision) => decision != 0);
+  }
 
   void _checkOpen() {
     if (_disposed) {
@@ -152,7 +186,11 @@ class DeviceAudioService {
     if (sentence.isEmpty || sentence.runes.length > 100) {
       throw const DeviceAudioException('가이드는 1~100자의 짧은 문장으로 만들어 주세요.');
     }
-    if (_recording || _starting || _guideBusy || _cancelFuture != null) {
+    if (_recording ||
+        _starting ||
+        _stopping ||
+        _guideBusy ||
+        _cancelFuture != null) {
       throw const DeviceAudioException('진행 중인 녹음이나 가이드를 마친 뒤 다시 시도해 주세요.');
     }
     if (defaultTargetPlatform != TargetPlatform.android) {
@@ -340,9 +378,32 @@ class DeviceAudioService {
     required void Function(List<double> samples) onSamples,
     void Function()? onLimitReached,
     void Function(String message)? onError,
+  }) {
+    if (_startFuture != null) {
+      throw const DeviceAudioException('진행 중인 녹음 준비를 먼저 마쳐 주세요.');
+    }
+    final pending = _start(
+      onSamples: onSamples,
+      onLimitReached: onLimitReached,
+      onError: onError,
+    );
+    _startFuture = pending;
+    return pending.whenComplete(() {
+      if (identical(_startFuture, pending)) _startFuture = null;
+    });
+  }
+
+  Future<void> _start({
+    required void Function(List<double> samples) onSamples,
+    void Function()? onLimitReached,
+    void Function(String message)? onError,
   }) async {
     _checkOpen();
-    if (_recording || _starting || _guideBusy || _cancelFuture != null) {
+    if (_recording ||
+        _starting ||
+        _stopping ||
+        _guideBusy ||
+        _cancelFuture != null) {
       throw const DeviceAudioException('진행 중인 녹음이나 가이드를 먼저 마쳐 주세요.');
     }
     final ticket = ++_recordGeneration;
@@ -364,12 +425,22 @@ class DeviceAudioService {
       }
       if (_disposed || ticket != _recordGeneration) return;
       _samples.clear();
-      _decoder.reset();
+      _speechFrames.clear();
+      _capturedBytes = 0;
+      _captureDone = Completer<void>();
+      _processing = Future<void>.value();
+      _onSamples = onSamples;
       _recordError = null;
       _stopFuture = null;
+      final processor = _processor = NativePracticeAudioSession();
+      await processor.create();
+      if (_disposed || ticket != _recordGeneration) {
+        await processor.cancel();
+        return;
+      }
       bool formatRejected = false;
       await recorder.setOnConfigChanged((config) {
-        if (config.sampleRate == recordingSampleRate &&
+        if (config.sampleRate == _captureSampleRate &&
             config.numChannels == 1 &&
             config.encoder == AudioEncoder.pcm16bits) {
           return;
@@ -384,12 +455,12 @@ class DeviceAudioService {
       final source = await recorder.startStream(
         const RecordConfig(
           encoder: AudioEncoder.pcm16bits,
-          sampleRate: recordingSampleRate,
+          sampleRate: _captureSampleRate,
           numChannels: 1,
           autoGain: false,
           echoCancel: false,
           noiseSuppress: false,
-          streamBufferSize: 1280,
+          streamBufferSize: 3840,
         ),
       );
       if (_disposed || ticket != _recordGeneration) {
@@ -420,20 +491,30 @@ class DeviceAudioService {
       _stream = source.listen(
         (bytes) {
           if (!_recording || _disposed || ticket != _recordGeneration) return;
-          final decoded = _decoder.add(bytes);
-          final remaining = _maxSamples - _samples.length;
+          final remaining = _maxCaptureBytes - _capturedBytes;
           if (remaining <= 0) {
             unawaited(endAtLimit());
             return;
           }
-          final accepted = decoded.length <= remaining
-              ? decoded
-              : decoded.sublist(0, remaining);
-          _samples.addAll(accepted);
-          if (accepted.isNotEmpty) {
-            onSamples(List<double>.unmodifiable(accepted));
-          }
-          if (_samples.length >= _maxSamples) unawaited(endAtLimit());
+          final accepted = Uint8List.fromList(bytes.take(remaining).toList());
+          _capturedBytes += accepted.length;
+          _processing = _processing
+              .then((_) async {
+                if (_disposed ||
+                    ticket != _recordGeneration ||
+                    _recordError != null)
+                  return;
+                final chunk = await processor.process(accepted);
+                if (!_disposed && ticket == _recordGeneration)
+                  _acceptProcessed(chunk);
+              })
+              .catchError((Object error) {
+                if (_disposed || ticket != _recordGeneration) return;
+                _recordError = error;
+                onError?.call('소음 처리를 마치지 못했어요. 다시 녹음해 주세요.');
+                unawaited(cancel());
+              });
+          if (_capturedBytes >= _maxCaptureBytes) unawaited(endAtLimit());
         },
         onError: (Object error) {
           if (_disposed || ticket != _recordGeneration || !_recording) return;
@@ -442,6 +523,9 @@ class DeviceAudioService {
           unawaited(cancel());
         },
         onDone: () {
+          final done = _captureDone;
+          if (ticket == _recordGeneration && done != null && !done.isCompleted)
+            done.complete();
           if (_recording &&
               _stopFuture == null &&
               ticket == _recordGeneration) {
@@ -454,11 +538,13 @@ class DeviceAudioService {
         () => unawaited(endAtLimit()),
       );
     } on DeviceAudioException {
+      if (ticket == _recordGeneration) await _processor?.cancel();
       rethrow;
     } catch (_) {
       if (ticket == _recordGeneration) {
         try {
           await _recorder?.cancel();
+          await _processor?.cancel();
         } catch (_) {
           /* release best effort */
         }
@@ -469,9 +555,25 @@ class DeviceAudioService {
     }
   }
 
+  void _acceptProcessed(ProcessedAudioChunk chunk) {
+    _speechFrames.addAll(chunk.speech);
+    _samples.addAll(chunk.samples);
+    if (_samples.length > _maxSamples ||
+        _samples.length > _speechFrames.length * 160) {
+      throw StateError('Processed audio and VAD are not aligned');
+    }
+    if (chunk.samples.isNotEmpty)
+      _onSamples?.call(List<double>.unmodifiable(chunk.samples));
+  }
+
   Future<RecordedAudio> stop() {
     _checkOpen();
-    return _stopFuture ??= _finishStop();
+    if (_stopFuture != null) return _stopFuture!;
+    final ticket = _recordGeneration;
+    _stopping = true;
+    return _stopFuture = _finishStop().whenComplete(() {
+      if (ticket == _recordGeneration) _stopping = false;
+    });
   }
 
   Future<RecordedAudio> _finishStop() async {
@@ -480,16 +582,40 @@ class DeviceAudioService {
     }
     final ticket = _recordGeneration;
     final stream = _stream;
+    final processor = _processor;
     _recordLimit?.cancel();
     _recordLimit = null;
     try {
-      await _recorder?.stop();
+      await _recorder?.stop().timeout(const Duration(seconds: 3));
+      await _captureDone?.future.timeout(const Duration(seconds: 3));
+      await _processing;
+      if (_disposed || ticket != _recordGeneration) {
+        throw const DeviceAudioException('녹음을 취소했어요.');
+      }
+      if (processor == null || _recordError != null) {
+        throw const DeviceAudioException('녹음된 소리를 읽지 못했어요. 다시 녹음해 주세요.');
+      }
+      final tail = await processor.finish();
+      if (_disposed || ticket != _recordGeneration) {
+        throw const DeviceAudioException('녹음을 취소했어요.');
+      }
+      _acceptProcessed(tail);
+    } on DeviceAudioException {
+      rethrow;
+    } catch (_) {
+      throw const DeviceAudioException('음성 처리를 마치지 못했어요. 다시 녹음해 주세요.');
     } finally {
       if (ticket == _recordGeneration) {
         _recording = false;
         _stream = null;
       }
       await stream?.cancel();
+      await _processing;
+      try {
+        await processor?.cancel();
+      } catch (_) {
+        /* already closed on failure */
+      }
     }
     if (_disposed || ticket != _recordGeneration) {
       throw const DeviceAudioException('녹음을 취소했어요.');
@@ -497,15 +623,24 @@ class DeviceAudioService {
     if (_recordError != null || _samples.isEmpty) {
       throw const DeviceAudioException('녹음된 소리를 읽지 못했어요. 다시 녹음해 주세요.');
     }
+    if (_speechFrames.every((decision) => decision == 0) &&
+        processor.rawVariance < 1e-10) {
+      throw const DeviceAudioException('목소리를 찾지 못했어요. 다시 녹음해 주세요.');
+    }
     final samples = List<double>.unmodifiable(_samples);
     final bytes = encodeWav(samples, recordingSampleRate);
     final path = await _newPath('recording');
     await File(path).writeAsBytes(bytes, flush: true);
+    if (_disposed || ticket != _recordGeneration) {
+      await _deleteFile(path);
+      throw const DeviceAudioException('녹음을 취소했어요.');
+    }
     return RecordedAudio(
       samples: samples,
       sampleRate: recordingSampleRate,
       path: path,
       bytes: bytes,
+      speechFrames: List<int>.unmodifiable(_speechFrames),
     );
   }
 
@@ -521,6 +656,13 @@ class DeviceAudioService {
     _recordLimit = null;
     _recording = false;
     _starting = false;
+    _stopping = false;
+    final processor = _processor;
+    _processor = null;
+    final pendingStart = _startFuture;
+    final pendingStop = _stopFuture;
+    final done = _captureDone;
+    if (done != null && !done.isCompleted) done.complete();
     final stream = _stream;
     _stream = null;
     await stream?.cancel();
@@ -529,8 +671,17 @@ class DeviceAudioService {
     } catch (_) {
       /* may already be stopped */
     }
+    await _processing;
+    try {
+      await processor?.cancel();
+    } catch (_) {
+      /* native session may already have finished */
+    }
+    await pendingStart?.catchError((Object _) {});
+    await pendingStop?.then<void>((_) {}, onError: (Object _) {});
     _samples.clear();
-    _decoder.reset();
+    _speechFrames.clear();
+    _onSamples = null;
     _stopFuture = null;
   }
 

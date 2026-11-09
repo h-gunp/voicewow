@@ -11,6 +11,7 @@ class _UnavailableRecorder implements PronunciationRecorder {
   Future<void> start({
     required void Function() onLimit,
     required void Function(String) onError,
+    void Function(String)? onVoiceActivity,
   }) async => _unavailable();
   @override
   Future<List<String>> finish() async => _unavailable();

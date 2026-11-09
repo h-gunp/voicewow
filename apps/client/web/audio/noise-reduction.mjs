@@ -14,6 +14,15 @@ function dispose(node) {
 
 /** The caller owns the ready node and context; this loader owns only initialization. */
 export async function createNoiseReductionNode(context, signal) {
+  return createNode(context, signal, false);
+}
+
+export async function createProcessedCaptureNode(context, signal, maxSeconds = 10) {
+  if (!Number.isFinite(maxSeconds) || maxSeconds <= 0 || maxSeconds > 20) throw new RangeError('Capture duration must be at most 20 seconds');
+  return createNode(context, signal, true, maxSeconds);
+}
+
+async function createNode(context, signal, capture, maxSeconds) {
   if (signal?.aborted) throw new DOMException('Noise reduction cancelled', 'AbortError');
   if (context.sampleRate !== 48000) throw failure('unsupported_sample_rate');
   if (typeof globalThis.AudioWorkletNode !== 'function'
@@ -57,17 +66,18 @@ export async function createNoiseReductionNode(context, signal) {
         // Independent cold downloads share the initialization deadline.
         const [wasmBinary, vadBinary] = await Promise.all([
           download('./vendor/rnnoise/rnnoise.wasm'),
-          download('./vendor/libfvad/libfvad.wasm').catch(() => null),
-          Promise.resolve().then(() => context.audioWorklet.addModule(new URL('./noise-reduction-worklet.mjs', import.meta.url).href)),
+          download('./vendor/libfvad/libfvad.wasm').catch(error => { if (capture) throw error; return null; }),
+          Promise.resolve().then(() => context.audioWorklet.addModule(new URL(capture ? './processed-capture-worklet.mjs' : './noise-reduction-worklet.mjs', import.meta.url).href)),
         ]);
         if (finished) return;
-        node = new AudioWorkletNode(context, 'voicemate-noise-meter', {
+        node = new AudioWorkletNode(context, capture ? 'voicemate-processed-capture' : 'voicemate-noise-meter', {
           numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1],
-          processorOptions: {wasmBinary, vadBinary},
+          processorOptions: {wasmBinary, vadBinary, ...(capture ? {maxSeconds} : {})},
         });
         if (finished) { dispose(node); return; }
         node.port.onmessage = ({data}) => {
           if (data?.type === 'ready') {
+            if (capture && data.vadStatus !== 'ready') { finish(failure('load_failed')); return; }
             node.vadStatus = vadBinary ? (data.vadStatus || 'unknown') : 'load_failed';
             finish();
           }

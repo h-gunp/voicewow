@@ -19,6 +19,7 @@ class FakePronunciationRecorder implements PronunciationRecorder {
   String? failure;
   String? playbackFailure;
   void Function()? limit;
+  void Function(String)? activity;
   List<String> phones = [
     'M',
     'A',
@@ -45,9 +46,11 @@ class FakePronunciationRecorder implements PronunciationRecorder {
   Future<void> start({
     required void Function() onLimit,
     required void Function(String) onError,
+    void Function(String)? onVoiceActivity,
   }) async {
     starts++;
     limit = onLimit;
+    activity = onVoiceActivity;
     await startPending?.future;
   }
 
@@ -130,6 +133,54 @@ Future<void> tap(WidgetTester tester, String key) async {
 }
 
 void main() {
+  testWidgets('voice activity updates only the active recording status', (
+    tester,
+  ) async {
+    final recorder = FakePronunciationRecorder();
+    await pumpPractice(tester, recorder);
+    await tap(tester, 'pronunciation-prepare');
+    await tester.pumpAndSettle();
+    await tap(tester, 'pronunciation-mic');
+    final oldActivity = recorder.activity!;
+    const messages = {
+      'nonSpeech': '말소리를 기다리고 있다. 문구를 읽는다.',
+      'speech': '말소리를 감지했다. 읽기를 마치면 마이크를 다시 누른다.',
+      'uncertain': '소리를 듣고 있다. 문구를 계속 읽는다.',
+    };
+    for (final entry in messages.entries) {
+      oldActivity(entry.key);
+      await tester.pump();
+      expect(find.text(entry.value), findsOneWidget);
+      expect(recorder.finishes, 0);
+    }
+    oldActivity('unknown');
+    await tester.pump();
+    expect(find.text(messages['uncertain']!), findsOneWidget);
+    await tap(tester, 'pronunciation-mic');
+    await tester.pumpAndSettle();
+    oldActivity('speech');
+    await tester.pump();
+    expect(find.text(messages['speech']!), findsNothing);
+    expect(find.byKey(const Key('pronunciation-observed')), findsOneWidget);
+
+    await tap(tester, 'pronunciation-mic');
+    recorder.activity!('nonSpeech');
+    oldActivity('speech');
+    await tester.pump();
+    expect(find.text(messages['nonSpeech']!), findsOneWidget);
+    expect(find.text(messages['speech']!), findsNothing);
+    final currentActivity = recorder.activity!;
+    await tap(tester, 'pronunciation-cancel');
+    await tester.pumpAndSettle();
+    currentActivity('speech');
+    await tester.pump();
+    expect(find.text(messages['speech']!), findsNothing);
+    expect(find.text('중지했다. 모델 준비 후 다시 읽을 수 있다.'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    currentActivity('speech');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('help cancels pronunciation and keeps the practice reusable', (
     tester,
   ) async {

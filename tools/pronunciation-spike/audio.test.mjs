@@ -41,3 +41,18 @@ test('resampling uses the browser OfflineAudioContext, with mono 16kHz and prese
     assert.deepEqual(observed, { channels: 1, length: 16000, rate: 16000, input: { channels: 1, length: 48000, rate: 48000 } });
   } finally { if (previous === undefined) delete globalThis.OfflineAudioContext; else globalThis.OfflineAudioContext = previous; }
 });
+
+test('resampling limits finite overshoot but still rejects a non-finite renderer result', async () => {
+  const previous = globalThis.OfflineAudioContext;
+  let output = Float32Array.of(1.04, -1.02, .25);
+  globalThis.OfflineAudioContext = class {
+    createBuffer() { return {copyToChannel(){}}; }
+    createBufferSource() { return {connect(){},start(){}}; }
+    async startRendering() { return {getChannelData:()=>output}; }
+  };
+  try {
+    assert.deepEqual(await to16kHz(new Float32Array(9), 48000), Float32Array.of(1,-1,.25));
+    output = Float32Array.of(NaN);
+    await assert.rejects(to16kHz(new Float32Array(9), 48000));
+  } finally { if(previous===undefined)delete globalThis.OfflineAudioContext;else globalThis.OfflineAudioContext=previous; }
+});

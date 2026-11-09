@@ -10,6 +10,9 @@ import 'package:voicemate/features/prosody/services/device_audio.dart';
 class FakeAudio extends DeviceAudioService {
   void Function(List<double>)? receive;
   bool denied = false;
+  bool? speechDetected;
+  @override
+  bool? speechInRange(int start, int end) => speechDetected;
   int recordingStops = 0;
   void Function()? reachedLimit;
   List<double> samples = List.generate(
@@ -110,6 +113,28 @@ class DeferredPlaybackAudio extends FakeAudio {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'live prosody excludes non-speech pitch evidence without deleting samples',
+    () async {
+      final audio = FakeAudio()..speechDetected = false;
+      final session = PracticeSession(audio: audio);
+      session.reference = ReferenceClip(
+        '안녕하세요.',
+        'guide.wav',
+        trimAnalysis(analyzeSamples(audio.samples, 16000)),
+        '시험용',
+      );
+      await session.startRecording();
+      audio.receive!(audio.samples);
+      expect(session.currentVoice, isFalse);
+      expect(session.liveTrace, isEmpty);
+      audio.speechDetected = true;
+      audio.receive!(audio.samples);
+      expect(session.currentVoice, isTrue);
+      expect(session.liveTrace, isNotEmpty);
+      session.dispose();
+    },
+  );
   test(
     'cancelling while playback stops prevents a late recording start',
     () async {

@@ -93,6 +93,7 @@ class NativePronunciationRecorder implements PronunciationRecorder {
   Future<void> start({
     required void Function() onLimit,
     required void Function(String) onError,
+    void Function(String)? onVoiceActivity,
   }) async {
     if (!_prepared || _busy || _recording || _disposed) {
       throw const DeviceAudioException('분석 준비를 마친 뒤 녹음해야 한다.');
@@ -106,8 +107,17 @@ class NativePronunciationRecorder implements PronunciationRecorder {
       // A late native start can cancel its recorder; drain it before reusing that recorder.
       await _pendingStart?.catchError((Object _) {});
       _check(ticket);
+      String? previousActivity;
       final starting = _audio.start(
-        onSamples: (_) {},
+        onSamples: (_) {
+          if (_disposed || ticket != _generation || !_recording) return;
+          final activity = _audio.recentVoiceActivity;
+          if (activity != previousActivity &&
+              const {'speech', 'nonSpeech', 'uncertain'}.contains(activity)) {
+            previousActivity = activity;
+            onVoiceActivity?.call(activity!);
+          }
+        },
         onLimitReached: () {
           if (!_disposed && ticket == _generation) onLimit();
         },

@@ -298,22 +298,44 @@ AudioFrame analyzeFrame(
 }
 
 /// 50ms windows / 20ms hops. Absolute signal level is not calibrated dB SPL.
-AudioAnalysis analyzeSamples(List<double> input, int sampleRate) {
+AudioAnalysis analyzeSamples(
+  List<double> input,
+  int sampleRate, {
+  List<int>? speechFrames,
+}) {
   if (sampleRate < 8000) throw ArgumentError('샘플 레이트는 8,000Hz 이상이어야 해요.');
   if (input.length / sampleRate > 30) {
     throw RangeError('연습 음성은 30초 이하로 녹음해 주세요.');
   }
   final duration = input.length / sampleRate;
+  if (speechFrames != null &&
+      (speechFrames.length !=
+              (input.length * 100 + sampleRate - 1) ~/ sampleRate ||
+          speechFrames.any((value) => value < 0 || value > 2))) {
+    throw ArgumentError('발화 구간과 녹음 길이가 맞지 않아요.');
+  }
   final reduced = _downsample(input, sampleRate),
       signal = reduced.samples,
       rate = reduced.rate;
+  final reductionFactor = math.max(1, sampleRate ~/ 12000);
   final windowSize = math.max(2, (rate * 0.05).round());
   final hop = math.max(1, (rate * frameHopSeconds).round());
   final frames = <AudioFrame>[];
   for (var start = 0; start + windowSize <= signal.length; start += hop) {
     final frame = signal.sublist(start, start + windowSize);
     final db = _rmsDb(frame);
-    final detected = db < _minLevelDb
+    final firstDecision = start * reductionFactor * 100 ~/ sampleRate;
+    final lastDecision = math.min(
+      speechFrames?.length ?? 0,
+      ((start + windowSize) * reductionFactor * 100 + sampleRate - 1) ~/
+          sampleRate,
+    );
+    final nonSpeech =
+        speechFrames != null &&
+        speechFrames
+            .sublist(firstDecision, lastDecision)
+            .every((value) => value == 0);
+    final detected = db < _minLevelDb || nonSpeech
         ? (pitchHz: null, clarity: 0.0)
         : _yin(frame, rate);
     frames.add(

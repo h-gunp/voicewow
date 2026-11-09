@@ -10,6 +10,10 @@ import unittest
 MODULE = Path(__file__).with_name("serve.py")
 PAGE = "/tools/pronunciation-spike/index.html"
 ROUTES = {
+    **{f"/apps/client/web/audio/{name}": f"apps/client/web/audio/{name}"
+       for name in ("processed-capture.mjs", "processed-capture-worklet.mjs", "noise-reduction.mjs",
+                    "noise-reducer.mjs", "voice-activity.mjs", "level-meter.mjs",
+                    "vendor/rnnoise/rnnoise.mjs", "vendor/rnnoise/rnnoise.wasm", "vendor/libfvad/libfvad.wasm")},
     **{f"/tools/pronunciation-spike/{name}": f"tools/pronunciation-spike/{name}"
        for name in ("index.html", "styles.css", "app.mjs", "worker.mjs", "client.mjs", "audio.mjs",
                     "phones.mjs", "phone-engine.mjs", "recording.mjs", "capture-worklet.mjs")},

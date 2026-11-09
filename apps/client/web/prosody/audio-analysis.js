@@ -88,6 +88,17 @@ export function analyzeFrame(input, sampleRate, noiseFloorDb = null) {
   return { ...detected, pitchHz: active ? detected.pitchHz : null, rmsDb, active };
 }
 
+export function isNonSpeechWindow(ranges, start, end) {
+  let covered = start;
+  for (const range of ranges) {
+    if (range.end <= covered) continue;
+    if (range.start > covered + 1e-9 || !range.nonSpeech) return false;
+    covered = range.end;
+    if (covered >= end - 1e-9) return true;
+  }
+  return false;
+}
+
 export function trimAnalysis(analysis) {
   const active = analysis.frames.filter(f => f.active);
   if (!active.length) return { ...analysis, frames: [], duration: 0, startTime: 0 };
@@ -149,7 +160,7 @@ export function summarizeComparison(reference, user, comparison, { whole = false
  * relativePitch is in semitones relative to the recording's voiced median;
  * relativeDb is relative to the recording's voiced median signal level.
  */
-export function analyzeAudio(input, sampleRate) {
+export function analyzeAudio(input, sampleRate, speechRanges = []) {
   if (!(input instanceof Float32Array) || !Number.isFinite(sampleRate) || sampleRate < 8000) {
     throw new TypeError('Float32Array audio and a sample rate of at least 8000 Hz are required.');
   }
@@ -169,8 +180,10 @@ export function analyzeAudio(input, sampleRate) {
     }
     const rms = Math.sqrt(sumSquares / frame.length);
     const rmsDb = 20 * Math.log10(Math.max(rms, 1e-7));
-    const detected = rmsDb < MIN_LEVEL_DB ? { pitchHz: null, clarity: 0 } : yin(frame, rate);
-    frames.push({ time: (start + windowSize / 2) / rate, pitchHz: detected.pitchHz,
+    const time = (start + windowSize / 2) / rate;
+    const nonSpeech = isNonSpeechWindow(speechRanges, start / rate, (start + windowSize) / rate);
+    const detected = nonSpeech || rmsDb < MIN_LEVEL_DB ? { pitchHz: null, clarity: 0 } : yin(frame, rate);
+    frames.push({ time, pitchHz: detected.pitchHz,
       clarity: detected.clarity, rmsDb, relativePitch: null, relativeDb: null, active: false });
   }
   // Estimate background from the quieter non-periodic frames. Capping the

@@ -3,6 +3,7 @@ abstract interface class PronunciationRecorder {
   Future<void> start({
     required void Function() onLimit,
     required void Function(String) onError,
+    void Function(String)? onVoiceActivity,
   });
   Future<List<String>> finish();
   Future<void> play();

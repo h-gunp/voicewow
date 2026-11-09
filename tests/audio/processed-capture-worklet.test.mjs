@@ -1,0 +1,72 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {createNoiseProcessor} from '../../apps/client/web/audio/noise-reducer.mjs';
+import {createVoiceActivity} from '../../apps/client/web/audio/voice-activity.mjs';
+
+class Port {
+  messages = []; waiters = [];
+  postMessage(value, transfer = []) {
+    const message = structuredClone(value, {transfer});
+    this.messages.push(message);
+    for (const waiter of this.waiters) if (waiter.type === message.type) waiter.resolve(message);
+  }
+  next(type) {
+    const message = this.messages.find(value => value.type === type);
+    return message ? Promise.resolve(message) : new Promise(resolve => this.waiters.push({type, resolve}));
+  }
+}
+globalThis.sampleRate = 48000;
+globalThis.AudioWorkletProcessor = class { constructor() { this.port = new Port(); } };
+let Processor;
+globalThis.registerProcessor = (name, type) => { assert.equal(name, 'voicemate-processed-capture'); Processor = type; };
+await import('../../apps/client/web/audio/processed-capture-worklet.mjs');
+const wasmBinary = await readFile(new URL('../../apps/client/web/audio/vendor/rnnoise/rnnoise.wasm', import.meta.url));
+const vadBinary = await readFile(new URL('../../apps/client/web/audio/vendor/libfvad/libfvad.wasm', import.meta.url));
+const create = maxSeconds => new Processor({processorOptions: {wasmBinary, vadBinary, maxSeconds}});
+
+test('real RNNoise/VAD capture emits continuous clean PCM, metadata and final tail before acknowledgement', async () => {
+  const capture = create(10);
+  assert.equal((await capture.port.next('ready')).vadStatus, 'ready');
+  const input = Float32Array.from({length: 12037}, (_, i) => i > 4800 && i < 9600 ? 0 : Math.sin(i * .17) * .1);
+  for (let i = 0; i < input.length; i += 128) {
+    const output = new Float32Array(128).fill(1);
+    assert.equal(capture.process([[input.subarray(i, i + 128)]], [[output]]), true);
+    assert.ok(output.every(sample => sample === 0));
+  }
+  capture.port.onmessage({data: {type: 'finish'}});
+  const final = await capture.port.next('finished');
+  const chunks = capture.port.messages.filter(value => value.type === 'pcm');
+  assert.deepEqual(chunks.map(chunk => chunk.samples.length), [4800, 4800, 2437]);
+  assert.deepEqual(chunks.map(chunk => chunk.startFrame), [0, 4800, 9600]);
+  assert.deepEqual(chunks.map(chunk => chunk.sequence), [1, 2, 3]);
+  assert.equal(capture.port.messages.at(-1).type, 'finished');
+  assert.equal(final.frames, input.length);
+  assert.equal(final.speech.totalFrames, Math.ceil(input.length / 480));
+  assert.equal(final.speech.speechFrames + final.speech.nonSpeechFrames + final.speech.uncertainFrames, final.speech.totalFrames);
+  const processor = await createNoiseProcessor(wasmBinary, await createVoiceActivity(vadBinary));
+  try {
+    const expected = [...processor.push(input), ...processor.finish()].flatMap(frame => [...frame.samples]);
+    assert.deepEqual(chunks.flatMap(chunk => [...chunk.samples]), expected);
+  } finally { processor.dispose(); }
+  assert.equal(capture.process([], [[]]), false);
+});
+
+test('automatic limit flushes a partial RNNoise frame without padding duration or VAD count', async () => {
+  const capture = create(961.1 / 48000);
+  await capture.port.next('ready');
+  assert.equal(capture.process([[new Float32Array(2000).fill(.1)]], [[new Float32Array(2000)]]), false);
+  const final = await capture.port.next('finished');
+  assert.equal(final.frames, 961);
+  assert.equal(final.speech.totalFrames, 3);
+  assert.deepEqual(capture.port.messages.slice(-3).map(value => value.type), ['pcm', 'limit', 'finished']);
+  assert.equal(capture.port.messages.find(value => value.type === 'pcm').samples.length, 961);
+});
+
+test('cancel during actual asynchronous preparation never sends ready or PCM', async () => {
+  const capture = create(10);
+  capture.port.onmessage({data: {type: 'cancel'}});
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.deepEqual(capture.port.messages, []);
+  assert.equal(capture.process([[new Float32Array(128)]], [[new Float32Array(128)]]), false);
+});

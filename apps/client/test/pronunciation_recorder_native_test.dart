@@ -91,6 +91,52 @@ void main() {
     expect(audio.disposed, isTrue);
   });
 
+  test('voice activity deduplicates states and drops stale samples', () async {
+    final audio = _Audio();
+    final recorder = NativePronunciationRecorder(audio: audio);
+    final activities = <String>[];
+    await recorder.prepare();
+    await recorder.start(
+      onLimit: () {},
+      onError: (_) {},
+      onVoiceActivity: activities.add,
+    );
+    final oldSamples = audio.samplesCallback!;
+    for (final activity in [
+      null,
+      'nonSpeech',
+      'nonSpeech',
+      'speech',
+      'uncertain',
+      'invalid',
+    ]) {
+      audio.activity = activity;
+      oldSamples([0.1]);
+    }
+    expect(activities, ['nonSpeech', 'speech', 'uncertain']);
+    expect(await recorder.finish(), ['G', 'A']);
+    audio.activity = 'speech';
+    oldSamples([0.1]);
+    expect(activities, hasLength(3));
+    await recorder.start(
+      onLimit: () {},
+      onError: (_) {},
+      onVoiceActivity: activities.add,
+    );
+    oldSamples([0.1]);
+    expect(activities, hasLength(3));
+    audio.samplesCallback!([0.1]);
+    expect(activities, ['nonSpeech', 'speech', 'uncertain', 'speech']);
+    final latestSamples = audio.samplesCallback!;
+    await recorder.cancel();
+    audio.activity = 'nonSpeech';
+    latestSamples([0.1]);
+    expect(activities, hasLength(4));
+    await recorder.dispose();
+    latestSamples([0.1]);
+    expect(activities, hasLength(4));
+  });
+
   test('replay waits for completion and rejects a second operation', () async {
     final audio = _Audio()..playback = Completer<void>();
     final recorder = NativePronunciationRecorder(audio: audio);
@@ -185,6 +231,10 @@ class _Audio extends DeviceAudioService {
   bool disposed = false;
   Completer<void>? playback;
   Completer<void>? starting;
+  String? activity;
+  void Function(List<double>)? samplesCallback;
+  @override
+  String? get recentVoiceActivity => activity;
   @override
   Future<void> start({
     required void Function(List<double>) onSamples,
@@ -192,6 +242,7 @@ class _Audio extends DeviceAudioService {
     void Function(String)? onError,
   }) async {
     starts++;
+    samplesCallback = onSamples;
     if (starts == 1) await starting?.future;
     onSamples([0.1]);
   }

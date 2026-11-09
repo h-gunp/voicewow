@@ -37,6 +37,11 @@ VoiceMateNoiseMeter *voicemate_meter_create(void) {
 
 int voicemate_meter_process(VoiceMateNoiseMeter *meter, const int16_t pcm[480],
                            VoiceMateAudioFrame *result) {
+    return voicemate_meter_process_pcm(meter, pcm, result, NULL);
+}
+
+int voicemate_meter_process_pcm(VoiceMateNoiseMeter *meter, const int16_t pcm[480],
+                               VoiceMateAudioFrame *result, float clean[480]) {
     if (!meter || !pcm || !result) return -1;
     float input[480], output[480];
     int16_t vad_input[480];
@@ -52,6 +57,7 @@ int voicemate_meter_process(VoiceMateNoiseMeter *meter, const int16_t pcm[480],
     for (int i = 0; i < 480; ++i) {
         const double value = output[i] / 32768.0;
         if (!isfinite(value)) return -1;
+        if (clean) clean[i] = (float)value;
         processed_energy += value * value;
         processed_peak = fmax(processed_peak, fabs(value));
         const double limited = fmax(-1.0, fmin(1.0, value));

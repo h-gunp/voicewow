@@ -29,6 +29,35 @@ Float64List voice({
 }
 
 void main() {
+  test(
+    'VAD masks pitch evidence without shortening audio or removing internal pauses',
+    () {
+      final samples = voice(seconds: 1);
+      final original = List<double>.of(samples);
+      final noSpeech = analyzeSamples(
+        samples,
+        rate,
+        speechFrames: List<int>.filled(100, 0),
+      );
+      expect(noSpeech.pitchMedian, isNull);
+      expect(noSpeech.voicedFrames, 0);
+      expect(noSpeech.duration, 1);
+      final decisions = List<int>.generate(
+        100,
+        (index) => index >= 35 && index < 65 ? 0 : 2,
+      );
+      final mixed = analyzeSamples(samples, rate, speechFrames: decisions);
+      expect(mixed.pitchMedian, isNotNull);
+      expect(
+        mixed.frames
+            .where((frame) => frame.time > .4 && frame.time < .6)
+            .every((frame) => !frame.active),
+        isTrue,
+      );
+      expect(mixed.duration, 1);
+      expect(samples, original);
+    },
+  );
   test('YIN detects a known live tone while silence remains unmeasured', () {
     final tone = Float64List.fromList(
       List.generate(800, (i) => .2 * math.sin(2 * math.pi * 220 * i / rate)),

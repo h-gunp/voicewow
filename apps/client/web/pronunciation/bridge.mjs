@@ -50,13 +50,23 @@ export function createPronunciationSession({ client = createPhoneClient(), recor
         throw koreanError(error);
       }
     },
-    async start(onLimit, onError) {
+    async start(onLimit, onError, onVoiceActivity) {
       if (!client.ready || !['ready', 'result'].includes(phase)) throw new Error('발음 모델을 먼저 준비해야 한다.');
       const ticket = ++generation;
       clearPlayback(); pendingFinish = undefined;
       phase = 'starting';
       let limited = false;
+      let previousSpeech = {speechFrames: 0, nonSpeechFrames: 0, uncertainFrames: 0}, lastActivity;
       const current = recorderFactory({
+        onChunk: ({speech}) => {
+          if (ticket !== generation || phase !== 'recording') return;
+          const keys = ['speechFrames', 'nonSpeechFrames', 'uncertainFrames'];
+          if (!speech || keys.some(key => !Number.isInteger(speech[key]) || speech[key] < previousSpeech[key])) return;
+          const activity = speech.speechFrames > previousSpeech.speechFrames ? 'speech'
+            : speech.nonSpeechFrames > previousSpeech.nonSpeechFrames && speech.uncertainFrames === previousSpeech.uncertainFrames ? 'nonSpeech' : 'uncertain';
+          previousSpeech = {...speech};
+          if (activity !== lastActivity) { lastActivity = activity; onVoiceActivity?.(activity); }
+        },
         onLimit: () => {
           if (ticket !== generation || phase !== 'recording' || limited) return;
           limited = true;
@@ -151,7 +161,7 @@ export function createPronunciationBridge(factory = createPronunciationSession) 
         if (ticket !== generation) throw aborted();
         await session.prepare(progress);
       },
-      async start(onLimit, onError) { check(); await session.start(onLimit, onError); },
+      async start(onLimit, onError, onVoiceActivity) { check(); await session.start(onLimit, onError, onVoiceActivity); },
       async finish() { check(); return session.finish(); },
       async play() { check(); await session.play(); },
       async cancel() {
@@ -171,7 +181,7 @@ export function createPronunciationBridge(factory = createPronunciationSession) 
   return {
     createSession,
     prepare: progress => current().prepare(progress),
-    start: (onLimit, onError) => current().start(onLimit, onError),
+    start: (onLimit, onError, onVoiceActivity) => current().start(onLimit, onError, onVoiceActivity),
     finish: () => current().finish(),
     play: () => current().play(),
     async cancel() { await active?.cancel(); },

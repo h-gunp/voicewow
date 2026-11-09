@@ -5,7 +5,7 @@ import { readWav } from './wav-fixture.mjs';
 
 // Load the browser ES module without introducing a package.json requirement.
 const source = await readFile(new URL('../../apps/client/web/prosody/audio-analysis.js', import.meta.url), 'utf8');
-const { analyzeAudio, analyzeFrame, trimAnalysis, compareAnalyses, summarizeComparison } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+const { analyzeAudio, analyzeFrame, trimAnalysis, compareAnalyses, summarizeComparison, isNonSpeechWindow } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 const rate = 16000;
 function tone(frequency, gain = 0.3, seconds = 1) {
   const data = new Float32Array(rate * seconds);
@@ -204,4 +204,36 @@ test('long low-hum waiting time does not dominate a short spoken contour', () =>
   assert.ok(Math.abs(user.voicedDuration - reference.voicedDuration) < .1);
   assert.ok(comparison.pitchError < .2);
   assert.ok(comparison.intensityError < .5);
+});
+
+test('speech classification excludes periodic background without deleting PCM or time', () => {
+  const samples = tone(220, .3, 2), original = samples.slice();
+  const full = analyzeAudio(samples, rate);
+  const gated = analyzeAudio(samples, rate, [{start:0,end:1,nonSpeech:true}]);
+  assert.deepEqual(samples, original);
+  assert.equal(gated.frames.length, full.frames.length);
+  assert.equal(gated.duration, full.duration);
+  assert.ok(gated.frames.filter(frame => frame.time < .975).every(frame => !frame.active && frame.pitchHz === null));
+  assert.ok(gated.frames.filter(frame => frame.time > 1.1).every(frame => frame.active));
+  assert.ok(Math.abs(gated.pitchMedian - 220) < 2);
+});
+
+test('uncertain speech keeps the acoustic pitch check and does not become forced silence', () => {
+  const samples = tone(220);
+  assert.deepEqual(analyzeAudio(samples, rate, [{start:0,end:1,nonSpeech:false}]), analyzeAudio(samples, rate));
+  const background = analyzeAudio(samples, rate, [{start:0,end:1,nonSpeech:true}]);
+  assert.equal(background.voicedFrames, 0);
+  assert.equal(background.pitchMedian, null);
+});
+
+test('VAD preserves analysis windows touching speech, uncertainty or unclassified gaps', () => {
+  const ranges=[{start:0,end:.1,nonSpeech:false},{start:.1,end:.2,nonSpeech:true},{start:.2,end:1,nonSpeech:false}];
+  assert.equal(isNonSpeechWindow(ranges,.08,.13),false);
+  assert.equal(isNonSpeechWindow(ranges,.16,.21),false);
+  assert.equal(isNonSpeechWindow(ranges,.12,.17),true);
+  assert.equal(isNonSpeechWindow([{start:.1,end:.2,nonSpeech:true}],.08,.13),false);
+  assert.equal(isNonSpeechWindow([{start:0,end:.1,nonSpeech:true},{start:.1,end:.2,nonSpeech:true}],.08,.13),true);
+  const measured=analyzeAudio(tone(180),rate,ranges);
+  for(const time of [.105,.185])assert.ok(measured.frames.find(frame=>Math.abs(frame.time-time)<1e-8).active);
+  assert.equal(measured.frames.find(frame=>Math.abs(frame.time-.145)<1e-8).active,false);
 });

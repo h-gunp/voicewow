@@ -1,13 +1,12 @@
 import {AsrClient} from './asr-client.js';
-import {startAsrPcmBridge} from './asr-pcm-bridge.js';
 import {ScriptTracker,sourceRanges} from './script-alignment.js';
 
 export function createScriptTracking({document,cancelTts}){
   const el=id=>document.getElementById(id);
-  let client=null,bridge=null,captureAbort=null,ready=false,ticket=0,tracker=null;
+  let client=null,ready=false,ticket=0,tracker=null,queue=Promise.resolve(),pending=0,sequence=0;
   const message=text=>{el('asr-status').textContent=text;};
   function clear(){el('asr-before').textContent='';el('asr-match').textContent='';el('asr-after').textContent='';}
-  function stop(){ticket++;ready=false;captureAbort?.abort();captureAbort=null;bridge?.stop();bridge=null;client?.stop();client=null;tracker=null;clear();}
+  function stop(){ticket++;ready=false;client?.stop();client=null;tracker=null;queue=Promise.resolve();pending=0;sequence=0;clear();}
   function render(result){
     clear();
     if(!result.range){message(result.status==='ambiguous'?'같은 문구가 반복돼 위치를 구분하지 못했어요.':'대본과 일치하는 위치를 찾고 있다.');return;}
@@ -26,16 +25,20 @@ export function createScriptTracking({document,cancelTts}){
       });
       await client.prepare();if(current!==ticket)throw Error('Cancelled');ready=true;message('준비됐어요. 연습을 시작하면 기기 안에서 대본 위치를 추정해요.');
     },
-    async attach(stream,source,chunks,index){
+    attach(source,chunks,index){
       if(!ready||!client)throw Error('ASR not ready');
-      const current=ticket,active=client;
       tracker=new ScriptTracker(source,sourceRanges(source,chunks)[index]);clear();
-      captureAbort=new AbortController();
-      const created=await startAsrPcmBridge({stream,signal:captureAbort.signal,onChunk:chunk=>active.consume(chunk),onError:()=>{
-        if(current===ticket){stop();message('처리가 녹음 속도를 따라가지 못해 위치 표시를 멈췄어요.');}
-      }});
-      if(current!==ticket){created.stop();throw Error('Cancelled');}
-      bridge=created;
     },
+    consume({samples,sampleRate}){
+      if(!ready||!client||!tracker)return;
+      if(pending>=4){stop();message('처리가 녹음 속도를 따라가지 못해 위치 표시를 멈췄어요.');return;}
+      const current=ticket,active=client;
+      // ASR transfers ownership; live analysis and recording keep their PCM.
+      const chunk={samples:samples.slice(),sampleRate,sequence:++sequence};pending++;
+      queue=queue.then(()=>{if(current===ticket)return active.consume(chunk);})
+        .catch(()=>{if(current===ticket){stop();message('음성 위치 표시가 중단됐어요. 다시 준비해 주세요.');}})
+        .finally(()=>{if(current===ticket)pending--;});
+    },
+    drain(){return queue;},
   };
 }

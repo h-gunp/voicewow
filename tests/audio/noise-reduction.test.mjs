@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createNoiseReductionNode } from '../../apps/client/web/audio/noise-reduction.mjs';
+import { createNoiseReductionNode, createProcessedCaptureNode } from '../../apps/client/web/audio/noise-reduction.mjs';
 
 function deferred() {
   let resolve, reject;
@@ -61,6 +61,34 @@ function assertDisposed(node) {
   assert.equal(node.port.onmessageerror, null);
   assert.equal(node.onprocessorerror, null);
 }
+
+test('processed capture requires VAD and forwards duration without changing the meter API', async t => {
+  const h = harness(t);
+  const pending = createProcessedCaptureNode(h.context, new AbortController().signal, 20);
+  await settle();
+  assert.equal(h.nodes[0].name, 'voicemate-processed-capture');
+  assert.equal(h.nodes[0].options.processorOptions.maxSeconds, 20);
+  assert.ok(h.modules[0].endsWith('/processed-capture-worklet.mjs'));
+  h.nodes[0].port.onmessage({data: {type: 'ready', vadStatus: 'ready'}});
+  assert.equal(await pending, h.nodes[0]);
+});
+
+test('processed capture rejects VAD download failure instead of disabling speech classification', async t => {
+  const h = harness(t); let calls = 0;
+  h.replace('fetch', async () => ({ok: ++calls !== 2, arrayBuffer: async () => new ArrayBuffer(4)}));
+  await assert.rejects(createProcessedCaptureNode(h.context, new AbortController().signal), {captureReason: 'load_failed'});
+  assert.equal(h.nodes.length, 0);
+});
+
+test('processed capture rejects a ready node with failed VAD and releases it', async t => {
+  const h = harness(t);
+  const pending = createProcessedCaptureNode(h.context, new AbortController().signal);
+  await settle();
+  const rejected = assert.rejects(pending, {captureReason: 'load_failed'});
+  h.nodes[0].port.onmessage({data: {type: 'ready', vadStatus: 'init_failed'}});
+  await rejected;
+  assertDisposed(h.nodes[0]);
+});
 
 for (const stage of ['response','body']) test(`cold VAD ${stage} finishing after 1500 ms remains available`, async t => {
   const h=harness(t), gate=deferred(); let calls=0, vadSignal;

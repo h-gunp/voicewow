@@ -1,0 +1,276 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:record/record.dart';
+import 'package:voicemate/features/prosody/audio/wav.dart';
+import 'package:voicemate/features/prosody/services/device_audio.dart';
+import 'package:voicemate/features/prosody/services/practice_audio_processor.dart';
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  const channel = MethodChannel('voicemate/practice_audio');
+  const paths = MethodChannel('plugins.flutter.io/path_provider');
+  final messenger =
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+  late RecordPlatform previous;
+  late _Capture capture;
+  late _Processor processor;
+  late DeviceAudioService service;
+  late Directory directory;
+
+  setUp(() async {
+    previous = RecordPlatform.instance;
+    capture = _Capture();
+    RecordPlatform.instance = capture;
+    processor = _Processor();
+    messenger.setMockMethodCallHandler(channel, processor.handle);
+    directory = await Directory.systemTemp.createTemp('practice_clean_audio_');
+    messenger.setMockMethodCallHandler(paths, (_) async => directory.path);
+    service = DeviceAudioService();
+  });
+  tearDown(() async {
+    if (processor.release != null && !processor.release!.isCompleted)
+      processor.release!.complete();
+    await service.dispose();
+    RecordPlatform.instance = previous;
+    messenger.setMockMethodCallHandler(channel, null);
+    messenger.setMockMethodCallHandler(paths, null);
+    await directory.delete(recursive: true);
+  });
+
+  test(
+    'stop drains capture and native work before saving exactly the live clean PCM',
+    () async {
+      final live = <double>[];
+      processor.release = Completer<void>();
+      await service.start(onSamples: live.addAll);
+      expect(capture.config!.sampleRate, 48000);
+      expect(capture.config!.noiseSuppress, isFalse);
+      capture.emit(480);
+      await processor.started.future;
+      capture.tailSamples = 480;
+      var completed = false;
+      final stopping = service.stop().then((value) {
+        completed = true;
+        return value;
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(completed, isFalse);
+      processor.release!.complete();
+      processor.release = null;
+      final result = await stopping;
+      expect(result.samples, List<double>.filled(320, .125));
+      expect(live, result.samples);
+      expect(result.sampleRate, 16000);
+      expect(result.speechFrames, [1, 1]);
+      expect(service.recentVoiceActivity, 'speech');
+      expect(
+        await File(result.path).readAsBytes(),
+        encodeWav(result.samples, 16000),
+      );
+      expect(processor.methods.where((name) => name == 'finish').length, 1);
+    },
+  );
+
+  test(
+    'VAD non-speech alone never removes a weak consonant recording',
+    () async {
+      processor.decision = 0;
+      processor.variance = 1e-5;
+      await service.start(onSamples: (_) {});
+      capture.emit(480);
+      final result = await service.stop();
+      expect(result.samples.length, 160);
+      expect(result.speechFrames, [0]);
+      expect(service.recentVoiceActivity, 'nonSpeech');
+    },
+  );
+
+  test('native response rejects excess VAD decisions', () async {
+    final session = NativePracticeAudioSession();
+    await session.create();
+    messenger.setMockMethodCallHandler(
+      channel,
+      (call) async => call.method == 'process'
+          ? {
+              'samples': Float32List(0),
+              'speech': Int32List.fromList([1, 1]),
+              'inputSamples': 480,
+              'outputSamples': 0,
+              'rawVariance': .01,
+            }
+          : null,
+    );
+    await expectLater(session.process(Uint8List(960)), throwsStateError);
+    await session.cancel();
+  });
+
+  test('unresponsive native processing has a bounded deadline', () async {
+    final session = NativePracticeAudioSession();
+    await session.create();
+    messenger.setMockMethodCallHandler(
+      channel,
+      (call) => call.method == 'process'
+          ? Completer<Object?>().future
+          : Future<Object?>.value(null),
+    );
+    await expectLater(
+      session.process(Uint8List(960)),
+      throwsA(
+        isA<PlatformException>().having(
+          (error) => error.code,
+          'code',
+          'audio_processing_timeout',
+        ),
+      ),
+    );
+    await session.cancel();
+  });
+
+  test(
+    'confirmed non-speech plus negligible raw variance rejects empty audio',
+    () async {
+      processor.decision = 0;
+      processor.variance = 0;
+      await service.start(onSamples: (_) {});
+      capture.emit(480);
+      await expectLater(
+        service.stop(),
+        throwsA(
+          isA<DeviceAudioException>().having(
+            (error) => error.message,
+            'message',
+            contains('목소리를 찾지 못했어요'),
+          ),
+        ),
+      );
+      expect(directory.listSync(recursive: true).whereType<File>(), isEmpty);
+    },
+  );
+
+  test(
+    'cancel discards delayed processed audio and drains before a fresh session',
+    () async {
+      final live = <double>[];
+      processor.release = Completer<void>();
+      await service.start(onSamples: live.addAll);
+      capture.emit(960);
+      await processor.started.future;
+      final cancelling = service.cancel();
+      await expectLater(
+        service.start(onSamples: (_) {}),
+        throwsA(isA<DeviceAudioException>()),
+      );
+      processor.release!.complete();
+      processor.release = null;
+      await cancelling;
+      expect(live, isEmpty);
+      await service.start(onSamples: live.addAll);
+      capture.emit(480);
+      final result = await service.stop();
+      expect(result.samples.length, 160);
+      expect(live, result.samples);
+      expect(processor.createdIds.toSet().length, 2);
+    },
+  );
+}
+
+class _Capture extends RecordPlatform {
+  StreamController<Uint8List>? stream;
+  RecordConfig? config;
+  int tailSamples = 0;
+  void emit(int samples) => stream!.add(
+    Uint8List.fromList(
+      List<int>.generate(samples * 2, (i) => i.isEven ? 0 : 96),
+    ),
+  );
+  @override
+  Future<void> create(String recorderId) async {}
+  @override
+  Stream<RecordState> onStateChanged(String recorderId) => const Stream.empty();
+  @override
+  Future<bool> hasPermission(String recorderId, {bool request = true}) async =>
+      true;
+  @override
+  Future<bool> isEncoderSupported(
+    String recorderId,
+    AudioEncoder encoder,
+  ) async => true;
+  @override
+  void setOnConfigChanged(
+    String recorderId,
+    void Function(RecordConfig)? handler,
+  ) {}
+  @override
+  Future<Stream<Uint8List>> startStream(
+    String recorderId,
+    RecordConfig value,
+  ) async {
+    config = value;
+    stream = StreamController<Uint8List>();
+    return stream!.stream;
+  }
+
+  @override
+  Future<String?> stop(String recorderId) async {
+    if (tailSamples > 0) emit(tailSamples);
+    await stream?.close();
+    return null;
+  }
+
+  @override
+  Future<void> cancel(String recorderId) async {
+    await stream?.close();
+  }
+
+  @override
+  Future<void> dispose(String recorderId) async {}
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _Processor {
+  final methods = <String>[], createdIds = <int>[];
+  final started = Completer<void>();
+  Completer<void>? release;
+  int input = 0, output = 0, flags = 0, decision = 1;
+  double variance = .01;
+  Future<Object?> handle(MethodCall call) async {
+    methods.add(call.method);
+    final args = call.arguments as Map;
+    if (call.method == 'create') {
+      createdIds.add(args['session'] as int);
+      input = output = flags = 0;
+      return {'inputSampleRate': 48000, 'sampleRate': 16000};
+    }
+    if (call.method == 'cancel') return null;
+    if (call.method == 'process') {
+      if (!started.isCompleted) started.complete();
+      await release?.future;
+      input += (args['pcm'] as Uint8List).length ~/ 2;
+    }
+    final finished = call.method == 'finish';
+    final readyFrames = finished
+        ? (input + 479) ~/ 480
+        : (input ~/ 480 - 1).clamp(0, 2000);
+    final nextOutput = finished ? (input + 2) ~/ 3 : readyFrames * 160;
+    final samples = Float32List.fromList(
+      List<double>.filled(nextOutput - output, .125),
+    );
+    final speech = Int32List.fromList(
+      List<int>.filled(readyFrames - flags, decision),
+    );
+    output = nextOutput;
+    flags = readyFrames;
+    return {
+      'samples': samples,
+      'speech': speech,
+      'inputSamples': input,
+      'outputSamples': output,
+      'rawVariance': variance,
+    };
+  }
+}

@@ -7,6 +7,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private var pronunciation: PronunciationEngine? = null
     private var volume: VolumeEngine? = null
+    private var practiceAudio: PracticeAudioEngine? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -20,6 +21,10 @@ class MainActivity : FlutterActivity() {
             applicationContext,
             MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "voicemate/volume"),
         )
+        practiceAudio?.close()
+        practiceAudio = PracticeAudioEngine(
+            MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "voicemate/practice_audio"),
+        )
     }
 
     override fun onStop() {
@@ -32,6 +37,8 @@ class MainActivity : FlutterActivity() {
         pronunciation = null
         volume?.close()
         volume = null
+        practiceAudio?.close()
+        practiceAudio = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
 }

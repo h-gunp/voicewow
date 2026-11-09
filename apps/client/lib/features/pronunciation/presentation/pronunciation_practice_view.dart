@@ -157,6 +157,17 @@ class _PronunciationPracticeViewState extends State<PronunciationPracticeView>
           if (current(ticket)) unawaited(_finish());
         },
         onError: (message) => _error(StateError(message), ticket),
+        onVoiceActivity: (activity) {
+          if (!current(ticket) || phase != _Phase.recording) return;
+          final message = switch (activity) {
+            'speech' => '말소리를 감지했다. 읽기를 마치면 마이크를 다시 누른다.',
+            'nonSpeech' => '말소리를 기다리고 있다. 문구를 읽는다.',
+            'uncertain' => '소리를 듣고 있다. 문구를 계속 읽는다.',
+            _ => null,
+          };
+          if (message != null && message != status)
+            setState(() => status = message);
+        },
       );
       if (!current(ticket)) return;
       stopwatch

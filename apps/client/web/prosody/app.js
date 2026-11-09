@@ -1,5 +1,5 @@
 import { GUIDES } from './guide-data.js';
-import { analyzeAudio, analyzeFrame, trimAnalysis, compareAnalyses } from './audio-analysis.js';
+import { analyzeAudio, analyzeFrame, trimAnalysis, compareAnalyses, isNonSpeechWindow } from './audio-analysis.js';
 import { alignedTrace, wavBytes, segmentObservation } from './lab-utils.js';
 import { drawGraph, graphSegmentAt } from './charts.js';
 import { parsePracticeScript, selectLocalKoreanVoice, splitRegionText } from './script-utils.js';
@@ -10,8 +10,9 @@ import { createLiveView } from './live-view.js';
 import { createFlowPager } from './flow-pager.js';
 import { runGuideBatch } from './guide-batch.js';
 import { createScriptTracking } from './script-tracking-ui.js';
+import { createProcessedRecorder } from '../audio/processed-capture.mjs';
 
-export function createProsodyApp({document=globalThis.document,window=globalThis.window,embedded=false,onExit=()=>{},baseUrl=import.meta.url}={}) {
+export function createProsodyApp({document=globalThis.document,window=globalThis.window,embedded=false,onExit=()=>{},baseUrl=import.meta.url,createRecorder=createProcessedRecorder}={}) {
 const {generateGuide,cancelGuide}=createTtsClient();
 const cleanups=[];
 let disposed=false;
@@ -162,7 +163,7 @@ function paintPractice(trace=[],progress=null,options={}){
   paintChart('guide-chart',{reference:guide.analysis,regions:previewRegions,progress:live?null:progress});
 }
 function paintLive(s){
-  const elapsed=Math.max(0,(performance.now()-s.started)/1000-(s.firstVoice??0));
+  const elapsed=Math.max(0,(s.elapsed||0)-(s.firstVoice??0));
   const view=s.view.update(s.frames,s.firstVoice===null?0:elapsed);
   $('live-status').dataset.voice=view.hasCurrentVoice?'active':'waiting';
   const message=s.firstVoice===null?'목소리를 기다리고 있어요. 문구를 읽어 보세요.':view.hasCurrentVoice?'내 목소리를 주황색 선과 점으로 표시하고 있어요.':'지금은 높낮이를 확인하기 어려워요. 측정이 되면 주황색 점이 다시 나타나요.';
@@ -328,7 +329,7 @@ async function processClip(blob,{demo=false,decoded=null}={}){
   try{
     if(ticket!==generation)return;
     const audio=decoded||await decode(blob);if(ticket!==generation)return;
-    const user=trimAnalysis(analyzeAudio(audio.samples,audio.sampleRate));
+    const user=trimAnalysis(analyzeAudio(audio.samples,audio.sampleRate,audio.speechRanges));
     if(user.duration<.15||user.voicedFrames<8||!user.pitchMedian)throw new Error('앱이 목소리를 충분히 잡지 못했어요. 마이크 위치를 확인하고, 준비되면 편하게 다시 읽어 주세요.');
     const comparison=compareAnalyses(guide.analysis,user);
     if(!comparison.path.length)throw new Error(comparison.warnings[0]||'두 소리를 비교하기 어려워요. 다시 녹음해 주세요.');
@@ -353,61 +354,76 @@ async function processClip(blob,{demo=false,decoded=null}={}){
 function releaseSession(s){
   if(s.released)return;s.released=true;
   if(session===s)scriptTracking.stop();
-  clearInterval(s.liveTimer);clearTimeout(s.timeout);s.stream?.getTracks().forEach(t=>t.stop());
-  try{s.source?.disconnect();s.analyser?.disconnect();}catch{}
-  if(s.context&&s.context.state!=='closed')s.context.close().catch(()=>{});
+  s.recorder?.cancel();
 }
 async function record(){
-  if(state==='recording'){if(session?.recorder.state!=='inactive')session.recorder.stop();return;}
+  if(state==='recording'){return session?.finish();}
   if(isBusy())return;
   if(draftPending()){setText('practice-status','수정한 대본으로 연습 준비를 먼저 눌러 주세요.');return;}
   if(!guide.analysis){setText('practice-status','먼저 같은 대본의 가이드를 준비해 주세요.');return;}
-  if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){setText('practice-status','이 브라우저에서 마이크를 사용할 수 없어요. Safari·Chrome의 보안 연결 또는 로컬 주소에서 열어 주세요. 파일 비교와 데모도 사용할 수 있어요.');return;}
+  if(!navigator.mediaDevices?.getUserMedia){setText('practice-status','이 브라우저에서 마이크를 사용할 수 없어요. Safari·Chrome의 보안 연결 또는 로컬 주소에서 열어 주세요.');return;}
   if(practiceMode==='script'&&$('asr-enabled').checked&&!scriptTracking.ready){setText('practice-status','음성 위치 표시를 먼저 준비하거나 체크를 꺼 주세요.');return;}
   const ticket=++generation;state='requesting';stopPlayback();stopPreview();setText('timer','00:00');refresh();
-  setText('practice-status','마이크 접근을 허용하면 녹음이 시작돼요.');
-  let stream,context,s;
-  try{
-    stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},video:false});
-    if(ticket!==generation){stream.getTracks().forEach(t=>t.stop());return;}
-    s={stream};session=s;
-    const AC=window.AudioContext||window.webkitAudioContext;context=new AC();s.context=context;await context.resume();
-    if(ticket!==generation||document.hidden){if(session===s)cancelRecording();else releaseSession(s);return;}
-    const source=context.createMediaStreamSource(stream);s.source=source;
-    const analyser=context.createAnalyser();s.analyser=analyser;analyser.fftSize=4096;source.connect(analyser);
-    if(practiceMode==='script'&&$('asr-enabled').checked){
-      try{await scriptTracking.attach(stream,appliedScript,scriptLines,scriptIndex);}
-      catch{if(ticket===generation&&session===s){scriptTracking.stop();setText('asr-status','이 기기에서 음성 위치 표시를 시작하지 못했어요. 녹음은 계속해요.');}}
-      if(ticket!==generation||document.hidden){releaseSession(s);return;}
-    }
-    const recorder=new MediaRecorder(stream),chunks=[];Object.assign(s,{recorder,failed:false,cancelled:false,frames:[],firstVoice:null,view:createLiveView(guide.analysis)});
-    listen(recorder,'dataavailable',e=>{if(e.data.size)chunks.push(e.data);});
-    listen(recorder,'error',()=>{s.failed=true;if(recorder.state!=='inactive')recorder.stop();else finish();},{once:true});
-    let finished=false;
-    function finish(){
-      if(finished)return;finished=true;releaseSession(s);if(session===s)session=null;
-      if(s.cancelled)return;
-      if(s.failed){state='idle';retryFailure('녹음에 문제가 생겼어요. 다시 시도해 주세요.');return;}
-      const blob=new Blob(chunks,{type:recorder.mimeType||'audio/webm'});
-      if(!blob.size){state='idle';retryFailure('녹음된 소리를 읽지 못했어요. 다시 시도해 주세요.');return;}
-      processClip(blob);
-    }
-    listen(recorder,'stop',finish,{once:true});
-    recorder.start();state='recording';s.started=performance.now();refresh();paintLive(s);
-    setText('practice-status','주황색 선과 점을 보며 같은 문구를 읽어 보세요. 녹음을 마치면 말하는 속도를 맞춰 다시 비교해요.');
-    const data=new Float32Array(analyser.fftSize);
-    s.liveTimer=setInterval(()=>{
-      const elapsed=(performance.now()-s.started)/1000;setText('timer',`00:${String(Math.floor(elapsed)).padStart(2,'0')}`);
-      analyser.getFloatTimeDomainData(data);
-      const frameSamples=data.subarray(Math.max(0,data.length-Math.round(context.sampleRate*.05)));
-      const f=analyzeFrame(frameSamples,context.sampleRate);
+  setText('practice-status','소음 억제와 마이크를 준비하고 있다.');
+  const s={frames:[],firstVoice:null,view:createLiveView(guide.analysis),speechRanges:[],speech:{},liveSamples:new Float32Array(),nextLiveEnd:null};
+  session=s;
+  const current=()=>ticket===generation&&session===s&&!s.released&&!document.hidden;
+  function fail(error){
+    if(!current())return;
+    releaseSession(s);session=null;state='idle';
+    const message=error?.name==='NotAllowedError'?'마이크 접근이 허용되지 않았어요. 브라우저에서 권한을 바꿔 주세요.'
+      :error?.captureReason==='no_speech'?'녹음에서 목소리를 찾지 못했다. 마이크 가까이에서 다시 읽는다.'
+      :error?.captureReason==='unsupported_sample_rate'?'이 브라우저에서 소음 억제를 시작하지 못했다. 다른 브라우저에서 다시 시도한다.'
+      :['load_failed','load_timeout'].includes(error?.captureReason)?'소음 억제를 준비하지 못했다. 인터넷 연결을 확인하고 다시 시작한다.'
+      :'녹음을 처리하지 못했다. 마이크 연결을 확인하고 다시 시작한다.';
+    retryFailure(message);
+  }
+  s.finish=async()=>{
+    if(s.finishing||!current())return;s.finishing=true;state='processing';refresh();
+    setText('practice-status','녹음을 마무리하고 있다.');
+    try{
+      const audio=await s.recorder.stop();
+      if(!current())return;
+      await scriptTracking.drain();
+      if(!current())return;
+      releaseSession(s);session=null;
+      const blob=new Blob([wavBytes(audio.samples,audio.sampleRate)],{type:'audio/wav'});
+      await processClip(blob,{decoded:{...audio,speechRanges:s.speechRanges}});
+    }catch(error){fail(error);}
+  };
+  s.recorder=createRecorder({maxSeconds:20,onLimit:()=>{void s.finish();},onError:fail,onChunk:chunk=>{
+    if(!current())return;
+    const {samples,sampleRate,startFrame,speech}=chunk;
+    const nonSpeech=speech.nonSpeechFrames>(s.speech.nonSpeechFrames||0)
+      &&speech.speechFrames===(s.speech.speechFrames||0)&&speech.uncertainFrames===(s.speech.uncertainFrames||0);
+    s.speech={...speech};
+    const endFrame=startFrame+samples.length;
+    s.elapsed=endFrame/sampleRate;
+    s.speechRanges.push({start:startFrame/sampleRate,end:endFrame/sampleRate,nonSpeech});
+    const windowSize=Math.round(sampleRate*.05),hop=Math.round(sampleRate*.04);
+    const joined=new Float32Array(s.liveSamples.length+samples.length);joined.set(s.liveSamples);joined.set(samples,s.liveSamples.length);
+    const bufferStart=startFrame-s.liveSamples.length;s.nextLiveEnd??=windowSize;
+    while(s.nextLiveEnd<=endFrame){
+      const end=s.nextLiveEnd-bufferStart;
+      const f=analyzeFrame(joined.subarray(end-windowSize,end),sampleRate);
+      if(isNonSpeechWindow(s.speechRanges,(s.nextLiveEnd-windowSize)/sampleRate,s.nextLiveEnd/sampleRate)){f.active=false;f.pitchHz=null;}
+      const elapsed=s.nextLiveEnd/sampleRate;
       if(s.firstVoice===null&&f.active)s.firstVoice=elapsed;
       if(s.firstVoice!==null)s.frames.push({...f,time:elapsed-s.firstVoice});
-      paintLive(s);
-    },40);
-    s.timeout=setTimeout(()=>{if(recorder.state!=='inactive')recorder.stop();},20000);
-    listen(stream.getAudioTracks()[0],'ended',()=>{if(recorder.state!=='inactive')recorder.stop();},{once:true});
-  }catch(error){if(s)releaseSession(s);else stream?.getTracks().forEach(t=>t.stop());if(ticket!==generation)return;if(session===s)session=null;state='idle';retryFailure(error.name==='NotAllowedError'?'마이크 접근이 허용되지 않았어요. 브라우저에서 권한을 바꾸거나 음성 파일로 시험해 보세요.':'마이크를 시작하지 못했어요. 연결을 확인하거나 음성 파일로 시험해 보세요.');}
+      s.nextLiveEnd+=hop;
+    }
+    s.liveSamples=joined.slice(-windowSize);
+    setText('timer',`00:${String(Math.floor(endFrame/sampleRate)).padStart(2,'0')}`);
+    paintLive(s);
+    scriptTracking.consume(chunk);
+  }});
+  try{
+    if(practiceMode==='script'&&$('asr-enabled').checked)scriptTracking.attach(appliedScript,scriptLines,scriptIndex);
+    await s.recorder.start();
+    if(!current()){releaseSession(s);return;}
+    state='recording';refresh();paintLive(s);
+    setText('practice-status','소음을 줄여 녹음하고 있다. 주황색 선과 점을 보며 같은 문구를 읽는다.');
+  }catch(error){fail(error);}
 }
 async function playUrl(url,start=0,end=null,label=''){
   if(disposed)return;
@@ -544,7 +560,7 @@ async function makeScriptGuide({replaceSelected=false}={}){
         const audio=await generateGuide(item.text,{onProgress});
         if(run.controller.signal.aborted||run.ticket!==generation)throw new DOMException('취소했어요.','AbortError');
         if(audio.samples.length/audio.sampleRate>20)throw new Error('음성이 20초보다 길어요. 이 문장을 더 짧게 나눠 주세요.');
-        const analysis=trimAnalysis(analyzeAudio(audio.samples,audio.sampleRate));
+        const analysis=trimAnalysis(analyzeAudio(audio.samples,audio.sampleRate,audio.speechRanges));
         if(analysis.voicedFrames<15||!analysis.pitchMedian)throw new Error('높낮이를 충분히 찾지 못했어요. 이 문장을 조금 다듬어 다시 만들어 주세요.');
         return {analysis,blob:new Blob([wavBytes(audio.samples,audio.sampleRate)],{type:'audio/wav'})};
       },
@@ -583,7 +599,7 @@ async function loadReference(file){
   setText('reference-status','참고 음성에서 목소리를 확인하고 있어요.');
   try{
     const audio=await decode(file);if(ticket!==generation)return;
-    const analysis=trimAnalysis(analyzeAudio(audio.samples,audio.sampleRate));
+    const analysis=trimAnalysis(analyzeAudio(audio.samples,audio.sampleRate,audio.speechRanges));
     if(analysis.voicedFrames<15||!analysis.pitchMedian)throw new Error('참고 음성에서 충분한 목소리를 찾지 못했어요. 같은 문장을 또렷하게 읽은 파일을 넣어 주세요.');
     const previous=scriptReferences.get(index);
     const next={analysis,audioUrl:URL.createObjectURL(file),name:file.name};
@@ -603,7 +619,7 @@ function readScript(){
   utterance.onerror=()=>{if(ttsUtterance!==utterance)return;ttsUtterance=null;setText('practice-status','기기 읽어주기를 실행하지 못했어요. 직접 읽거나 참고 음성을 넣어 연습해 주세요.');};
   window.speechSynthesis.speak(utterance);
 }
-function cancelRecording(){if(disposed)return;scriptTracking.stop();const run=guideBatch;guideBatch=null;generation++;run?.controller.abort();cancelGuide();if(session){const s=session;s.cancelled=true;session=null;if(s.recorder&&s.recorder.state!=='inactive')s.recorder.stop();releaseSession(s);}state='idle';stopPreview();stopPlayback();if(run){guideNotice=`가이드 준비를 멈췄어요. 준비된 ${scriptReferences.size}개는 그대로 보관했어요.`;syncScriptReference();}paintStoredRecording();renderResult();refresh();}
+function cancelRecording(){if(disposed)return;scriptTracking.stop();const run=guideBatch;guideBatch=null;generation++;run?.controller.abort();cancelGuide();if(session){const s=session;s.cancelled=true;session=null;releaseSession(s);}state='idle';stopPreview();stopPlayback();if(run){guideNotice=`가이드 준비를 멈췄어요. 준비된 ${scriptReferences.size}개는 그대로 보관했어요.`;syncScriptReference();}paintStoredRecording();renderResult();refresh();}
 function dispose(){
   if(disposed)return;
   try { cancelRecording(); } finally {

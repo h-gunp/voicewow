@@ -76,6 +76,26 @@ test('limit callback is single-use and stale callbacks cannot affect a retry', a
   assert.equal(limited, 1); assert.equal(failed, 0);
 });
 
+test('voice activity reports changed chunk decisions without changing phones or accepting stale activity', async t => {
+  const f = fixture(t), states = [];
+  await f.session.prepare();
+  await f.session.start(() => {}, () => {}, state => states.push(state));
+  const first = f.capture();
+  assert.equal(typeof first.onChunk, 'function');
+  const emit = (speechFrames, nonSpeechFrames, uncertainFrames) => first.onChunk({speech: {
+    speechFrames, nonSpeechFrames, uncertainFrames, totalFrames: speechFrames + nonSpeechFrames + uncertainFrames,
+  }});
+  emit(0, 10, 0); emit(0, 20, 0); emit(3, 27, 0); emit(3, 27, 10);
+  assert.deepEqual(states, ['nonSpeech', 'speech', 'uncertain']);
+  assert.deepEqual(await f.session.finish(), ['k', 'a']);
+  emit(13, 27, 10);
+  await f.session.start(() => {}, () => {}, state => states.push(state));
+  emit(23, 27, 10);
+  await f.session.cancel();
+  f.capture().onChunk({speech: {speechFrames: 10, nonSpeechFrames: 0, uncertainFrames: 0, totalFrames: 10}});
+  assert.deepEqual(states, ['nonSpeech', 'speech', 'uncertain']);
+});
+
 test('cancelling inference rejects its late result and clears replay', async t => {
   const inference = deferred(), reached = deferred();
   const f = fixture(t, { client: { recognize() { reached.resolve(); return inference.promise; } } });
