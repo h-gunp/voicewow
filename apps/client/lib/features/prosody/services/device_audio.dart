@@ -460,6 +460,9 @@ class DeviceAudioService {
           autoGain: false,
           echoCancel: false,
           noiseSuppress: false,
+          androidConfig: AndroidRecordConfig(
+            audioSource: AndroidAudioSource.voiceRecognition,
+          ),
           streamBufferSize: 3840,
         ),
       );

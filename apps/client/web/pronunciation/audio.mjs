@@ -4,9 +4,33 @@ function validate(samples, sampleRate) {
     || samples.some(value => !Number.isFinite(value) || Math.abs(value) > 1.001)) throw new Error('20초 이하의 유효한 오디오가 필요하다.');
 }
 
+// Match native PracticeDownsampler: 7.2kHz low-pass, centered 63-tap Hamming FIR.
+const downsampleTaps = Float32Array.from({length: 63}, (_, index) => {
+  const x = index - 31;
+  const lowpass = x === 0 ? .3 : Math.sin(2 * Math.PI * .15 * x) / (Math.PI * x);
+  return lowpass * (.54 - .46 * Math.cos(2 * Math.PI * index / 62));
+});
+let tapSum = 0;
+for (const tap of downsampleTaps) tapSum = Math.fround(tapSum + tap);
+for (let i = 0; i < downsampleTaps.length; i++) downsampleTaps[i] /= tapSum;
+
+function downsample48kHz(samples) {
+  const result = new Float32Array(Math.ceil(samples.length / 3));
+  for (let i = 0; i < result.length; i++) {
+    let value = 0;
+    for (let tap = 0; tap < downsampleTaps.length; tap++) {
+      const index = i * 3 + 31 - tap;
+      if (index >= 0 && index < samples.length) value += Math.fround(downsampleTaps[tap] * samples[index]);
+    }
+    result[i] = Math.max(-1, Math.min(1, value));
+  }
+  return result;
+}
+
 export async function to16kHz(samples, sampleRate) {
   validate(samples, sampleRate);
   if (sampleRate === 16000) return samples.slice();
+  if (sampleRate === 48000) return downsample48kHz(samples);
   const Context = globalThis.OfflineAudioContext || globalThis.webkitOfflineAudioContext;
   if (!Context) throw new Error('이 브라우저에서 오디오 변환을 사용할 수 없다.');
   const context = new Context(1, Math.round(samples.length / sampleRate * 16000), 16000);

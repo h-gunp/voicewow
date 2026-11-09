@@ -48,6 +48,12 @@ void main() {
       processor.release = Completer<void>();
       await service.start(onSamples: live.addAll);
       expect(capture.config!.sampleRate, 48000);
+      expect(
+        capture.config!.androidConfig.audioSource,
+        AndroidAudioSource.voiceRecognition,
+      );
+      expect(capture.config!.autoGain, isFalse);
+      expect(capture.config!.echoCancel, isFalse);
       expect(capture.config!.noiseSuppress, isFalse);
       capture.emit(480);
       await processor.started.future;
