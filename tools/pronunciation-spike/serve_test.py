@@ -17,11 +17,11 @@ ROUTES = {
        f"apps/client/web/prosody/vendor/onnx/{name}"
        for name in ("ort.wasm.min.mjs", "ort-wasm-simd-threaded.mjs", "ort-wasm-simd-threaded.wasm")},
     **{f"/apps/client/web/pronunciation/{name}": f"apps/client/web/pronunciation/{name}"
-       for name in ("audio.mjs", "phones.mjs", "phone-engine.mjs", "client.mjs",
+       for name in ("audio.mjs", "phones.mjs", "ipa-phones.mjs", "phone-engine.mjs", "client.mjs",
                     "recording.mjs", "capture-worklet.mjs")},
-    **{f"/.local/pronunciation-spike/{name}": f".local/pronunciation-spike/{name}"
+    **{f"/.local/pronunciation-ipa/{name}": f".local/pronunciation-ipa/{name}"
        for name in ("config.json", "vocab.json", "added_tokens.json",
-                    "preprocessor_config.json", "onnx/model_quantized.onnx")},
+                    "preprocessor_config.json", "ko-ipa.onnx", "model.safetensors")},
     "/fonts/PretendardVariable.ttf": "apps/client/assets/fonts/PretendardVariable.ttf",
 }
 
@@ -125,8 +125,8 @@ class ServerTest(unittest.TestCase):
 
     def test_sensitive_files_and_directory_indexes_are_unavailable(self):
         for relative in (".env", "tools/pronunciation-spike/download-model.py",
-                         "tools/pronunciation-spike/serve_test.py", ".local/pronunciation-spike/fixture.wav",
-                         ".local/pronunciation-spike/manifest.json", "README.md"):
+                         "tools/pronunciation-spike/serve_test.py", ".local/pronunciation-ipa/fixture.wav",
+                         ".local/pronunciation-ipa/manifest.json", "README.md"):
             target = self.root / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text("secret", encoding="utf-8")

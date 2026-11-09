@@ -17,17 +17,17 @@ ROUTES = {
        f"apps/client/web/prosody/vendor/onnx/{name}"
        for name in ("ort.wasm.min.mjs", "ort-wasm-simd-threaded.mjs", "ort-wasm-simd-threaded.wasm")},
     **{f"/apps/client/web/pronunciation/{name}": f"apps/client/web/pronunciation/{name}"
-       for name in ("audio.mjs", "phones.mjs", "phone-engine.mjs", "client.mjs",
+       for name in ("audio.mjs", "phones.mjs", "ipa-phones.mjs", "phone-engine.mjs", "client.mjs",
                     "recording.mjs", "capture-worklet.mjs", "sha256.mjs",
                     "vendor/hash-wasm/sha256.umd.min.js", "vendor/onnx/ort.wasm.min.mjs")},
-    **{f"/.local/pronunciation-spike/{name}": f".local/pronunciation-spike/{name}"
+    **{f"/.local/pronunciation-ipa/{name}": f".local/pronunciation-ipa/{name}"
        for name in ("config.json", "vocab.json", "added_tokens.json",
-                    "preprocessor_config.json", "onnx/model_quantized.onnx")},
+                    "preprocessor_config.json", "ko-ipa.onnx", "model.safetensors")},
     "/fonts/PretendardVariable.ttf": "apps/client/assets/fonts/PretendardVariable.ttf",
 }
 MIMES = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
          ".mjs": "application/javascript", ".js": "application/javascript", ".wasm": "application/wasm",
-         ".json": "application/json", ".ttf": "font/ttf", ".onnx": "application/octet-stream"}
+         ".json": "application/json", ".ttf": "font/ttf", ".onnx": "application/octet-stream", ".safetensors": "application/octet-stream"}
 CSP = ("default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; "
        "connect-src 'self'; media-src 'self' blob:; object-src 'none'; "
        "frame-ancestors 'none'; base-uri 'none'; form-action 'none'")

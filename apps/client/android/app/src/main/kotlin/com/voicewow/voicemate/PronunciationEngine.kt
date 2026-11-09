@@ -16,11 +16,9 @@ import java.net.URI
 import java.nio.FloatBuffer
 import java.security.MessageDigest
 import java.util.concurrent.Executors
-import kotlin.math.abs
-import kotlin.math.sqrt
 
 internal object PronunciationPcm {
-    fun normalize(samples: FloatArray, sampleRate: Int): FloatArray {
+    fun prepareSamples(samples: FloatArray, sampleRate: Int): FloatArray {
         require(sampleRate == 16000 && samples.size in 3200..320000) {
             "16kHz 모노 음성을 0.2초 이상 20초 이하로 녹음해야 한다."
         }
@@ -28,39 +26,24 @@ internal object PronunciationPcm {
         val rawMean = samples.sumOf { it.toDouble() } / samples.size
         val variance = samples.sumOf { (it - rawMean) * (it - rawMean) } / samples.size
         require(variance >= 1e-10) { "분석할 소리가 없거나 너무 작다. 다시 녹음해야 한다." }
-        val threshold = maxOf(samples.maxOf { abs(it.toDouble()) } * 0.01, 1e-4)
-        val first = samples.indexOfFirst { abs(it.toDouble()) >= threshold }
-        var input = samples
-        if (first >= 0) {
-            val last = samples.indexOfLast { abs(it.toDouble()) >= threshold }
-            val length = last - first + 1 + 12800
-            // Match the web path's sample-level 400 ms context without cutting speech.
-            if (length <= 320000) {
-                val start = first - 6400
-                input = FloatArray(length) { samples.getOrElse(start + it) { 0f } }
-            }
-        }
-        val mean = input.sumOf { it.toDouble() } / input.size
-        val inputVariance = input.sumOf { (it - mean) * (it - mean) } / input.size
-        require(inputVariance.isFinite() && inputVariance > 0) { "분석할 소리가 없거나 너무 작다. 다시 녹음해야 한다." }
-        val scale = sqrt(inputVariance)
-        return FloatArray(input.size) { ((input[it] - mean) / scale).toFloat() }
+        // The pinned model's feature extractor uses raw PCM with do_normalize=false.
+        return samples
     }
 
     fun decode(logits: FloatArray, shape: LongArray, vocab: Array<String>): List<String> {
         require(shape.size == 3 && shape[0] == 1L && shape[1] in 1L..1000L &&
-            shape[2] == 45L && logits.size.toLong() == shape[1] * 45 &&
-            vocab.size == 45 && vocab[42] == "[PAD]") { "음소 모델 출력 형식이 올바르지 않다." }
+            shape[2] == 55L && logits.size.toLong() == shape[1] * 55 &&
+            vocab.size == 55 && vocab[0] == "[PAD]" && vocab[51] == " ") { "음소 모델 출력 형식이 올바르지 않다." }
         val phones = mutableListOf<String>()
         var previous = -1
         repeat(shape[1].toInt()) { frame ->
-            val offset = frame * 45
+            val offset = frame * 55
             var id = 0
-            repeat(45) { column ->
+            repeat(55) { column ->
                 require(logits[offset + column].isFinite()) { "분석 결과에 유효하지 않은 수치가 있다." }
                 if (logits[offset + column] > logits[offset + id]) id = column
             }
-            if (id != 42 && id != 40 && id != previous) phones.add(vocab[id])
+            if (id != 0 && id != 51 && id != previous) phones.add(vocab[id])
             previous = id
         }
         return phones
@@ -210,16 +193,16 @@ class PronunciationEngine(private val cacheRoot: File, private val channel: Meth
         val added = JSONObject(files[2].readText())
         added.keys().forEach { vocabulary.put(it, added.getInt(it)) }
         val processor = JSONObject(files[3].readText())
-        require(config.getInt("vocab_size") == 45 && config.getInt("pad_token_id") == 42 &&
-            vocabulary.length() == 45 && processor.getInt("sampling_rate") == 16000 &&
-            processor.getBoolean("do_normalize")) { "지원하지 않는 음소 모델 설정이다." }
-        val labels = Array(45) { "" }
+        require(config.getInt("vocab_size") == 55 && config.getInt("pad_token_id") == 0 &&
+            vocabulary.length() == 55 && processor.getInt("sampling_rate") == 16000 &&
+            !processor.getBoolean("do_normalize")) { "지원하지 않는 음소 모델 설정이다." }
+        val labels = Array(55) { "" }
         vocabulary.keys().forEach {
             val id = vocabulary.getInt(it)
             require(id in labels.indices && labels[id].isEmpty()) { "음소 사전이 올바르지 않다." }
             labels[id] = it
         }
-        require(labels[42] == "[PAD]" && labels[40] == "|" && labels.all { it.isNotEmpty() })
+        require(labels[0] == "[PAD]" && labels[51] == " " && labels.all { it.isNotEmpty() })
         checkCurrent(operation)
         progress(operation, "기기에서 음소 모델을 여는 중이다.")
         val loaded = OrtSession.SessionOptions().use { options ->
@@ -235,7 +218,7 @@ class PronunciationEngine(private val cacheRoot: File, private val channel: Meth
             val input = loaded.inputInfo["input_values"]?.info as? TensorInfo
             val output = loaded.outputInfo["logits"]?.info as? TensorInfo
             require(input?.type == OnnxJavaType.FLOAT && input.shape.size == 2 &&
-                output?.type == OnnxJavaType.FLOAT && output.shape.size == 3 && output.shape[2] == 45L) {
+                output?.type == OnnxJavaType.FLOAT && output.shape.size == 3 && output.shape[2] == 55L) {
                 "지원하지 않는 음소 모델 입출력 형식이다."
             }
             checkCurrent(operation)
@@ -248,12 +231,12 @@ class PronunciationEngine(private val cacheRoot: File, private val channel: Meth
     }
 
     private fun recognize(samples: FloatArray, sampleRate: Int, operation: Pending): List<String> {
-        val normalized = PronunciationPcm.normalize(samples, sampleRate)
+        val prepared = PronunciationPcm.prepareSamples(samples, sampleRate)
         val session = checkNotNull(model) { "분석 모델을 먼저 준비해야 한다." }
         val labels = checkNotNull(vocab)
         checkCurrent(operation)
-        OnnxTensor.createTensor(OrtEnvironment.getEnvironment(), FloatBuffer.wrap(normalized),
-            longArrayOf(1, normalized.size.toLong())).use { input ->
+        OnnxTensor.createTensor(OrtEnvironment.getEnvironment(), FloatBuffer.wrap(prepared),
+            longArrayOf(1, prepared.size.toLong())).use { input ->
             session.run(mapOf("input_values" to input)).use { output ->
                 checkCurrent(operation)
                 val tensor = output.get("logits").orElse(null) as? OnnxTensor
@@ -266,7 +249,8 @@ class PronunciationEngine(private val cacheRoot: File, private val channel: Meth
         }
     }
 
-    private data class Asset(val path: String, val bytes: Long, val sha256: String)
+    private data class Asset(val path: String, val bytes: Long, val sha256: String,
+        val sourceUrl: String = "$MODEL_SOURCE/$path")
 
     private fun loadAsset(asset: Asset, operation: Pending): File {
         val directory = File(cacheRoot, "pronunciation/$REVISION")
@@ -277,7 +261,7 @@ class PronunciationEngine(private val cacheRoot: File, private val channel: Meth
         checkCurrent(operation)
         val temporary = File.createTempFile("model-", ".part", directory)
         try {
-            val http = (URI("https://huggingface.co/chegrowk/ko-phone-int8/resolve/$REVISION/${asset.path}").toURL()
+            val http = (URI(asset.sourceUrl).toURL()
                 .openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 connectTimeout = 30000
@@ -302,7 +286,7 @@ class PronunciationEngine(private val cacheRoot: File, private val channel: Meth
                             val next = (received * 100 / asset.bytes).toInt()
                             if (asset.bytes > 1000000 && next != percent) {
                                 percent = next
-                                progress(operation, "음소 모델을 내려받는 중이다. $percent% (약 356MB)")
+                                progress(operation, "음소 모델을 내려받는 중이다. $percent% (약 378MB)")
                             }
                         }
                     }
@@ -350,13 +334,16 @@ class PronunciationEngine(private val cacheRoot: File, private val channel: Meth
 
     companion object {
         private val downloadLock = Any()
-        private const val REVISION = "dbb9c196f3e5e72d41c8ce2b63e6d0c91a011b70"
+        private const val REVISION = "772950d64427910937e11c5b76c9e4594059ce8c"
+        private const val MODEL_SOURCE = "https://huggingface.co/icig/normal-korean-ipa-translation/resolve/$REVISION"
         private val ASSETS = listOf(
-            Asset("config.json", 2063, "bc3394c2db0f96a9ab5e68c3a389201266bd21a26fcde109ff9d07accda26bd2"),
-            Asset("vocab.json", 500, "ca2a65143ce6acf25913f7e354ca7bae767ddb39b99218713057ae117dc87fc9"),
-            Asset("added_tokens.json", 30, "e6fbfcadb18a959fef9b7736b9f23fa2f5761674824f0db1263aaaf2e15e0959"),
-            Asset("preprocessor_config.json", 279, "f6a6867d632ee397cab2eb1c6a49dc64d857bb085e0f0463705b0217f4b96da4"),
-            Asset("onnx/model_quantized.onnx", 356129122, "c1ef511e4bac127e884edb013b16fae9e0d3d54d792039417aa3cf4b48e8a134"),
+            Asset("config.json", 2369, "fabc5f4a4238971ae1399ca5f3e591ae5beb142fdd2b3804a20e6700649ea83e"),
+            Asset("vocab.json", 645, "7027b570bda6e7ea7a3b3b44f1e8198e2d521f9b57a7857579ac7001e0cb72f1"),
+            Asset("added_tokens.json", 30, "843da62c8cdea9fb78b7303dc873d0988c7debf7e1c9903e8dfd22c1705f31a2"),
+            Asset("preprocessor_config.json", 258, "3698647300e38b0a83ccf0ee9b24834e2d262157410305d54a3a1f655ead3002"),
+            Asset("ko-ipa.onnx", 282052, "840b1a2f19d1b2c52ac5ef522764d5e5fb42ad79a0b839805904ed1b6b36f949",
+                "https://raw.githubusercontent.com/h-gunp/voicewow/4972547545da42780de509218990714eb7a12f7a/apps/client/web/pronunciation/models/ko-ipa.onnx"),
+            Asset("model.safetensors", 377681876, "dfe465932554b8d8d5ff818afb27995fc7ac20e6af7e3b77f26a8aa7e7dc0404"),
         )
     }
 }

@@ -1,3 +1,21 @@
+# 현재 한국어 IPA 모델 검증
+
+현재 제품은 `icig/normal-korean-ipa-translation` revision `772950d64427910937e11c5b76c9e4594059ce8c`를 사용한다. raw 16kHz PCM을 입력하고, 55개 CTC 출력의 실제 IPA를 한글 비교용 음소로 변환한다. 사용자 음성은 업로드하지 않는다.
+
+현재 모델 준비·실행 명령은 다음과 같다.
+
+```powershell
+python tools/pronunciation-spike/prepare-ipa-model.py
+python tools/pronunciation-spike/serve.py --port 8093
+node tools/pronunciation-spike/measure.mjs
+```
+
+캐시는 `.local/pronunciation-ipa/`다. graph는 저장소의 작은 외부 참조 파일이며 원본 가중치는 Hugging Face의 고정 revision에서 직접 받는다. 모든 파일의 크기와 SHA-256을 검사한다. [모델 교체 평가 기록](../../docs/pronunciation-model-upgrade.md)에 비교 범위와 결과를 기록했다.
+
+아래 내용과 `download-model.py`·`prepare-web-model.py`는 이전 MFA 모델의 재현 기록이다. 현재 제품 준비에는 위 명령을 사용한다.
+
+---
+
 # 기기 내부 발음 분석 검증 도구
 
 제품 연결 전에 모델을 확인하려고 만든 검증 도구다. 녹음·WAV 입력을 기기 안에서 음소와 추정 한글로 변환한다. 이 spike 화면은 비교 색상이나 점수를 제공하지 않는다. 실제 발음 판별 정확도는 검증되지 않았다.

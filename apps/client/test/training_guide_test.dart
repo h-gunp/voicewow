@@ -17,7 +17,7 @@ void main() {
     expect(find.text('기능별 사용 방법'), findsOneWidget);
     expect(find.textContaining('주변 환경음 듣기'), findsOneWidget);
     expect(find.textContaining('회색은 판단이 불확실'), findsOneWidget);
-    expect(find.textContaining('약 356MB'), findsOneWidget);
+    expect(find.textContaining('약 378MB'), findsOneWidget);
     expect(find.textContaining('내 대본으로도 연습'), findsOneWidget);
     expect(find.byKey(const Key('preparation-next')), findsNothing);
     expect(selected, isEmpty);

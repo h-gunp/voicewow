@@ -1,4 +1,5 @@
-const MAX_SECONDS = 20;
+// Bound browser inference memory; the native Android engine keeps its 20-second limit.
+const MAX_SECONDS = 10;
 const DELIVERY_TIMEOUT_MS = 3000;
 const FINAL_TIMEOUT_MS = 1000;
 const START_TIMEOUT_MS = 15000;

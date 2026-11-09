@@ -157,7 +157,7 @@ void main() {
   test(
     'an unresolved reference phone does not hide a unique known substitution',
     () {
-      for (final fixture in [('G A', '붜', '가'), ('Ph A', '밟', '파')]) {
+      for (final fixture in [('G A', '밟', '가'), ('Ph A', '밟', '파')]) {
         final result = compare(fixture.$1, [fixture.$2]);
         expect(textOf(result.observed), fixture.$3);
         expect(result.observed.single.mark, ComparisonMark.different);
@@ -189,7 +189,7 @@ void main() {
   );
 
   test('unknown-only differences cannot become confirmed substitutions', () {
-    for (final reference in ['붜', '밟']) {
+    for (final reference in ['밟']) {
       final result = compare('B A', [reference]);
       expect(result.observed.single.mark, ComparisonMark.uncertain);
       expect(result.expected.single.mark, ComparisonMark.uncertain);

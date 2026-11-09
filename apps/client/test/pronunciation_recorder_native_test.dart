@@ -32,7 +32,7 @@ void main() {
 
   setUp(() {
     calls = [];
-    platform = (call) async => call.method == 'recognize' ? ['G', 'A'] : null;
+    platform = (call) async => call.method == 'recognize' ? ['ɡ', 'a'] : null;
     messenger.setMockMethodCallHandler(channel, (call) {
       calls.add(call);
       return platform(call);

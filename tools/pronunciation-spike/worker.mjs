@@ -9,7 +9,7 @@ self.onmessage = async event => {
   try {
     if (type === 'prepare') {
       engine ??= await createPhoneEngine({ loadAsset: async asset => {
-        const response = await fetch(new URL(`../../.local/pronunciation-spike/${asset.path}`, import.meta.url), { credentials: 'omit', cache: 'no-store' });
+        const response = await fetch(new URL(`../../.local/pronunciation-ipa/${asset.path}`, import.meta.url), { credentials: 'omit', cache: 'no-store' });
         if (!response.ok) throw new Error('로컬 모델 파일을 찾을 수 없다. 다운로드 도구를 먼저 실행해야 한다.');
         const declared = response.headers.get('content-length');
         if (declared !== null && Number(declared) !== asset.bytes) throw new Error('로컬 모델 파일 크기가 일치하지 않는다.');

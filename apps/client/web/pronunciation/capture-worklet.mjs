@@ -3,7 +3,7 @@ class PronunciationCapture extends AudioWorkletProcessor {
   constructor() {
     super();
     this.chunkFrames = Math.round(sampleRate / 10);
-    this.maxFrames = Math.floor(sampleRate * 20);
+    this.maxFrames = Math.floor(sampleRate * 10);
     this.buffer = new Float32Array(this.chunkFrames);
     this.used = 0;
     this.frames = 0;

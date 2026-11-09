@@ -1,4 +1,18 @@
-# Local pronunciation model
+# Current Korean IPA model
+
+VoiceMate downloads the original [icig/normal-korean-ipa-translation](https://huggingface.co/icig/normal-korean-ipa-translation/tree/772950d64427910937e11c5b76c9e4594059ce8c) safetensors file directly from its pinned upstream revision. Audio and recognition results remain on the device.
+
+- Model: Wav2Vec2 base, 94.4M parameters, 55 CTC classes, blank 0, separator 51.
+- Input: raw mono 16kHz float32; the upstream processor disables normalization and attention masks.
+- Weights: 377,681,876 bytes; SHA-256 `dfe465932554b8d8d5ff818afb27995fc7ac20e6af7e3b77f26a8aa7e7dc0404`.
+- `models/ko-ipa.onnx` contains the graph and operator constants, with zero embedded learned initializer bytes. All 212 learned initializers reference byte ranges in the original `model.safetensors`. No converted weights are hosted by this repository or Sites.
+- Graph: 282,052 bytes; SHA-256 `840b1a2f19d1b2c52ac5ef522764d5e5fb42ad79a0b839805904ed1b6b36f949`.
+- Exact source URLs, tensor offsets, hashes and export versions are in `models/source.json`. Reproduction: `tools/pronunciation-spike/export-ipa-model.py`.
+- Upstream has no declared license in its repository or API metadata. The earlier model's Apache-2.0 license does not describe this new checkpoint. No permission grant is inferred from public availability.
+- Runtime remains ONNX Runtime Web/Android 1.23.2. The notices below retain the previous model and the unchanged vendored runtime's provenance.
+
+## Previous MFA model (historical)
+
 
 The application downloads public model assets; microphone audio and recognition results are not uploaded.
 

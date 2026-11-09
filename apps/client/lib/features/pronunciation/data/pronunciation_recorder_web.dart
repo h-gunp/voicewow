@@ -1,6 +1,7 @@
 import 'dart:js_interop';
 
 import 'pronunciation_recorder_contract.dart';
+import '../domain/ipa_phones.dart';
 
 PronunciationRecorder createPronunciationRecorder() =>
     WebPronunciationRecorder();
@@ -64,7 +65,9 @@ class WebPronunciationRecorder implements PronunciationRecorder {
   @override
   Future<List<String>> finish() => _run(() async {
     final result = await _bridge.finish().toDart;
-    return result.toDart.map((phone) => phone.toDart).toList(growable: false);
+    return ipaToPhones(
+      result.toDart.map((phone) => phone.toDart).toList(growable: false),
+    );
   });
 
   @override

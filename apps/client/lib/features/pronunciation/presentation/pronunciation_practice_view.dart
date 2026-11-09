@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../../app_theme.dart';
 import '../data/pronunciation_recorder_contract.dart';
 import '../domain/pronunciation_comparison.dart';
@@ -127,7 +128,7 @@ class _PronunciationPracticeViewState extends State<PronunciationPracticeView>
   Future<void> _prepare() async {
     if (phase != _Phase.idle) return;
     final ticket = ++epoch;
-    _set(_Phase.preparing, '발음 모델을 준비 중이다. 처음에는 약 356MB를 내려받는다.');
+    _set(_Phase.preparing, '발음 모델을 준비 중이다. 처음에는 약 378MB를 내려받는다.');
     try {
       await widget.recorder.prepare(
         onProgress: (message) {
@@ -295,7 +296,7 @@ class _PronunciationPracticeViewState extends State<PronunciationPracticeView>
               ),
               if (phase == _Phase.recording)
                 Text(
-                  '${(stopwatch.elapsedMilliseconds / 1000).clamp(0, 20).toStringAsFixed(1)} / 20초',
+                  '${(stopwatch.elapsedMilliseconds / 1000).clamp(0, kIsWeb ? 10 : 20).toStringAsFixed(1)} / ${kIsWeb ? 10 : 20}초',
                   style: smallCopy,
                 ),
               const SizedBox(height: 10),
@@ -438,7 +439,7 @@ class _PronunciationPracticeViewState extends State<PronunciationPracticeView>
       ],
       if (phase == _Phase.idle) ...[
         const SizedBox(height: 24),
-        const Text('처음에는 약 356MB 모델을 내려받는다.', style: smallCopy),
+        const Text('처음에는 약 378MB 모델을 내려받는다.', style: smallCopy),
       ],
     ],
   );

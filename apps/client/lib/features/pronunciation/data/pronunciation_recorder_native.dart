@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../../prosody/services/device_audio.dart';
 import 'pronunciation_recorder_contract.dart';
+import '../domain/ipa_phones.dart';
 import 'pronunciation_recorder_stub.dart' as unsupported;
 
 PronunciationRecorder createPronunciationRecorder() => Platform.isAndroid
@@ -146,7 +147,7 @@ class NativePronunciationRecorder implements PronunciationRecorder {
       });
       _check(ticket);
       if (phones == null) throw const DeviceAudioException('분석 결과를 읽지 못했다.');
-      return phones;
+      return ipaToPhones(phones);
     } on PlatformException catch (error) {
       throw DeviceAudioException(error.message ?? '음성을 분석하지 못했다. 다시 녹음해야 한다.');
     } finally {

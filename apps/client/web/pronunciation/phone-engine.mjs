@@ -1,19 +1,42 @@
 import * as ort from './vendor/onnx/ort.wasm.min.mjs';
 import { prepareSamples, decodePhones, phonesToHangul } from './phones.mjs';
 import { sha256 } from './sha256.mjs';
+import { ipaToPhones } from './ipa-phones.mjs';
 
-export const MODEL_REVISION = 'dbb9c196f3e5e72d41c8ce2b63e6d0c91a011b70';
-export const WEB_MODEL_ASSET = Object.freeze({
-  path: 'ko-phone-int8.ort', bytes: 356216776, partBytes: 16777216,
-  sha256: 'a280f2679f08c809ae3c5ad55abe15dc78803e06143cc9b485c143612652765e',
-});
+export const MODEL_REVISION = '772950d64427910937e11c5b76c9e4594059ce8c';
 export const MODEL_ASSETS = Object.freeze([
-  { path: 'config.json', bytes: 2063, sha256: 'bc3394c2db0f96a9ab5e68c3a389201266bd21a26fcde109ff9d07accda26bd2' },
-  { path: 'vocab.json', bytes: 500, sha256: 'ca2a65143ce6acf25913f7e354ca7bae767ddb39b99218713057ae117dc87fc9' },
-  { path: 'added_tokens.json', bytes: 30, sha256: 'e6fbfcadb18a959fef9b7736b9f23fa2f5761674824f0db1263aaaf2e15e0959' },
-  { path: 'preprocessor_config.json', bytes: 279, sha256: 'f6a6867d632ee397cab2eb1c6a49dc64d857bb085e0f0463705b0217f4b96da4' },
-  { path: 'onnx/model_quantized.onnx', bytes: 356129122, sha256: 'c1ef511e4bac127e884edb013b16fae9e0d3d54d792039417aa3cf4b48e8a134' },
-]);
+  {
+    "path": "config.json",
+    "bytes": 2369,
+    "sha256": "fabc5f4a4238971ae1399ca5f3e591ae5beb142fdd2b3804a20e6700649ea83e"
+  },
+  {
+    "path": "vocab.json",
+    "bytes": 645,
+    "sha256": "7027b570bda6e7ea7a3b3b44f1e8198e2d521f9b57a7857579ac7001e0cb72f1"
+  },
+  {
+    "path": "added_tokens.json",
+    "bytes": 30,
+    "sha256": "843da62c8cdea9fb78b7303dc873d0988c7debf7e1c9903e8dfd22c1705f31a2"
+  },
+  {
+    "path": "preprocessor_config.json",
+    "bytes": 258,
+    "sha256": "3698647300e38b0a83ccf0ee9b24834e2d262157410305d54a3a1f655ead3002"
+  },
+  {
+    "path": "ko-ipa.onnx",
+    "bytes": 282052,
+    "sha256": "840b1a2f19d1b2c52ac5ef522764d5e5fb42ad79a0b839805904ed1b6b36f949"
+  },
+  {
+    "path": "model.safetensors",
+    "bytes": 377681876,
+    "sha256": "dfe465932554b8d8d5ff818afb27995fc7ac20e6af7e3b77f26a8aa7e7dc0404"
+  }
+].map(Object.freeze));
+export const WEB_MODEL_ASSET = MODEL_ASSETS[4];
 
 export async function createPhoneEngine({ loadAsset, modelAsset = MODEL_ASSETS[4], onProgress = () => {} }) {
   const read = async asset => {
@@ -26,20 +49,19 @@ export async function createPhoneEngine({ loadAsset, modelAsset = MODEL_ASSETS[4
   };
   const json = async index => JSON.parse(new TextDecoder().decode(await read(MODEL_ASSETS[index])));
   const config = await json(0), vocab = { ...await json(1), ...await json(2) }, processor = await json(3);
-  if (config.vocab_size !== 45 || config.pad_token_id !== 42 || Object.keys(vocab).length !== 45
-    || processor.sampling_rate !== 16000 || processor.do_normalize !== true) throw new Error('지원하지 않는 음소 모델 설정이다.');
+  if (config.vocab_size !== 55 || config.pad_token_id !== 0 || Object.keys(vocab).length !== 55
+    || processor.sampling_rate !== 16000 || processor.do_normalize !== false) throw new Error('지원하지 않는 음소 모델 설정이다.');
   ort.env.wasm.numThreads = 1;
   ort.env.wasm.proxy = false;
   ort.env.wasm.wasmPaths = new URL('../prosody/vendor/onnx/', import.meta.url).href;
   ort.env.logLevel = 'error';
   const modelBytes = await read(modelAsset);
+  const weights = await read(MODEL_ASSETS[5]);
   onProgress('다운로드와 검증을 마쳤다. 기기 안에서 발음 모델을 여는 중이다.');
   const session = await ort.InferenceSession.create(modelBytes, {
-    executionProviders: ['wasm'], graphOptimizationLevel: 'all',
-    ...(modelAsset.path === WEB_MODEL_ASSET.path ? { extra: { session: {
-      use_ort_model_bytes_directly: '1', use_ort_model_bytes_for_initializers: '1',
-      voicemate_consume_model_bytes: '1',
-    } } } : {}),
+    // Graph optimization adds a large allocation while the mobile session opens.
+    executionProviders: ['wasm'], graphOptimizationLevel: 'disabled',
+    externalData: [{ path: 'model.safetensors', data: weights }],
   });
   const metadata = { inputs: session.inputMetadata, outputs: session.outputMetadata, versions: ort.env.versions };
   if (session.inputNames.length !== 1 || session.inputNames[0] !== 'input_values' || session.outputNames[0] !== 'logits') {
@@ -58,7 +80,7 @@ export async function createPhoneEngine({ loadAsset, modelAsset = MODEL_ASSETS[4
       try {
         output = await session.run({ input_values: tensor });
         const phones = decodePhones(output.logits.data, output.logits.dims, vocab);
-        return { phones, display: phonesToHangul(phones), inferenceMs: performance.now() - start,
+        return { phones, display: phonesToHangul(ipaToPhones(phones)), inferenceMs: performance.now() - start,
           duration: samples.length / sampleRate, frames: output.logits.dims[1] };
       } finally {
         tensor.dispose();

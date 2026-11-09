@@ -9,8 +9,9 @@ test('truncated model assets fail before a session is created', async () => {
 test('loader failure is propagated; fixed assets do not contain audio or text requests', async () => {
   const problem = new Error('offline fixture missing');
   await assert.rejects(createPhoneEngine({ loadAsset: async () => { throw problem; } }), error => error === problem);
-  assert.equal(MODEL_ASSETS.find(asset => asset.path.endsWith('.onnx')).bytes, 356129122);
+  assert.equal(MODEL_ASSETS.find(asset => asset.path.endsWith('.safetensors')).bytes, 377681876);
   for (const asset of MODEL_ASSETS) {
+    assert.ok(Object.isFrozen(asset));
     assert.match(asset.sha256, /^[a-f0-9]{64}$/);
     assert.ok(!asset.path.includes('..'));
   }

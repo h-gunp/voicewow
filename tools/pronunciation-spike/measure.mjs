@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readWav } from '../prosody-web-tests/wav-fixture.mjs';
 
-const root = fileURLToPath(new URL('../../.local/pronunciation-spike/', import.meta.url));
+const root = fileURLToPath(new URL('../../.local/pronunciation-ipa/', import.meta.url));
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 
 function withinRoot(name) {
@@ -63,8 +63,8 @@ async function selfCheck() {
 
 async function main() {
   const { createPhoneEngine } = await import('./phone-engine.mjs');
-  const { env } = await import('../../apps/client/web/prosody/vendor/onnx/ort.wasm.min.mjs');
-  const manifest = JSON.parse(await fs.readFile(path.join(root, 'manifest.json'), 'utf8'));
+  const { env } = await import('../../apps/client/web/pronunciation/vendor/onnx/ort.wasm.min.mjs');
+  const manifest = JSON.parse(await fs.readFile(path.join(root, 'model-manifest.json'), 'utf8'));
   const fixtureManifest = JSON.parse(await fs.readFile(path.join(root, 'fixture-manifest.json'), 'utf8'));
   const waves = [];
   for (const id of [0, 2]) {
@@ -81,7 +81,7 @@ async function main() {
     timestamp: new Date().toISOString(), node: process.version, platform: process.platform, arch: process.arch,
     cpu: os.cpus()[0]?.model, logicalCpus: os.cpus().length, totalMemoryBytes: os.totalmem(), runtime: env.versions,
     model: { repository: manifest.repository, revision: manifest.revision,
-      ...manifest.files.find(file => file.file === 'onnx/model_quantized.onnx') },
+      ...manifest.files.find(file => file.file === 'model.safetensors') },
     fixtureSource: fixtureManifest, memoryBeforeInit: process.memoryUsage(), results: [],
     accuracy: { assessed: false, reason: 'No human-verified correct/incorrect pronunciation recordings; source read-text is not an acoustic ground-truth label' },
     timingLimit: 'Single shared-machine run; warm-up, CPU contention and trial order are not controlled',

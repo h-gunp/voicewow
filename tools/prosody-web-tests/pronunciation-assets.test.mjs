@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
+import fs from 'node:fs/promises';
+import { MODEL_ASSETS, WEB_MODEL_ASSET } from '../../apps/client/web/pronunciation/phone-engine.mjs';
 import { createModelLoader } from '../../apps/client/web/pronunciation/model-loader.mjs';
 
-const bytes = Uint8Array.of(1, 2, 3);
-const asset = { path: 'vocab.json', bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') };
+const bytes = new Uint8Array(await fs.readFile(new URL('../pronunciation-spike/fixtures/ipa-vocab.json', import.meta.url)));
+const asset = MODEL_ASSETS[1];
 
 function fixture(t, { cached, payload = bytes, cacheFails = false, headers } = {}) {
   const requests = [], progress = [], removed = [], saved = [];
@@ -30,11 +31,11 @@ test('fixed revision download validates and caches bytes, with no audio request 
   const f = fixture(t);
   assert.deepEqual(await f.load(asset), bytes);
   assert.equal(f.requests.length, 1);
-  assert.match(String(f.requests[0].url), /^https:\/\/huggingface\.co\/chegrowk\/ko-phone-int8\/resolve\/dbb9c196f3e5e72d41c8ce2b63e6d0c91a011b70\/vocab.json$/);
+  assert.match(String(f.requests[0].url), /^https:\/\/huggingface\.co\/icig\/normal-korean-ipa-translation\/resolve\/772950d64427910937e11c5b76c9e4594059ce8c\/vocab.json$/);
   assert.equal(f.requests[0].options.credentials, 'omit');
   assert.equal(f.requests[0].options.body, undefined);
   assert.equal(f.saved.length, 1);
-  assert.ok(f.progress.some(message => message.includes('356')));
+  assert.ok(f.progress.some(message => message.includes('378')));
   assert.deepEqual(await f.load(asset), bytes);
   assert.equal(f.requests.length, 1);
   assert.ok(f.progress.some(message => message.includes('캐시')));
@@ -47,7 +48,7 @@ test('corrupt cached bytes are removed and replaced only with verified download'
   assert.equal(f.saved.length, 1);
 });
 
-for (const [name, payload] of [['short', bytes.slice(0, 2)], ['oversize', Uint8Array.of(1, 2, 3, 4)], ['hash', Uint8Array.of(3, 2, 1)]]) {
+for (const [name, payload] of [['short', bytes.slice(0, 2)], ['oversize', new Uint8Array(bytes.length + 1)], ['hash', new Uint8Array(bytes.length)]]) {
   test(`${name} download is rejected without saving a cache entry`, async t => {
     const f = fixture(t, { payload });
     await assert.rejects(f.load(asset), /크기|해시/);
@@ -79,37 +80,25 @@ test('cache writes use pull streams instead of copying the complete model buffer
   assert.ok(bodies.at(-1) instanceof ReadableStream);
 });
 
-test('web ORT parts load from a pinned asset commit and reuse the existing verified cache key', async t => {
-  const f = fixture(t);
-  const calls = [];
-  t.mock.method(globalThis, 'fetch', async (url, options) => {
-    calls.push({ url: String(url), options });
-    return new Response(calls.length === 1 ? bytes.subarray(0,2) : bytes.subarray(2));
-  });
-  const model = { ...asset, path: 'ko-phone-int8.ort', partBytes: 2 };
-  assert.deepEqual(await f.load(model), bytes);
-  const base = 'https://raw.githubusercontent.com/h-gunp/voicewow/72bb26aa05c94763dfab5f150a7ae747a1937e10/';
-  assert.deepEqual(calls.map(call => call.url), [base + 'ko-phone-int8.ort.part00', base + 'ko-phone-int8.ort.part01']);
-  for (const { options } of calls) {
-    assert.equal(options.credentials, 'omit');
-    assert.equal(options.referrerPolicy, 'no-referrer');
-    assert.equal(options.body, undefined);
-  }
-  assert.deepEqual(f.saved, [new URL('../../apps/client/web/pronunciation/models/ko-phone-int8.ort', import.meta.url).href]);
-  assert.deepEqual(await f.load(model), bytes);
-  assert.equal(calls.length, 2);
+test('web graph is loaded from this deployment and reused from verified cache', async t => {
+  const graph = new Uint8Array(await fs.readFile(new URL('../../apps/client/web/pronunciation/models/ko-ipa.onnx', import.meta.url)));
+  const f = fixture(t, {payload: graph});
+  assert.deepEqual(await f.load(WEB_MODEL_ASSET), graph);
+  assert.deepEqual(f.saved, [new URL('../../apps/client/web/pronunciation/models/ko-ipa.onnx', import.meta.url).href]);
+  assert.deepEqual(await f.load(WEB_MODEL_ASSET), graph);
+  assert.equal(f.requests.length, 1);
+  await assert.rejects(f.load({...WEB_MODEL_ASSET,path:'../secret'}), /모델 파일 정보/);
 });
 
-test('a missing web model part fails clearly without falling back to the large ONNX runtime', async t => {
+test('missing graph fails without a fallback model or cached partial file', async t => {
   const f = fixture(t);
   t.mock.method(globalThis, 'fetch', async () => new Response('missing', { status: 404 }));
-  await assert.rejects(f.load({ ...asset, path: 'ko-phone-int8.ort', partBytes: 2 }), /모델.*배포/);
+  await assert.rejects(f.load(WEB_MODEL_ASSET), /내려받지/);
   assert.equal(f.saved.length, 0);
 });
 
-test('incorrect part contents never enter the verified model cache', async t => {
-  const f = fixture(t);
-  t.mock.method(globalThis, 'fetch', async () => new Response(Uint8Array.of(9)));
-  await assert.rejects(f.load({ ...asset, path: 'ko-phone-int8.ort', partBytes: 1 }), /해시/);
+test('incorrect graph contents never enter the verified model cache', async t => {
+  const f = fixture(t, {payload: new Uint8Array(WEB_MODEL_ASSET.bytes)});
+  await assert.rejects(f.load(WEB_MODEL_ASSET), /해시/);
   assert.equal(f.saved.length, 0);
 });

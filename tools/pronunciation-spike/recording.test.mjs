@@ -174,30 +174,30 @@ test('cancel discards samples and an in-flight stop cannot resolve with stale PC
   assert.equal(b.errors.length, 0);
 });
 
-test('20-second worklet cap truncates a crossing frame and stops even without a consumer callback', async t => {
+test('10-second worklet cap truncates a crossing frame and stops even without a consumer callback', async t => {
   const b = await browser(t);
   await b.recorder.start();
-  b.nodes[0].feed([new Float32Array(160017).fill(0.125)]);
+  b.nodes[0].feed([new Float32Array(80017).fill(0.125)]);
   await flush();
   const result = await b.recorder.stop();
-  assert.equal(result.samples.length, 160000);
+  assert.equal(result.samples.length, 80000);
   assert.equal(result.samples.at(-1), 0.125);
   assert.equal(b.limits.length, 1);
   assert.equal(b.track.readyState, 'ended');
 });
 
-test('wall deadline requests final PCM even when fewer than 20 seconds of audio arrived', async t => {
+test('wall deadline requests final PCM even when fewer than 10 seconds of audio arrived', async t => {
   const b = await browser(t);
   t.mock.timers.enable({ apis: ['setTimeout'] });
   await b.recorder.start();
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 10; i++) {
     b.nodes[0].feed([new Float32Array(800).fill(0.125)]);
     await flush();
     t.mock.timers.tick(1000);
   }
   await flush();
   assert.equal(b.limits.length, 1);
-  assert.equal((await b.recorder.stop()).samples.length, 16000);
+  assert.equal((await b.recorder.stop()).samples.length, 8000);
   assert.equal(b.track.readyState, 'ended');
 });
 

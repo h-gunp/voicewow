@@ -225,6 +225,7 @@ const _vowels = <String, String>{
   'oE': 'ㅞ',
   'uI': 'ㅟ',
   'euI': 'ㅢ',
+  'wEO': 'ㅝ',
 };
 const _merged = <String, String>{
   'E': 'ㅐ/ㅔ 구분 불가',
@@ -270,7 +271,7 @@ const _medialPhones = [
   'oE',
   'iO',
   'U',
-  'uEO',
+  'wEO',
   'oE',
   'uI',
   'iU',
