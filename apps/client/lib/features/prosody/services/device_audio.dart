@@ -93,9 +93,12 @@ class Pcm16StreamDecoder {
 /// permission, opens the microphone or downloads/sends a script. Recordings and
 /// synthesized examples live in one app-temporary directory, removed on dispose.
 class DeviceAudioService {
-  DeviceAudioService({this.noiseReductionEnabled = true});
+  DeviceAudioService({
+    this.noiseReductionEnabled = true,
+    this.voiceActivityEnabled = true,
+  });
 
-  final bool noiseReductionEnabled;
+  final bool noiseReductionEnabled, voiceActivityEnabled;
   static const int recordingSampleRate = 16000;
   static const int maxRecordingSeconds = 20;
   static const int _maxSamples = recordingSampleRate * maxRecordingSeconds;
@@ -139,7 +142,7 @@ class DeviceAudioService {
   Stream<String> get errors => _errors.stream;
 
   String? get recentVoiceActivity {
-    if (_speechFrames.isEmpty) return null;
+    if (!voiceActivityEnabled || _speechFrames.isEmpty) return null;
     final recent = _speechFrames.skip(
       _speechFrames.length > 10 ? _speechFrames.length - 10 : 0,
     );
@@ -150,7 +153,7 @@ class DeviceAudioService {
   }
 
   bool? speechInRange(int start, int end) {
-    if (_processor == null) return null;
+    if (!voiceActivityEnabled || _processor == null) return null;
     final first = start ~/ 160;
     final last = (end + 159) ~/ 160;
     if (first < 0 || last > _speechFrames.length || first >= last) return null;
@@ -446,7 +449,10 @@ class DeviceAudioService {
       _recordError = null;
       _stopFuture = null;
       final processor = _processor = NativePracticeAudioSession();
-      await processor.create(noiseReductionEnabled: noiseReductionEnabled);
+      await processor.create(
+        noiseReductionEnabled: noiseReductionEnabled,
+        voiceActivityEnabled: voiceActivityEnabled,
+      );
       if (_disposed || ticket != _recordGeneration) {
         await processor.cancel();
         return;
@@ -576,7 +582,8 @@ class DeviceAudioService {
     _speechFrames.addAll(chunk.speech);
     _samples.addAll(chunk.samples);
     if (_samples.length > _maxSamples ||
-        _samples.length > _speechFrames.length * 160) {
+        (voiceActivityEnabled &&
+            _samples.length > _speechFrames.length * 160)) {
       throw StateError('Processed audio and VAD are not aligned');
     }
     if (chunk.samples.isNotEmpty)
@@ -640,9 +647,14 @@ class DeviceAudioService {
     if (_recordError != null || _samples.isEmpty) {
       throw const DeviceAudioException('녹음된 소리를 읽지 못했어요. 다시 녹음해 주세요.');
     }
-    if (_speechFrames.every((decision) => decision == 0) &&
-        processor.rawVariance < 1e-10) {
-      throw const DeviceAudioException('목소리를 찾지 못했어요. 다시 녹음해 주세요.');
+    if (processor.rawVariance < 1e-10 &&
+        (_speechFrames.isEmpty ||
+            _speechFrames.every((decision) => decision == 0))) {
+      throw DeviceAudioException(
+        voiceActivityEnabled
+            ? '목소리를 찾지 못했어요. 다시 녹음해 주세요.'
+            : '분석할 소리가 없어요. 다시 녹음해 주세요.',
+      );
     }
     final samples = List<double>.unmodifiable(_samples);
     final bytes = encodeWav(samples, recordingSampleRate);
@@ -657,7 +669,9 @@ class DeviceAudioService {
       sampleRate: recordingSampleRate,
       path: path,
       bytes: bytes,
-      speechFrames: List<int>.unmodifiable(_speechFrames),
+      speechFrames: voiceActivityEnabled
+          ? List<int>.unmodifiable(_speechFrames)
+          : null,
       diagnosticsPcm48: _diagnosticsRaw?.takeBytes(),
     );
   }

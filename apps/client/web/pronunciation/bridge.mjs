@@ -56,17 +56,7 @@ export function createPronunciationSession({ client = createPhoneClient(), recor
       clearPlayback(); pendingFinish = undefined;
       phase = 'starting';
       let limited = false;
-      let previousSpeech = {speechFrames: 0, nonSpeechFrames: 0, uncertainFrames: 0}, lastActivity;
       const current = recorderFactory({
-        onChunk: ({speech}) => {
-          if (ticket !== generation || phase !== 'recording') return;
-          const keys = ['speechFrames', 'nonSpeechFrames', 'uncertainFrames'];
-          if (!speech || keys.some(key => !Number.isInteger(speech[key]) || speech[key] < previousSpeech[key])) return;
-          const activity = speech.speechFrames > previousSpeech.speechFrames ? 'speech'
-            : speech.nonSpeechFrames > previousSpeech.nonSpeechFrames && speech.uncertainFrames === previousSpeech.uncertainFrames ? 'nonSpeech' : 'uncertain';
-          previousSpeech = {...speech};
-          if (activity !== lastActivity) { lastActivity = activity; onVoiceActivity?.(activity); }
-        },
         onLimit: () => {
           if (ticket !== generation || phase !== 'recording' || limited) return;
           limited = true;

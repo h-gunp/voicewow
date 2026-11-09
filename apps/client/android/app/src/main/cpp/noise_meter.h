@@ -11,6 +11,9 @@ typedef struct {
 
 VoiceMateNoiseMeter *voicemate_meter_create(void);
 VoiceMateNoiseMeter *voicemate_meter_create_with_noise_reduction(int enabled);
+/* Disabled voice activity leaves result.speech at -1 and never creates a VAD. */
+VoiceMateNoiseMeter *voicemate_meter_create_with_processing(int noise_reduction_enabled,
+                                                         int voice_activity_enabled);
 /* Returns 0 while RNNoise primes, 1 for an aligned frame, and -1 on failure.
  * Noise-reduction-disabled capture returns the current frame immediately. */
 int voicemate_meter_process(VoiceMateNoiseMeter *meter, const int16_t pcm[480],

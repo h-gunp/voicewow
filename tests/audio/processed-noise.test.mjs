@@ -8,6 +8,16 @@ import {createCaptureProcessor} from '../../apps/client/web/audio/capture-proces
 const wasmBinary = await readFile(new URL('../../apps/client/web/audio/vendor/rnnoise/rnnoise.wasm', import.meta.url));
 const flatten = frames => Float32Array.from(frames.flatMap(frame => [...frame.samples]));
 
+test('raw capture accepts no detector handle and preserves PCM without inventing a speech decision', async () => {
+  const input = Float32Array.from({length: 961}, (_, i) => .0001 * Math.sin(i));
+  const processor = await createCaptureProcessor(null, null, 48000, false);
+  try {
+    const frames = [...processor.push(input), ...processor.finish()];
+    assert.deepEqual(flatten(frames), input);
+    assert.ok(frames.every(frame => frame.speech === null));
+  } finally { processor.dispose(); }
+});
+
 test('raw capture preserves frame-boundary tails, pauses and weak samples without RNNoise initialization', async () => {
   for (const length of [1, 479, 480, 481, 959, 960, 14437]) {
     const input = Float32Array.from({length}, (_, i) => i % 2000 < 1000 ? 0 : .0001 * Math.sin(i));

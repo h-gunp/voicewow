@@ -1,6 +1,6 @@
 import {createNoiseProcessor} from './noise-reducer.mjs';
 
-/** Default capture keeps RNNoise; pronunciation preserves raw PCM and uses VAD only. */
+/** Default capture keeps RNNoise; pronunciation preserves raw PCM without detectors. */
 export async function createCaptureProcessor(wasmBinary, vad, sampleRate = 48000, noiseReductionEnabled = true) {
   if (noiseReductionEnabled) {
     return createNoiseProcessor(wasmBinary, vad, sampleRate);
@@ -9,9 +9,9 @@ export async function createCaptureProcessor(wasmBinary, vad, sampleRate = 48000
   const pending = new Float32Array(480);
   let used = 0, disposed = false, finished = false;
   function frame(length) {
-    const speech = vad.process(pending);
-    if (typeof speech !== 'boolean') throw new Error('VAD returned an invalid decision');
-    const result = {samples: pending.slice(0, length), speech: speech ? 'speech' : 'nonSpeech'};
+    const speech = vad ? vad.process(pending) : null;
+    if (vad && typeof speech !== 'boolean') throw new Error('VAD returned an invalid decision');
+    const result = {samples: pending.slice(0, length), speech: speech === null ? null : speech ? 'speech' : 'nonSpeech'};
     pending.fill(0); used = 0;
     return result;
   }
@@ -34,7 +34,7 @@ export async function createCaptureProcessor(wasmBinary, vad, sampleRate = 48000
     },
     dispose() {
       if (disposed) return;
-      disposed = true; pending.fill(0); vad.dispose();
+      disposed = true; pending.fill(0); vad?.dispose();
     },
   };
 }

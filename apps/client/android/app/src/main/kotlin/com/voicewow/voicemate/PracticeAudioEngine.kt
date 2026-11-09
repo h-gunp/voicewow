@@ -8,7 +8,7 @@ import java.util.concurrent.Executors
 
 internal object NativePracticeAudio {
     init { System.loadLibrary("voicemate_audio") }
-    external fun create(noiseReductionEnabled: Boolean): Long
+    external fun create(noiseReductionEnabled: Boolean, voiceActivityEnabled: Boolean): Long
     external fun process(handle: Long, pcm: ShortArray): FloatArray
     external fun destroy(handle: Long)
 }
@@ -19,8 +19,8 @@ class PracticeAudioEngine(private val channel: MethodChannel) : MethodChannel.Me
     private val worker = Executors.newSingleThreadExecutor()
     private val sessions = mutableMapOf<Long, Session>()
     @Volatile private var closed = false
-    private class Session(val handle: Long, noiseReductionEnabled: Boolean) {
-        val processor = PracticeAudioProcessor(noiseReductionEnabled) { NativePracticeAudio.process(handle, it) }
+    private class Session(val handle: Long, noiseReductionEnabled: Boolean, voiceActivityEnabled: Boolean) {
+        val processor = PracticeAudioProcessor(noiseReductionEnabled, voiceActivityEnabled) { NativePracticeAudio.process(handle, it) }
         var nextSequence = 0
     }
 
@@ -41,10 +41,12 @@ class PracticeAudioEngine(private val channel: MethodChannel) : MethodChannel.Me
                     "create" -> {
                         require(!sessions.containsKey(id))
                         val noiseReductionEnabled = arguments?.get("noiseReductionEnabled") ?: true
+                        val voiceActivityEnabled = arguments?.get("voiceActivityEnabled") ?: true
                         require(noiseReductionEnabled is Boolean)
-                        val handle = NativePracticeAudio.create(noiseReductionEnabled)
+                        require(voiceActivityEnabled is Boolean)
+                        val handle = NativePracticeAudio.create(noiseReductionEnabled, voiceActivityEnabled)
                         check(handle != 0L)
-                        sessions[id] = Session(handle, noiseReductionEnabled)
+                        sessions[id] = Session(handle, noiseReductionEnabled, voiceActivityEnabled)
                         mapOf("inputSampleRate" to 48000, "sampleRate" to 16000)
                     }
                     "process" -> {

@@ -15,7 +15,12 @@ PronunciationRecorder createPronunciationRecorder() => Platform.isAndroid
 
 class NativePronunciationRecorder implements PronunciationRecorder {
   NativePronunciationRecorder({DeviceAudioService? audio})
-    : _audio = audio ?? DeviceAudioService(noiseReductionEnabled: false) {
+    : _audio =
+          audio ??
+          DeviceAudioService(
+            noiseReductionEnabled: false,
+            voiceActivityEnabled: false,
+          ) {
     if (!_handlerInstalled) {
       _handlerInstalled = true;
       _channel.setMethodCallHandler((call) async {

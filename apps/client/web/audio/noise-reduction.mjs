@@ -17,19 +17,20 @@ export async function createNoiseReductionNode(context, signal) {
   return createNode(context, signal, false);
 }
 
-export async function createProcessedCaptureNode(context, signal, maxSeconds = 10, noiseReductionEnabled = true) {
+export async function createProcessedCaptureNode(context, signal, maxSeconds = 10, noiseReductionEnabled = true, voiceActivityEnabled = true) {
   if (!Number.isFinite(maxSeconds) || maxSeconds <= 0 || maxSeconds > 20) throw new RangeError('Capture duration must be at most 20 seconds');
   if (typeof noiseReductionEnabled !== 'boolean') throw new TypeError('Noise reduction setting must be boolean');
-  return createNode(context, signal, true, maxSeconds, noiseReductionEnabled);
+  if (typeof voiceActivityEnabled !== 'boolean') throw new TypeError('Voice activity setting must be boolean');
+  return createNode(context, signal, true, maxSeconds, noiseReductionEnabled, voiceActivityEnabled);
 }
 
-async function createNode(context, signal, capture, maxSeconds, noiseReductionEnabled = true) {
+async function createNode(context, signal, capture, maxSeconds, noiseReductionEnabled = true, voiceActivityEnabled = true) {
   if (signal?.aborted) throw new DOMException('Noise reduction cancelled', 'AbortError');
   if (context.sampleRate !== 48000) throw failure('unsupported_sample_rate');
+  const needsDetector = noiseReductionEnabled || voiceActivityEnabled;
   if (typeof globalThis.AudioWorkletNode !== 'function'
-      || typeof globalThis.WebAssembly?.instantiate !== 'function'
-      || typeof context.audioWorklet?.addModule !== 'function'
-      || typeof globalThis.fetch !== 'function') throw failure('unsupported');
+      || (needsDetector && (typeof globalThis.WebAssembly?.instantiate !== 'function' || typeof globalThis.fetch !== 'function'))
+      || typeof context.audioWorklet?.addModule !== 'function') throw failure('unsupported');
 
   return new Promise((resolve, reject) => {
     const request = new AbortController();
@@ -67,19 +68,20 @@ async function createNode(context, signal, capture, maxSeconds, noiseReductionEn
         // Independent cold downloads share the initialization deadline.
         const [wasmBinary, vadBinary] = await Promise.all([
           noiseReductionEnabled ? download('./vendor/rnnoise/rnnoise.wasm') : Promise.resolve(null),
-          download('./vendor/libfvad/libfvad.wasm').catch(error => { if (capture) throw error; return null; }),
+          voiceActivityEnabled ? download('./vendor/libfvad/libfvad.wasm').catch(error => { if (capture) throw error; return null; }) : Promise.resolve(null),
           Promise.resolve().then(() => context.audioWorklet.addModule(new URL(capture ? './processed-capture-worklet.mjs' : './noise-reduction-worklet.mjs', import.meta.url).href)),
         ]);
         if (finished) return;
         node = new AudioWorkletNode(context, capture ? 'voicemate-processed-capture' : 'voicemate-noise-meter', {
           numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1],
-          processorOptions: {wasmBinary, vadBinary, ...(capture ? {maxSeconds, ...(!noiseReductionEnabled ? {noiseReductionEnabled: false} : {})} : {})},
+          processorOptions: {wasmBinary, vadBinary, ...(capture ? {maxSeconds,
+            ...(!noiseReductionEnabled ? {noiseReductionEnabled: false} : {}), ...(!voiceActivityEnabled ? {voiceActivityEnabled: false} : {})} : {})},
         });
         if (finished) { dispose(node); return; }
         node.port.onmessage = ({data}) => {
           if (data?.type === 'ready') {
-            if (capture && data.vadStatus !== 'ready') { finish(failure('load_failed')); return; }
-            node.vadStatus = vadBinary ? (data.vadStatus || 'unknown') : 'load_failed';
+            if (capture && voiceActivityEnabled && data.vadStatus !== 'ready') { finish(failure('load_failed')); return; }
+            if (voiceActivityEnabled) node.vadStatus = vadBinary ? (data.vadStatus || 'unknown') : 'load_failed';
             finish();
           }
           else if (data?.type === 'error') finish(failure('load_failed'));

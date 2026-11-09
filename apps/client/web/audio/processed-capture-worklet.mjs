@@ -10,8 +10,8 @@ class ProcessedCapture extends AudioWorkletProcessor {
     this.stopped = false;
     this.hasInput = false;
     this.buffer = new Float32Array(4800);
-    this.speech = {speechFrames: 0, nonSpeechFrames: 0, uncertainFrames: 0, totalFrames: 0};
-    const {wasmBinary, vadBinary, maxSeconds = 10, noiseReductionEnabled = true} = options.processorOptions;
+    const {wasmBinary, vadBinary, maxSeconds = 10, noiseReductionEnabled = true, voiceActivityEnabled = true} = options.processorOptions;
+    this.speech = voiceActivityEnabled ? {speechFrames: 0, nonSpeechFrames: 0, uncertainFrames: 0, totalFrames: 0} : null;
     this.maxFrames = Math.floor(sampleRate * maxSeconds);
     this.port.onmessage = ({data}) => {
       if (data?.type === 'cancel' || data?.type === 'dispose') { this.dispose(); return; }
@@ -19,19 +19,19 @@ class ProcessedCapture extends AudioWorkletProcessor {
       if (data?.type === 'finish') this.finish(false);
       else this.fail('Invalid recording command');
     };
-    this.prepare(wasmBinary, vadBinary, noiseReductionEnabled);
+    this.prepare(wasmBinary, vadBinary, noiseReductionEnabled, voiceActivityEnabled);
   }
 
-  async prepare(wasmBinary, vadBinary, noiseReductionEnabled) {
+  async prepare(wasmBinary, vadBinary, noiseReductionEnabled, voiceActivityEnabled) {
     let vad;
     try {
       if (sampleRate !== 48000 || !Number.isFinite(this.maxFrames) || this.maxFrames < 1 || this.maxFrames > 960000) throw new Error('Unsupported processed capture settings');
-      vad = await createVoiceActivity(vadBinary);
-      if (this.stopped) { vad.dispose(); return; }
+      if (voiceActivityEnabled) vad = await createVoiceActivity(vadBinary);
+      if (this.stopped) { vad?.dispose(); return; }
       const processor = await createCaptureProcessor(wasmBinary, vad, sampleRate, noiseReductionEnabled);
       if (this.stopped) { processor.dispose(); return; }
       this.processor = processor;
-      this.port.postMessage({type: 'ready', vadStatus: 'ready'});
+      this.port.postMessage({type: 'ready', ...(voiceActivityEnabled ? {vadStatus: 'ready'} : {})});
     } catch (error) { vad?.dispose(); if (!this.stopped) this.fail(error.message); }
   }
 
@@ -51,14 +51,16 @@ class ProcessedCapture extends AudioWorkletProcessor {
     if (!this.used) return;
     const samples = this.buffer.slice(0, this.used);
     this.port.postMessage({type: 'pcm', samples, sampleRate, sequence: ++this.sequence,
-      startFrame: this.emitted, speech: {...this.speech}}, [samples.buffer]);
+      startFrame: this.emitted, speech: this.speech ? {...this.speech} : null}, [samples.buffer]);
     this.emitted += this.used; this.used = 0;
   }
 
   collect(frames) {
     for (const frame of frames) {
-      this.speech[`${frame.speech}Frames`]++;
-      this.speech.totalFrames++;
+      if (this.speech) {
+        this.speech[`${frame.speech}Frames`]++;
+        this.speech.totalFrames++;
+      }
       for (const sample of frame.samples) {
         this.buffer[this.used++] = sample;
         if (this.used === this.buffer.length) this.flush();
@@ -77,7 +79,7 @@ class ProcessedCapture extends AudioWorkletProcessor {
       this.dispose();
       if (limit) this.port.postMessage({type: 'limit'});
       this.port.postMessage({type: 'finished', sequence: this.sequence, frames: this.frames,
-        speech: {...this.speech}, rawVariance});
+        speech: this.speech ? {...this.speech} : null, rawVariance});
     } catch (error) { this.fail(error.message); }
   }
 

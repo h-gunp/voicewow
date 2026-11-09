@@ -115,4 +115,34 @@ class PracticeAudioProcessorTest {
         assertEquals(478, actual.size)
         assertEquals(3, calls)
     }
+
+    @Test fun disabledVadPreservesEverySampleAndEmitsNoDecisions() {
+        val pcm = bytes(ShortArray(1433) { (sin(it * .07) * 20000).toInt().toShort() })
+        var calls = 0
+        val raw = PracticeAudioProcessor(noiseReductionEnabled = false, voiceActivityEnabled = false) { frame ->
+            calls++
+            FloatArray(481) { index -> if (index == 0) -1f else frame[index - 1] / 32768f }
+        }
+        val output = mutableListOf<Float>()
+        for (start in pcm.indices step 317) {
+            val chunk = raw.add(pcm.copyOfRange(start, minOf(start + 317, pcm.size)))
+            output.addAll(chunk.samples.toList())
+            assertTrue(chunk.speech.isEmpty())
+        }
+        val tail = raw.finish()
+        output.addAll(tail.samples.toList())
+        assertTrue(tail.speech.isEmpty())
+        val withVad = processor()
+        val expected = withVad.add(pcm).samples.toList() + withVad.finish().samples.toList()
+        assertArrayEquals(expected.toFloatArray(), output.toFloatArray(), 0f)
+        assertEquals(478, raw.outputSamples)
+        assertEquals(3, calls)
+    }
+
+    @Test fun disabledVadRejectsAFabricatedNonSpeechDecision() {
+        val raw = PracticeAudioProcessor(noiseReductionEnabled = false, voiceActivityEnabled = false) {
+            FloatArray(481)
+        }
+        assertThrows(IllegalStateException::class.java) { raw.add(ByteArray(960)) }
+    }
 }

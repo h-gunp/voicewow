@@ -8,6 +8,7 @@ internal data class PracticeAudioChunk(val samples: FloatArray, val speech: IntA
 
 /** Continuous 48 kHz PCM16 input, optional RNNoise, then 16 kHz output. */
 internal class PracticeAudioProcessor(private val noiseReductionEnabled: Boolean = true,
+    private val voiceActivityEnabled: Boolean = true,
     private val denoise: (ShortArray) -> FloatArray) {
     private val frame = ShortArray(480)
     private val resampler = PracticeDownsampler()
@@ -78,10 +79,11 @@ internal class PracticeAudioProcessor(private val noiseReductionEnabled: Boolean
         } else {
             check(processed.size == 481 && processed.all { it.isFinite() })
             val decision = processed[0].toInt()
-            check(decision in 0..2 && processed[0] == decision.toFloat())
+            if (voiceActivityEnabled) check(decision in 0..2 && processed[0] == decision.toFloat())
+            else check(processed[0] == -1f) { "Disabled VAD must not emit a classification" }
             val validOutput = if (noiseReductionEnabled) pendingValid else valid
             if (validOutput > 0) {
-                speech.add(decision)
+                if (voiceActivityEnabled) speech.add(decision)
                 for (index in 1..validOutput) resampler.add(processed[index], output)
             }
         }

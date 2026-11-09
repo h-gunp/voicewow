@@ -9,8 +9,8 @@ const unsupportedRate = enabled => Object.assign(new Error(enabled
 const active = session => ['starting', 'recording', 'stopping'].includes(session.phase);
 const stopTracks = stream => { for (const track of stream?.getTracks() || []) track.stop(); };
 const speechKeys = ['speechFrames', 'nonSpeechFrames', 'uncertainFrames'];
-const validSpeech = (value, frames) => value && speechKeys.every(key => Number.isInteger(value[key]) && value[key] >= 0)
-  && value.totalFrames === Math.ceil(frames / 480) && speechKeys.reduce((sum, key) => sum + value[key], 0) === value.totalFrames;
+const validSpeech = (value, frames, enabled) => enabled ? value && speechKeys.every(key => Number.isInteger(value[key]) && value[key] >= 0)
+  && value.totalFrames === Math.ceil(frames / 480) && speechKeys.reduce((sum, key) => sum + value[key], 0) === value.totalFrames : value == null;
 function releaseNode(node) {
   if (!node) return;
   node.port.onmessage = node.port.onmessageerror = node.onprocessorerror = null;
@@ -22,12 +22,13 @@ function releaseNode(node) {
 /** A user gesture must call start(). stop() waits for the final PCM acknowledgment.
  * onLimit fires after automatic stop begins; stop() then returns the same result.
  * Startup errors reject start(); later failures also call onError once.
- * PCM is continuous at 48kHz; pronunciation disables RNNoise. VAD never crops or gates frames.
+ * PCM is continuous at 48kHz; pronunciation disables RNNoise and VAD. Disabled VAD returns speech:null.
  * onChunk owns a copy that it may mutate/transfer without changing stop()'s result.
  */
-export function createProcessedRecorder({ maxSeconds = 10, noiseReductionEnabled = true, onChunk = () => {}, onLimit = () => {}, onError = () => {} } = {}) {
+export function createProcessedRecorder({ maxSeconds = 10, noiseReductionEnabled = true, voiceActivityEnabled = true, onChunk = () => {}, onLimit = () => {}, onError = () => {} } = {}) {
   if (!Number.isFinite(maxSeconds) || maxSeconds <= 0 || maxSeconds > 20) throw new RangeError('Capture duration must be at most 20 seconds');
   if (typeof noiseReductionEnabled !== 'boolean') throw new TypeError('Noise reduction setting must be boolean');
+  if (typeof voiceActivityEnabled !== 'boolean') throw new TypeError('Voice activity setting must be boolean');
   let current;
 
   function cleanup(session) {
@@ -91,34 +92,34 @@ export function createProcessedRecorder({ maxSeconds = 10, noiseReductionEnabled
         || message.sampleRate !== session.context.sampleRate
         || message.sequence !== session.sequence + 1 || message.startFrame !== session.frames
         || session.frames + message.samples.length > session.maxFrames
-        || !validSpeech(message.speech, session.frames + message.samples.length)) {
+        || !validSpeech(message.speech, session.frames + message.samples.length, voiceActivityEnabled)) {
         fail(session, new Error('Invalid or discontinuous PCM chunk')); return;
       }
       session.chunks.push(message.samples);
       session.sequence++;
       session.frames += message.samples.length;
       renewDelivery(session);
-      try { onChunk({samples: message.samples.slice(), sampleRate: 48000, startFrame: message.startFrame, speech: {...message.speech}}); }
+      try { onChunk({samples: message.samples.slice(), sampleRate: 48000, startFrame: message.startFrame, speech: message.speech ? {...message.speech} : null}); }
       catch (error) { fail(session, error); }
       return;
     }
     if (message?.type === 'limit' && session.frames === session.maxFrames) { limit(session); return; }
     if (message?.type !== 'finished' || session.phase !== 'stopping'
       || message.sequence !== session.sequence || message.frames !== session.frames
-      || !validSpeech(message.speech, session.frames) || !Number.isFinite(message.rawVariance) || message.rawVariance < 0) {
+      || !validSpeech(message.speech, session.frames, voiceActivityEnabled) || !Number.isFinite(message.rawVariance) || message.rawVariance < 0) {
       fail(session, new Error('Invalid final PCM acknowledgment')); return;
     }
     clearTimeout(session.finalTimer);
     // VAD alone must not discard a weak/fricative utterance. This raw-signal
     // threshold is the existing pronunciation analysis silence check.
-    if (session.frames >= 9600 && message.rawVariance < 1e-10 && message.speech.speechFrames === 0) {
+    if (voiceActivityEnabled && session.frames >= 9600 && message.rawVariance < 1e-10 && message.speech.speechFrames === 0) {
       fail(session, Object.assign(new Error('말소리가 들어오지 않았다. 마이크를 확인하고 다시 녹음해야 한다.'), {captureReason: 'no_speech'}));
       return;
     }
     const samples = new Float32Array(session.frames);
     let offset = 0;
     for (const chunk of session.chunks) { samples.set(chunk, offset); offset += chunk.length; }
-    const result = { samples, sampleRate: session.context.sampleRate, speech: {...message.speech} };
+    const result = { samples, sampleRate: session.context.sampleRate, speech: message.speech ? {...message.speech} : null };
     void cleanup(session).then(() => {
       if (session.phase !== 'stopping') return;
       session.phase = 'done';
@@ -165,7 +166,7 @@ export function createProcessedRecorder({ maxSeconds = 10, noiseReductionEnabled
       context.onstatechange = () => {
         if (active(session) && context.state !== 'running') fail(session, new Error('Audio context interrupted'));
       };
-      const prepared = createProcessedCaptureNode(context, session.loading.signal, maxSeconds, noiseReductionEnabled).then(node => {
+      const prepared = createProcessedCaptureNode(context, session.loading.signal, maxSeconds, noiseReductionEnabled, voiceActivityEnabled).then(node => {
         // Cancellation can win after loader readiness but before this await resumes.
         if (!active(session)) { releaseNode(node); throw aborted(); }
         session.node = node;

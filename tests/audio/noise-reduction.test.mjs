@@ -73,7 +73,7 @@ test('processed capture requires VAD and forwards duration without changing the 
   assert.equal(await pending, h.nodes[0]);
 });
 
-test('pronunciation raw capture loads VAD without requesting RNNoise', async t => {
+test('raw capture with VAD enabled skips RNNoise loading', async t => {
   const h = harness(t);
   h.replace('fetch', async (url, options) => {
     h.requests.push({url, options});
@@ -88,6 +88,31 @@ test('pronunciation raw capture loads VAD without requesting RNNoise', async t =
   assert.equal(h.nodes[0].options.processorOptions.noiseReductionEnabled, false);
   assert.equal(h.nodes[0].options.processorOptions.wasmBinary, null);
   h.nodes[0].port.onmessage({data: {type: 'ready', vadStatus: 'ready'}});
+  assert.equal(await pending, h.nodes[0]);
+});
+
+test('capture with both processors disabled starts without requesting any WASM', async t => {
+  const h = harness(t), abort = new AbortController();
+  t.after(() => abort.abort());
+  const pending = createProcessedCaptureNode(h.context, abort.signal, 10, false, false);
+  pending.catch(() => {});
+  await settle();
+  assert.deepEqual(h.requests, []);
+  assert.equal(h.nodes[0].options.processorOptions.voiceActivityEnabled, false);
+  assert.equal(h.nodes[0].options.processorOptions.vadBinary, null);
+  h.nodes[0].port.onmessage({data: {type: 'ready'}});
+  assert.equal(await pending, h.nodes[0]);
+});
+
+test('raw capture without detectors does not require WASM or fetch APIs', async t => {
+  const h = harness(t), abort = new AbortController();
+  h.replace('WebAssembly', undefined); h.replace('fetch', undefined);
+  t.after(() => abort.abort());
+  const pending = createProcessedCaptureNode(h.context, abort.signal, 10, false, false);
+  pending.catch(() => {});
+  await settle();
+  assert.equal(h.nodes.length, 1);
+  h.nodes[0].port.onmessage({data: {type: 'ready'}});
   assert.equal(await pending, h.nodes[0]);
 });
 

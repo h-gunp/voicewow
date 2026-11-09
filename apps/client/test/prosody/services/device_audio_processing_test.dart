@@ -49,6 +49,7 @@ void main() {
       processor.release = Completer<void>();
       await service.start(onSamples: live.addAll);
       expect(processor.noiseReductionSelections, [true]);
+      expect(processor.voiceActivitySelections, [true]);
       expect(capture.config!.sampleRate, 48000);
       expect(
         capture.config!.androidConfig.audioSource,
@@ -84,7 +85,7 @@ void main() {
   );
 
   test(
-    'pronunciation alone disables suppression and retains PCM and VAD',
+    'pronunciation alone disables suppression and VAD while retaining PCM',
     () async {
       const pronunciation = MethodChannel('voicemate/pronunciation');
       Float32List? recognized;
@@ -108,12 +109,13 @@ void main() {
         onVoiceActivity: activities.add,
       );
       expect(processor.noiseReductionSelections, [false]);
+      expect(processor.voiceActivitySelections, [false]);
       capture.emit(9600);
       await Future<void>.delayed(Duration.zero);
-      expect(activities, ['speech']);
+      expect(activities, isEmpty);
       expect(await recorder.finish(), ['A']);
       expect(recognized, Float32List.fromList(List<double>.filled(3200, .125)));
-      expect(processor.flags, 20);
+      expect(processor.flags, 0);
       expect(capture.config!.autoGain, isFalse);
       expect(capture.config!.echoCancel, isFalse);
       expect(capture.config!.noiseSuppress, isFalse);
@@ -131,6 +133,81 @@ void main() {
       expect(result.samples.length, 160);
       expect(result.speechFrames, [0]);
       expect(service.recentVoiceActivity, 'nonSpeech');
+    },
+  );
+
+  test('VAD-off recording has nullable activity and keeps live PCM', () async {
+    await service.dispose();
+    service = DeviceAudioService(
+      noiseReductionEnabled: false,
+      voiceActivityEnabled: false,
+    );
+    processor.variance = 1e-5;
+    final live = <double>[];
+    await service.start(onSamples: live.addAll);
+    capture.emit(480);
+    await processor.started.future;
+    await Future<void>.delayed(Duration.zero);
+    expect(live, List<double>.filled(150, .125));
+    expect(service.recentVoiceActivity, isNull);
+    final recording = await service.stop();
+    expect(recording.samples, List<double>.filled(160, .125));
+    expect(live, recording.samples);
+    expect(recording.speechFrames, isNull);
+    expect(service.speechInRange(0, 160), isNull);
+  });
+
+  test('VAD-off recording rejects negligible raw variance', () async {
+    await service.dispose();
+    service = DeviceAudioService(
+      noiseReductionEnabled: false,
+      voiceActivityEnabled: false,
+    );
+    processor.variance = 0;
+    await service.start(onSamples: (_) {});
+    capture.emit(480);
+    await expectLater(service.stop(), throwsA(isA<DeviceAudioException>()));
+    expect(processor.flags, 0);
+    expect(directory.listSync(recursive: true).whereType<File>(), isEmpty);
+  });
+
+  test(
+    'VAD-off native responses reject decisions and incomplete PCM',
+    () async {
+      final unexpected = NativePracticeAudioSession();
+      await unexpected.create(voiceActivityEnabled: false);
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method != 'process') return null;
+        return {
+          'samples': Float32List(150),
+          'speech': Int32List.fromList([1]),
+          'inputSamples': 480,
+          'outputSamples': 150,
+          'rawVariance': .01,
+        };
+      });
+      await expectLater(unexpected.process(Uint8List(960)), throwsStateError);
+      await unexpected.cancel();
+
+      messenger.setMockMethodCallHandler(channel, processor.handle);
+      final incomplete = NativePracticeAudioSession();
+      await incomplete.create(
+        noiseReductionEnabled: false,
+        voiceActivityEnabled: false,
+      );
+      await incomplete.process(Uint8List(960));
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method != 'finish') return null;
+        return {
+          'samples': Float32List(0),
+          'speech': Int32List(0),
+          'inputSamples': 480,
+          'outputSamples': 150,
+          'rawVariance': .01,
+        };
+      });
+      await expectLater(incomplete.finish(), throwsStateError);
+      await incomplete.cancel();
     },
   );
 
@@ -310,7 +387,9 @@ class _Capture extends RecordPlatform {
 class _Processor {
   final methods = <String>[], createdIds = <int>[];
   final noiseReductionSelections = <bool?>[];
+  final voiceActivitySelections = <bool?>[];
   bool noiseReductionEnabled = true;
+  bool voiceActivityEnabled = true;
   final started = Completer<void>();
   Completer<void>? release;
   int input = 0, output = 0, flags = 0, decision = 1, capturedBytes = 0;
@@ -322,6 +401,8 @@ class _Processor {
       createdIds.add(args['session'] as int);
       noiseReductionSelections.add(args['noiseReductionEnabled'] as bool?);
       noiseReductionEnabled = args['noiseReductionEnabled'] as bool? ?? true;
+      voiceActivitySelections.add(args['voiceActivityEnabled'] as bool?);
+      voiceActivityEnabled = args['voiceActivityEnabled'] as bool? ?? true;
       input = output = flags = capturedBytes = 0;
       return {'inputSampleRate': 48000, 'sampleRate': 16000};
     }
@@ -346,10 +427,13 @@ class _Processor {
       List<double>.filled(nextOutput - output, .125),
     );
     final speech = Int32List.fromList(
-      List<int>.filled(readyFrames - flags, decision),
+      List<int>.filled(
+        voiceActivityEnabled ? readyFrames - flags : 0,
+        decision,
+      ),
     );
     output = nextOutput;
-    flags = readyFrames;
+    flags = voiceActivityEnabled ? readyFrames : 0;
     return {
       'samples': samples,
       'speech': speech,

@@ -16,7 +16,7 @@ class NativePracticeAudioSession {
       _outputSamples = 0,
       _decisions = 0,
       _sentBytes = 0;
-  bool _cancelled = false;
+  bool _cancelled = false, _voiceActivityEnabled = true;
   double rawVariance = 0;
   Future<void>? _cancel;
 
@@ -28,11 +28,16 @@ class NativePracticeAudioSession {
     ),
   );
 
-  Future<void> create({bool noiseReductionEnabled = true}) async {
+  Future<void> create({
+    bool noiseReductionEnabled = true,
+    bool voiceActivityEnabled = true,
+  }) async {
+    _voiceActivityEnabled = voiceActivityEnabled;
     final result = await _bounded(
       _channel.invokeMapMethod<Object?, Object?>('create', {
         'session': _id,
         'noiseReductionEnabled': noiseReductionEnabled,
+        'voiceActivityEnabled': voiceActivityEnabled,
       }),
     );
     if (result?['inputSampleRate'] != 48000 || result?['sampleRate'] != 16000) {
@@ -62,7 +67,8 @@ class NativePracticeAudioSession {
       ),
     );
     if (_outputSamples != (_inputSamples + 2) ~/ 3 ||
-        _decisions != (_outputSamples + 159) ~/ 160) {
+        (_voiceActivityEnabled &&
+            _decisions != (_outputSamples + 159) ~/ 160)) {
       throw StateError('Incomplete processed recording');
     }
     return result;
@@ -94,8 +100,10 @@ class NativePracticeAudioSession {
         input > 48000 * 20 ||
         output != _outputSamples + samples.length ||
         output > (input + 2) ~/ 3 ||
-        _decisions + speech.length > (input + 479) ~/ 480 ||
-        output > (_decisions + speech.length) * 160 ||
+        (_voiceActivityEnabled
+            ? _decisions + speech.length > (input + 479) ~/ 480 ||
+                  output > (_decisions + speech.length) * 160
+            : speech.isNotEmpty) ||
         output > 16000 * 20) {
       throw StateError('Invalid processed audio sequence');
     }

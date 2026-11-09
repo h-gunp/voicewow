@@ -128,7 +128,9 @@ async function browser(t, options = {}) {
   globalThis.AudioContext = Context;
   globalThis.AudioWorkletNode = WorkletNode;
   const errors = [], limits = [];
-  const recorder = (options.maxSeconds ? createProcessedRecorder : createRecorder)({ maxSeconds: options.maxSeconds, noiseReductionEnabled: options.noiseReductionEnabled, onChunk: options.onChunk, onError: error => errors.push(error), onLimit: () => limits.push(true) });
+  const recorder = (options.maxSeconds ? createProcessedRecorder : createRecorder)({ maxSeconds: options.maxSeconds,
+    noiseReductionEnabled: options.noiseReductionEnabled, voiceActivityEnabled: options.voiceActivityEnabled,
+    onChunk: options.onChunk, onError: error => errors.push(error), onLimit: () => limits.push(true) });
   t.after(async () => {
     await recorder.cancel();
     for (const [key, descriptor] of original) {
@@ -139,13 +141,27 @@ async function browser(t, options = {}) {
   return { recorder, nodes, contexts, requests, assetRequests, stream, track, errors, limits };
 }
 
-test('pronunciation always bypasses RNNoise while preserving its VAD capture contract', async t => {
-  const b = await browser(t, {noiseReductionEnabled: true});
+test('pronunciation always bypasses both detectors and returns no activity summary', async t => {
+  const b = await browser(t, {noiseReductionEnabled: true, voiceActivityEnabled: true});
   await b.recorder.start();
-  assert.deepEqual(b.assetRequests.map(url => new URL(url).pathname.split('/vendor/')[1]), ['libfvad/libfvad.wasm']);
+  assert.deepEqual(b.assetRequests, []);
   assert.equal(b.nodes[0].settings.processorOptions.noiseReductionEnabled, false);
+  assert.equal(b.nodes[0].settings.processorOptions.voiceActivityEnabled, false);
   b.nodes[0].feed([Float32Array.of(.125, -.25, .5)]);
-  assert.deepEqual([...(await b.recorder.stop()).samples], [.125, -.25, .5]);
+  const result = await b.recorder.stop();
+  assert.deepEqual([...result.samples], [.125, -.25, .5]);
+  assert.equal(result.speech, null);
+});
+
+test('pronunciation completes silence without waiting for a voice decision', async t => {
+  const b = await browser(t);
+  await b.recorder.start();
+  const input = new Float32Array(10007);
+  b.nodes[0].feed([input]);
+  const result = await b.recorder.stop();
+  assert.deepEqual(result.samples, input);
+  assert.equal(result.speech, null);
+  assert.deepEqual(b.errors, []);
 });
 
 test('only start requests the mic and stop retains the final partial mono PCM', async t => {
@@ -398,11 +414,11 @@ test('live consumer transfer cannot detach final PCM and the last partial arrive
   assert.deepEqual([...result.samples], [...input]);
   assert.deepEqual(received, [...input]);
   assert.deepEqual(order, ['chunk', 'chunk', 'chunk', 'done']);
-  assert.equal(result.speech.totalFrames, Math.ceil(input.length / 480));
+  assert.equal(result.speech, null);
 });
 
 test('only near-constant raw silence is rejected; VAD-negative weak PCM survives unchanged', async t => {
-  const b = await browser(t, {decision: 'nonSpeech'});
+  const b = await browser(t, {maxSeconds: 10, noiseReductionEnabled: false, voiceActivityEnabled: true, decision: 'nonSpeech'});
   await b.recorder.start();
   b.nodes[0].feed([new Float32Array(9600)]);
   await assert.rejects(b.recorder.stop(), {captureReason: 'no_speech'});
@@ -437,6 +453,7 @@ test('common capture supports the twenty-second prosody cap', async t => {
   await b.recorder.start();
   assert.deepEqual(b.assetRequests.map(url => new URL(url).pathname.split('/vendor/')[1]), ['rnnoise/rnnoise.wasm', 'libfvad/libfvad.wasm']);
   assert.notEqual(b.nodes[0].settings.processorOptions.noiseReductionEnabled, false);
+  assert.notEqual(b.nodes[0].settings.processorOptions.voiceActivityEnabled, false);
   b.nodes[0].feed([new Float32Array(960017).fill(.1)]);
   await flush();
   assert.equal((await b.recorder.stop()).samples.length, 960000);

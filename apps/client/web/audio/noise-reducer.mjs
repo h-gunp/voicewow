@@ -4,7 +4,7 @@ import { LevelMeter } from './level-meter.mjs';
 const frameSize = 480;
 const pcmScale = 32768;
 
-/** Continuous denoised PCM. VAD describes frames; it never removes samples. */
+/** Continuous denoised PCM. Optional VAD describes frames; it never removes samples. */
 export async function createNoiseProcessor(wasmBinary, vad, sampleRate = 48000) {
   if (sampleRate !== 48000) throw new RangeError('RNNoise requires 48000 Hz');
   const engine = await createRNNWasmModule({ wasmBinary });
@@ -31,12 +31,12 @@ export async function createNoiseProcessor(wasmBinary, vad, sampleRate = 48000) 
         output[i] = engine.HEAPF32[offset + frameSize + i] / pcmScale;
         if (!Number.isFinite(output[i])) throw new Error('RNNoise returned invalid PCM');
       }
-      const detected = vad.process(output);
-      if (typeof detected !== 'boolean') throw new Error('VAD returned an invalid decision');
+      const detected = vad ? vad.process(output) : null;
+      if (vad && typeof detected !== 'boolean') throw new Error('VAD returned an invalid decision');
       // The zero frame only drains latency: its score is not real speech evidence.
       const supported = length === 0 ? previous.score : Math.min(previous.score, score);
       const quiet = length === 0 ? previous.score : Math.max(previous.score, score);
-      const speech = detected && supported >= .5 ? 'speech' : (!detected && quiet < .2 ? 'nonSpeech' : 'uncertain');
+      const speech = vad ? (detected && supported >= .5 ? 'speech' : (!detected && quiet < .2 ? 'nonSpeech' : 'uncertain')) : null;
       // RNNoise can overshoot full scale even when microphone PCM is bounded.
       for (let i = 0; i < output.length; i++) output[i] = Math.max(-1, Math.min(1, output[i]));
       result = { samples: output.slice(0, previous.length), speech };

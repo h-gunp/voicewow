@@ -52,9 +52,11 @@ Java_com_voicewow_voicemate_NativeNoiseMeter_destroy(JNIEnv *env, jobject object
 
 JNIEXPORT jlong JNICALL
 Java_com_voicewow_voicemate_NativePracticeAudio_create(JNIEnv *env, jobject object,
-                                                    jboolean noise_reduction_enabled) {
+                                                    jboolean noise_reduction_enabled,
+                                                    jboolean voice_activity_enabled) {
     (void)object;
-    VoiceMateNoiseMeter *meter = voicemate_meter_create_with_noise_reduction(noise_reduction_enabled == JNI_TRUE);
+    VoiceMateNoiseMeter *meter = voicemate_meter_create_with_processing(
+        noise_reduction_enabled == JNI_TRUE, voice_activity_enabled == JNI_TRUE);
     if (!meter) fail(env, "java/lang/IllegalStateException", "Practice audio initialization failed");
     return (jlong)(intptr_t)meter;
 }

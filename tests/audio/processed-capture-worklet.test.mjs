@@ -52,7 +52,7 @@ test('real RNNoise/VAD capture emits continuous clean PCM, metadata and final ta
   assert.equal(capture.process([], [[]]), false);
 });
 
-test('pronunciation bypass emits the first raw frame immediately and preserves every sample with real VAD', async () => {
+test('raw capture with VAD emits the first frame immediately and preserves every sample', async () => {
   const capture = new Processor({processorOptions: {wasmBinary: new Uint8Array([0]), vadBinary, maxSeconds: 10, noiseReductionEnabled: false}});
   const initialized = await Promise.race([capture.port.next('ready'), capture.port.next('error')]);
   assert.equal(initialized.type, 'ready', 'raw capture must not initialize the invalid RNNoise binary');
@@ -79,6 +79,40 @@ test('pronunciation bypass emits the first raw frame immediately and preserves e
   assert.equal(final.speech.speechFrames, speechFrames);
   assert.equal(final.speech.nonSpeechFrames, 26 - speechFrames);
   assert.equal(capture.port.messages.at(-1).type, 'finished');
+});
+
+test('pronunciation starts with invalid detector binaries and returns raw PCM with no speech metadata', async () => {
+  const capture = new Processor({processorOptions: {wasmBinary: new Uint8Array([0]), vadBinary: new Uint8Array([0]), maxSeconds: 10,
+    noiseReductionEnabled: false, voiceActivityEnabled: false}});
+  const initialized = await Promise.race([capture.port.next('ready'), capture.port.next('error')]);
+  assert.equal(initialized.type, 'ready', 'disabled detectors must not be initialized');
+  assert.equal(initialized.vadStatus, undefined);
+  const input = Float32Array.from({length: 10007}, (_, i) => i < 4800 ? 0 : .0001 * Math.sin(i));
+  for (let i = 0; i < input.length; i += 128) capture.process([[input.subarray(i, i + 128)]], [[new Float32Array(128)]]);
+  capture.port.onmessage({data: {type: 'finish'}});
+  const final = await capture.port.next('finished');
+  const chunks = capture.port.messages.filter(message => message.type === 'pcm');
+  assert.deepEqual(chunks.flatMap(message => [...message.samples]), [...input]);
+  assert.ok(chunks.every(message => message.speech === null));
+  assert.equal(final.speech, null);
+  assert.equal(final.frames, 10007);
+  assert.equal(capture.port.messages.at(-1).type, 'finished');
+});
+
+test('shared RNNoise capture can omit VAD without inventing activity metadata', async () => {
+  const capture = new Processor({processorOptions: {wasmBinary, vadBinary: new Uint8Array([0]), maxSeconds: 10, voiceActivityEnabled: false}});
+  const initialized = await Promise.race([capture.port.next('ready'), capture.port.next('error')]);
+  assert.equal(initialized.type, 'ready');
+  const input = Float32Array.from({length: 961}, (_, i) => .1 * Math.sin(i * .17));
+  capture.process([[input]], [[new Float32Array(input.length)]]);
+  capture.port.onmessage({data: {type: 'finish'}});
+  const final = await capture.port.next('finished');
+  assert.equal(final.speech, null);
+  const processor = await createNoiseProcessor(wasmBinary, null);
+  try {
+    const reference = [...processor.push(input), ...processor.finish()].flatMap(frame => [...frame.samples]);
+    assert.deepEqual(capture.port.messages.filter(message => message.type === 'pcm').flatMap(message => [...message.samples]), reference);
+  } finally { processor.dispose(); }
 });
 
 test('automatic limit flushes a partial RNNoise frame without padding duration or VAD count', async () => {
