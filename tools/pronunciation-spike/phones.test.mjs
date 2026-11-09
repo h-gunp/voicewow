@@ -26,6 +26,25 @@ function logitsFor(ids, classes = 55) {
   ids.forEach((id, frame) => logits[frame * classes + id] = 10);
   return logits;
 }
+
+test('CTC suppresses marginal nonblank bursts while retaining clear phones and input logits', () => {
+  for (const [margin, expected] of [[.25, []], [.5, []], [.75, ['ɡ']]]) {
+    const logits = logitsFor([1]);
+    logits[0] = 0;logits[1] = margin;
+    const original = logits.slice();
+    assert.deepEqual(decodePhones(logits, [1, 1, 55], vocab).map(item => item.phone), expected);
+    assert.deepEqual(logits, original);
+  }
+});
+
+test('one blank frame inside the same vowel does not invent another vowel', () => {
+  const phones = ids => decodePhones(logitsFor(ids), [1, ids.length, 55], vocab);
+  assert.deepEqual(phones([5, 0, 5]), [{phone:'a',startFrame:0,endFrame:3}]);
+  assert.deepEqual(phones([5, 0, 0, 5]).map(item=>item.phone), ['a','a']);
+  assert.deepEqual(phones([5, 51, 5]).map(item=>item.phone), ['a','a']);
+  assert.deepEqual(phones([1, 0, 1]).map(item=>item.phone), ['ɡ','ɡ']);
+  assert.deepEqual(phones([5, 52, 5]).map(item=>item.phone), ['a','[UNK]','a']);
+});
 const vocab = { '[PAD]': 0, 'ɡ': 1, 'k*': 2, a: 5, ' ': 51, '[UNK]': 52, '<s>': 53, '</s>': 54 };
 
 test('CTC collapses adjacent repeats but preserves blank-separated repeats and consonant IDs 1/2', () => {

@@ -5,6 +5,7 @@
 .worktrees/
 **/.dart_tool/
 **/build/
+/apps/client/android/.kotlin/
 **/.flutter-plugins-dependencies
 **/.idea/
 **/*.iml

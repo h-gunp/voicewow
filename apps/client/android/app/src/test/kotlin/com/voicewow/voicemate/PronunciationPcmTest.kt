@@ -17,6 +17,63 @@ class PronunciationPcmTest {
             PronunciationPcm.decode(logits, longArrayOf(1, ids.size.toLong(), 55), vocab))
     }
 
+    @Test fun fixedBlankOffsetDropsWeakFramesAndPreservesStrongRepeatsAndUnknown() {
+        for (margin in floatArrayOf(.25f, .5f, .5001f)) {
+            val frame = FloatArray(55) { -2f }.also { it[0] = 0f; it[1] = margin }
+            assertEquals(if (margin > .5f) listOf("ɡ") else emptyList<String>(),
+                PronunciationPcm.decode(frame, longArrayOf(1, 1, 55), vocab))
+        }
+        val ids = intArrayOf(1, 1, 1, 1, 1, 51, 52)
+        val margins = floatArrayOf(.25f, .5f, .5001f, .25f, .75f, .75f, .75f)
+        val logits = FloatArray(ids.size * 55) { -2f }
+        ids.forEachIndexed { frame, id ->
+            logits[frame * 55] = 0f
+            logits[frame * 55 + id] = margins[frame]
+        }
+        val original = logits.copyOf()
+        assertEquals(listOf("ɡ", "ɡ", "[UNK]"),
+            PronunciationPcm.decode(logits, longArrayOf(1, ids.size.toLong(), 55), vocab))
+        assertArrayEquals(original, logits, 0f)
+    }
+
+    @Test fun blankOffsetStillValidatesEveryOriginalLogit() {
+        for (column in 0 until 55) {
+            for (invalid in floatArrayOf(Float.NaN, Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY)) {
+                val logits = FloatArray(55) { -10f }.also { it[1] = 2f; it[column] = invalid }
+                assertThrows(IllegalArgumentException::class.java) {
+                    PronunciationPcm.decode(logits, longArrayOf(1, 1, 55), vocab)
+                }
+            }
+        }
+    }
+
+    @Test fun identicalVowelsMergeOnlyAcrossExactlyOneBlankFrame() {
+        val vowels = listOf("a", "ɑ", "i", "u", "o", "ɛ", "ɯ", "ʌ", "ja", "jʌ",
+            "jo", "ju", "jɛ", "wa", "wi", "wɛ", "wʌ", "ɰi")
+        for (vowel in vowels) {
+            val labels = vocab.copyOf().also { it[2] = vowel }
+            assertEquals(listOf(vowel), decodeIds(intArrayOf(2, 2, 0, 2, 0, 2), labels))
+            assertEquals(listOf(vowel, vowel), decodeIds(intArrayOf(2, 0, 0, 2), labels))
+            assertEquals(listOf(vowel, vowel), decodeIds(intArrayOf(2, 51, 2), labels))
+            assertEquals(listOf(vowel, vowel), decodeIds(intArrayOf(2, 0, 51, 0, 2), labels))
+        }
+    }
+
+    @Test fun oneBlankDoesNotMergeDifferentVowelsConsonantsOrUnknownTokens() {
+        val labels = vocab.copyOf().also { it[2] = "a"; it[3] = "ɑ" }
+        assertEquals(listOf("a", "ɑ"), decodeIds(intArrayOf(2, 0, 3), labels))
+        for (id in listOf(1, 52, 53, 54)) {
+            assertEquals(listOf(labels[id], labels[id]), decodeIds(intArrayOf(id, 0, id), labels))
+            assertEquals(listOf("a", labels[id], "a"), decodeIds(intArrayOf(2, 0, id, 0, 2), labels))
+        }
+    }
+
+    private fun decodeIds(ids: IntArray, labels: Array<String> = vocab): List<String> {
+        val logits = FloatArray(ids.size * 55) { -1f }
+        ids.forEachIndexed { frame, id -> logits[frame * 55 + id] = 1f }
+        return PronunciationPcm.decode(logits, longArrayOf(1, ids.size.toLong(), 55), labels)
+    }
+
     @Test fun preprocessingPreservesRawPcmAndRejectsInvalidOrSilentAudio() {
         val raw = FloatArray(3200) { if (it % 2 == 0) 0.5f else -0.5f }
         val original = raw.copyOf()

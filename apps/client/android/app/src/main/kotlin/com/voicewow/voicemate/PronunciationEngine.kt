@@ -35,15 +35,33 @@ internal object PronunciationPcm {
             shape[2] == 55L && logits.size.toLong() == shape[1] * 55 &&
             vocab.size == 55 && vocab[0] == "[PAD]" && vocab[51] == " ") { "음소 모델 출력 형식이 올바르지 않다." }
         val phones = mutableListOf<String>()
+        val vowels = setOf("a", "ɑ", "i", "u", "o", "ɛ", "ɯ", "ʌ", "ja", "jʌ",
+            "jo", "ju", "jɛ", "wa", "wi", "wɛ", "wʌ", "ɰi")
         var previous = -1
+        var lastId = -1
+        var lastEnd = -1
         repeat(shape[1].toInt()) { frame ->
             val offset = frame * 55
             var id = 0
+            var bestScore = logits[offset] + 0.5f
             repeat(55) { column ->
-                require(logits[offset + column].isFinite()) { "분석 결과에 유효하지 않은 수치가 있다." }
-                if (logits[offset + column] > logits[offset + id]) id = column
+                val score = logits[offset + column]
+                require(score.isFinite()) { "분석 결과에 유효하지 않은 수치가 있다." }
+                if (score > bestScore) {
+                    bestScore = score
+                    id = column
+                }
             }
-            if (id != 0 && id != 51 && id != previous) phones.add(vocab[id])
+            if (id != 0) {
+                if (id != 51 && id != previous) {
+                    // shortcut: one-frame vowel gaps count as continuation; rapid hiatus needs acoustic boundary detection.
+                    val mergeVowel = previous == 0 && frame - lastEnd == 1 &&
+                        lastId == id && vocab[id] in vowels
+                    if (!mergeVowel) phones.add(vocab[id])
+                }
+                lastId = id
+                lastEnd = frame + 1
+            }
             previous = id
         }
         return phones

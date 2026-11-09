@@ -15,6 +15,8 @@ export function prepareSamples(samples, sampleRate) {
   return samples;
 }
 
+const IPA_VOWELS = new Set(['a', 'ɑ', 'i', 'u', 'o', 'ɛ', 'ɯ', 'ʌ', 'ja', 'jʌ', 'jo', 'ju', 'jɛ', 'wa', 'wi', 'wɛ', 'wʌ', 'ɰi']);
+
 export function decodePhones(logits, dims, vocab) {
   if (!(logits instanceof Float32Array) || !Array.isArray(dims) || dims.length !== 3
     || dims[0] !== 1 || !Number.isInteger(dims[1]) || dims[1] < 1 || dims[1] > 1000
@@ -27,14 +29,20 @@ export function decodePhones(logits, dims, vocab) {
   for (let frame = 0; frame < dims[1]; frame++) {
     const offset = frame * dims[2];
     let id = 0;
+    // Calibrated for this pinned model to reduce spurious phone insertions.
+    let bestScore = Math.fround(logits[offset] + .5);
     for (let c = 0; c < dims[2]; c++) {
       if (!Number.isFinite(logits[offset + c])) throw new Error('음소 모델 출력에 유효하지 않은 수치가 있다.');
-      if (logits[offset + c] > logits[offset + id]) id = c;
+      if (logits[offset + c] > bestScore) { id = c; bestScore = logits[offset + c]; }
     }
     const phone = byId.get(id);
     if (phone === undefined) throw new Error('음소 사전과 모델이 일치하지 않는다.');
     if (id !== 0 && phone !== ' ') {
-      if (id === previous) phones.at(-1).endFrame = frame + 1;
+      const last = phones.at(-1);
+      // shortcut: one-frame vowel gaps count as continuation; rapid vowel hiatus needs acoustic boundary detection.
+      const vowelContinuation = previous === 0 && last?.phone === phone
+        && IPA_VOWELS.has(phone) && frame - last.endFrame === 1;
+      if (id === previous || vowelContinuation) last.endFrame = frame + 1;
       else phones.push({ phone, startFrame: frame, endFrame: frame + 1 });
     }
     previous = id;
