@@ -9,7 +9,7 @@ test('web compares a blue guide with an orange voice while native retains its pa
   assert.match(charts, /guide: '#2f62d6', voice: '#b74415'/);
   assert.match(css, /--blue:#2f62d6/);
   assert.match(css, /--coral:#b74415/);
-  assert.match(css, /--accent:#315b49/);
+  assert.match(css, /--accent:#176b67/);
   assert.match(dart, /_guide = Color\(0xff2f62d6\)/);
   assert.match(dart, /_voice = Color\(0xff34455e\)/);
 });

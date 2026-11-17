@@ -282,63 +282,73 @@ class _PronunciationPracticeViewState extends State<PronunciationPracticeView>
           _readingContent(scrollAll: true)
         else
           Expanded(child: _readingContent()),
-        Container(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
-          decoration: const BoxDecoration(
-            color: canvas,
-            border: Border(top: BorderSide(color: line)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Semantics(
-                liveRegion: true,
-                child: Text(status, style: smallCopy),
-              ),
-              if (phase == _Phase.recording)
-                Text(
-                  '${(stopwatch.elapsedMilliseconds / 1000).clamp(0, kIsWeb ? 10 : 20).toStringAsFixed(1)} / ${kIsWeb ? 10 : 20}초',
-                  style: smallCopy,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: GlassSurface(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Semantics(
+                  liveRegion: true,
+                  child: Text(status, style: smallCopy),
                 ),
-              const SizedBox(height: 10),
-              FilledButton.icon(
-                key: Key(
-                  phase == _Phase.idle
-                      ? 'pronunciation-prepare'
-                      : 'pronunciation-mic',
-                ),
-                onPressed: phase == _Phase.idle
-                    ? _prepare
-                    : phase == _Phase.recording
-                    ? _finish
-                    : phase == _Phase.ready
-                    ? _start
-                    : null,
-                icon: Icon(
-                  phase == _Phase.idle
-                      ? Icons.download_outlined
+                if (phase == _Phase.recording)
+                  Text(
+                    '${(stopwatch.elapsedMilliseconds / 1000).clamp(0, kIsWeb ? 10 : 20).toStringAsFixed(1)} / ${kIsWeb ? 10 : 20}초',
+                    style: smallCopy,
+                  ),
+                const SizedBox(height: 10),
+                FilledButton.icon(
+                  key: Key(
+                    phase == _Phase.idle
+                        ? 'pronunciation-prepare'
+                        : 'pronunciation-mic',
+                  ),
+                  onPressed: phase == _Phase.idle
+                      ? _prepare
                       : phase == _Phase.recording
-                      ? Icons.stop
-                      : Icons.mic,
+                      ? _finish
+                      : phase == _Phase.ready
+                      ? _start
+                      : null,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: phase == _Phase.recording ? red : accent,
+                    minimumSize: const Size(0, 58),
+                  ),
+                  icon: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withValues(alpha: .16),
+                    ),
+                    child: Icon(
+                      phase == _Phase.idle
+                          ? Icons.download_outlined
+                          : phase == _Phase.recording
+                          ? Icons.stop
+                          : Icons.mic,
+                    ),
+                  ),
+                  label: Text(
+                    phase == _Phase.idle
+                        ? '발음 모델 준비'
+                        : phase == _Phase.recording
+                        ? '녹음 종료 · 분석'
+                        : result == null
+                        ? '눌러서 읽기'
+                        : '다시 읽기',
+                  ),
                 ),
-                label: Text(
-                  phase == _Phase.idle
-                      ? '발음 모델 준비'
-                      : phase == _Phase.recording
-                      ? '녹음 종료 · 분석'
-                      : result == null
-                      ? '눌러서 읽기'
-                      : '다시 읽기',
-                ),
-              ),
-              if (!usable && phase != _Phase.cancelling)
-                TextButton(
-                  key: const Key('pronunciation-cancel'),
-                  onPressed: _cancel,
-                  child: const Text('중지'),
-                ),
-            ],
+                if (!usable && phase != _Phase.cancelling)
+                  TextButton(
+                    key: const Key('pronunciation-cancel'),
+                    onPressed: _cancel,
+                    child: const Text('중지'),
+                  ),
+              ],
+            ),
           ),
         ),
       ],
@@ -406,6 +416,7 @@ class _PronunciationPracticeViewState extends State<PronunciationPracticeView>
         result == null
             ? const Text('녹음하면 인식된 발음이 여기에 표시된다.', style: smallCopy)
             : _colored(result!.observed, const Key('pronunciation-observed')),
+        tint: wash,
       ),
       const SizedBox(height: 10),
       const Wrap(
@@ -422,16 +433,21 @@ class _PronunciationPracticeViewState extends State<PronunciationPracticeView>
       const Text('회색은 비교하기 어려운 부분이다. 다시 녹음해 확인할 수 있다.', style: smallCopy),
       if (result != null) ...[
         const SizedBox(height: 16),
-        for (final difference in result!.differences)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Text(difference),
-          ),
-        for (final note in result!.notes)
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Text(note, style: smallCopy),
-          ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final difference in result!.differences)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(difference),
+              ),
+            for (final note in result!.notes)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(note, style: smallCopy),
+              ),
+          ],
+        ),
         const SizedBox(height: 14),
         OutlinedButton.icon(
           key: const Key('pronunciation-replay'),
@@ -447,15 +463,8 @@ class _PronunciationPracticeViewState extends State<PronunciationPracticeView>
     ],
   );
 
-  Widget _panel(Widget child) => Container(
-    padding: const EdgeInsets.all(18),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(6),
-      border: Border.all(color: line),
-    ),
-    child: child,
-  );
+  Widget _panel(Widget child, {Color? tint}) =>
+      GlassSurface(padding: const EdgeInsets.all(22), tint: tint, child: child);
 
   Widget _colored(List<PronunciationSpan> spans, Key key) => Text.rich(
     key: key,

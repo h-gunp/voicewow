@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>VoiceMate</title>
+  <defs>
+    <linearGradient id="base" x2="1" y2="1">
+      <stop stop-color="#368e87"/><stop offset="1" stop-color="#104d51"/>
+    </linearGradient>
+    <linearGradient id="light" x2="0" y2="1">
+      <stop stop-color="white" stop-opacity=".075"/><stop offset=".314" stop-color="white" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#base)" d="M0 0h1024v1024H0z"/>
+  <path fill="url(#light)" d="M0 0h1024v1024H0z"/>
+  <g fill="#e6f5f1">
+    <rect x="217.60" y="399.36" width="76.80" height="225.28" rx="38.40"/>
+    <rect x="345.60" y="291.84" width="76.80" height="440.32" rx="38.40"/>
+    <rect x="473.60" y="204.80" width="76.80" height="614.40" rx="38.40"/>
+    <rect x="601.60" y="291.84" width="76.80" height="440.32" rx="38.40"/>
+    <rect x="729.60" y="399.36" width="76.80" height="225.28" rx="38.40"/>
+  </g>
+</svg>

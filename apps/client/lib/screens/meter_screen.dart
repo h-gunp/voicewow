@@ -231,7 +231,12 @@ class MeterScreen extends StatelessWidget {
             Text(
               '입력 수준 ${session.displayLevel?.toStringAsFixed(1) ?? '—'}',
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w500),
+              style: const TextStyle(
+                fontSize: 32,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -1,
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
             ),
             Center(
               child: ConstrainedBox(
@@ -358,7 +363,10 @@ class MeterScreen extends StatelessWidget {
           style: const TextStyle(color: muted, fontSize: 14, height: 1.7),
         ),
         const SizedBox(height: 28),
-        measurement,
+        GlassSurface(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          child: measurement,
+        ),
         const SizedBox(height: 24),
         const Divider(),
         TextButton(

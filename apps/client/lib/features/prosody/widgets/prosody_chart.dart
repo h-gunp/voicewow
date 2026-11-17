@@ -109,7 +109,7 @@ class _Legend extends StatelessWidget {
       const SizedBox(width: 4),
       Text(
         label,
-        style: const TextStyle(fontSize: 14, color: Color(0xff465a74)),
+        style: const TextStyle(fontSize: 14, color: Color(0xff536974)),
       ),
     ],
   );
@@ -183,7 +183,7 @@ class _ProsodyPainter extends CustomPainter {
       canvas.drawRect(
         Rect.fromLTRB(x(bands[i].$1), plot.top, x(bands[i].$2), plot.bottom),
         Paint()
-          ..color = i.isOdd ? const Color(0xfff8fafc) : const Color(0xfff0f5fc),
+          ..color = i.isOdd ? const Color(0xfff9fbfc) : const Color(0xfff0f4f6),
       );
     }
     if (selected != null) {
@@ -193,17 +193,17 @@ class _ProsodyPainter extends CustomPainter {
         x(selected!.end),
         plot.bottom,
       );
-      canvas.drawRect(area, Paint()..color = const Color(0xffeaf1fe));
+      canvas.drawRect(area, Paint()..color = const Color(0xffe3efed));
       canvas.drawRect(
         area.deflate(1),
         Paint()
-          ..color = const Color(0xff7c9fe0)
+          ..color = const Color(0xff83aaa7)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.5,
       );
     }
     final grid = Paint()
-      ..color = const Color(0xffdce5f2)
+      ..color = const Color(0xffd7e2e6)
       ..strokeWidth = 1;
     canvas.drawLine(plot.topLeft, plot.topRight, grid);
     canvas.drawLine(plot.bottomLeft, plot.bottomRight, grid);
@@ -223,7 +223,7 @@ class _ProsodyPainter extends CustomPainter {
         ..moveTo(plot.left, y(0))
         ..lineTo(plot.right, y(0)),
       Paint()
-        ..color = const Color(0xffa8b8cf)
+        ..color = const Color(0xffa3b6bc)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1,
       dash: 4,
@@ -308,7 +308,7 @@ class _ProsodyPainter extends CustomPainter {
         Path()
           ..moveTo(endX, plot.top)
           ..lineTo(endX, plot.bottom),
-        stroke(const Color(0xff94b6ec), 1),
+        stroke(const Color(0xff9cbebc), 1),
         dash: 3,
         gap: 5,
       );
@@ -336,7 +336,7 @@ class _ProsodyPainter extends CustomPainter {
     if (progress != null && progress!.isFinite) {
       final current = trace.isNotEmpty && measured(trace.last);
       final color = live
-          ? (current ? _voice : const Color(0xff52647b))
+          ? (current ? _voice : const Color(0xff536974))
           : _guide;
       final xx = x(progress!),
           label = live ? (current ? '내 목소리' : '소리 확인 중') : '지금';
@@ -407,7 +407,7 @@ class _ProsodyPainter extends CustomPainter {
     String text,
     Offset offset, {
     TextAlign align = TextAlign.left,
-    Color color = const Color(0xff465a74),
+    Color color = const Color(0xff536974),
     double font = 12,
     double maxWidth = double.infinity,
     bool bold = false,

@@ -1,4 +1,4 @@
-const COLORS = { guide: '#2f62d6', voice: '#b74415', text: '#465a74', grid: '#dce5f2' };
+const COLORS = { guide: '#2f62d6', voice: '#b74415', text: '#536974', grid: '#d7e2e6' };
 
 const validRegions = regions => Array.isArray(regions) ? regions.filter(region => region
   && Number.isFinite(region.start) && Number.isFinite(region.end)
@@ -57,27 +57,27 @@ export function drawGraph(canvas, { reference, trace = [], field = 'relativePitc
   ctx.font = '600 12px Pretendard, sans-serif';
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
-  ctx.fillStyle = '#38567e';
+  ctx.fillStyle = '#536974';
   ctx.fillText(isPitch ? '음 높이' : '소리 크기', left, 13);
   ctx.font = '12px Pretendard, sans-serif';
   ctx.textAlign = 'right';
-  ctx.fillStyle = '#465a74';
+  ctx.fillStyle = '#536974';
   ctx.fillText(live ? '기준: 녹음 중 갱신' : '기준: 각 목소리의 중간값', right, width < 320 ? 30 : 13, right - 4);
 
   const backgroundRegions = actualRegions.length ? actualRegions : [{ start: 0, end: regionDuration }];
   for (let i = 0; i < backgroundRegions.length; i++) {
     const start = x(backgroundRegions[i].start), end = x(backgroundRegions[i].end);
-    ctx.fillStyle = i === selectedIndex ? '#eaf1fe' : i % 2 ? '#f8fafc' : '#f0f5fc';
+    ctx.fillStyle = i === selectedIndex ? '#e3efed' : i % 2 ? '#f9fbfc' : '#f0f4f6';
     ctx.fillRect(start, top, end - start, bottom - top);
   }
-  if(selected&&selectedIndex<0){ctx.fillStyle='#eaf1fe';ctx.fillRect(x(selected.start),top,x(selected.end)-x(selected.start),bottom-top);}
+  if(selected&&selectedIndex<0){ctx.fillStyle='#e3efed';ctx.fillRect(x(selected.start),top,x(selected.end)-x(selected.start),bottom-top);}
   ctx.lineWidth = 1;
   ctx.strokeStyle = COLORS.grid;
   for (const position of [top, bottom]) {
     ctx.beginPath(); ctx.moveTo(left, position); ctx.lineTo(right, position); ctx.stroke();
   }
   // A visible zero line explains the relative scale without technical tick values.
-  ctx.strokeStyle = '#a8b8cf';
+  ctx.strokeStyle = '#a3b6bc';
   ctx.setLineDash([4, 5]);
   ctx.beginPath(); ctx.moveTo(left, y(0)); ctx.lineTo(right, y(0)); ctx.stroke();
   ctx.setLineDash([]);
@@ -86,16 +86,16 @@ export function drawGraph(canvas, { reference, trace = [], field = 'relativePitc
     : [0, regionDuration / 2, regionDuration];
   for (const boundary of boundaries) {
     const xx = x(boundary);
-    ctx.strokeStyle = '#d6e1ef'; ctx.beginPath(); ctx.moveTo(xx, top); ctx.lineTo(xx, bottom); ctx.stroke();
+    ctx.strokeStyle = '#d7e2e6'; ctx.beginPath(); ctx.moveTo(xx, top); ctx.lineTo(xx, bottom); ctx.stroke();
   }
   // Live position is elapsed recording time, not an inferred word position.
   // Keep the reference endpoint visible when the live time window is longer.
   if (live && Number.isFinite(reference?.duration) && reference.duration > 0) {
     const endX = x(reference.duration);
     if (endX > left + 12 && endX < right - 2) {
-      ctx.strokeStyle = '#94b6ec'; ctx.lineWidth = 1; ctx.setLineDash([3, 5]);
+      ctx.strokeStyle = '#9cbebc'; ctx.lineWidth = 1; ctx.setLineDash([3, 5]);
       ctx.beginPath(); ctx.moveTo(endX, top); ctx.lineTo(endX, bottom); ctx.stroke(); ctx.setLineDash([]);
-      ctx.font = '12px Pretendard, sans-serif'; ctx.fillStyle = '#52647b';
+      ctx.font = '12px Pretendard, sans-serif'; ctx.fillStyle = '#536974';
       if (right - endX > 64) { ctx.textAlign = 'left'; ctx.fillText('가이드 끝', endX + 5, top + 22); }
       else if (endX - left > 64) { ctx.textAlign = 'right'; ctx.fillText('가이드 끝', endX - 5, top + 22); }
     }
@@ -106,7 +106,7 @@ export function drawGraph(canvas, { reference, trace = [], field = 'relativePitc
   ctx.textAlign = 'right';
   ctx.fillText(isPitch ? '높음' : '큼', left - 10, top + 5);
   ctx.font = '12px Pretendard, sans-serif';
-  ctx.fillStyle = '#465a74'; ctx.fillText('기준', left - 10, y(0));
+  ctx.fillStyle = '#536974'; ctx.fillText('기준', left - 10, y(0));
   ctx.fillStyle = COLORS.text;
   ctx.font = '600 12px Pretendard, sans-serif';
   ctx.fillText(isPitch ? '낮음' : '작음', left - 10, bottom - 4);
@@ -149,7 +149,7 @@ export function drawGraph(canvas, { reference, trace = [], field = 'relativePitc
 
   if (selected) {
     const start = x(selected.start), end = x(selected.end);
-    ctx.strokeStyle = '#7c9fe0'; ctx.lineWidth = 1.8;
+    ctx.strokeStyle = '#83aaa7'; ctx.lineWidth = 1.8;
     ctx.strokeRect(start + 1, top + 1, Math.max(0, end - start - 2), bottom - top - 2);
   }
   ctx.font = '600 14px Pretendard, sans-serif';
@@ -159,10 +159,10 @@ export function drawGraph(canvas, { reference, trace = [], field = 'relativePitc
     : actualRegions.map((region, i) => ({ time: (region.start + region.end) / 2, label: region.label, selected: i === selectedIndex }));
   for (const label of labels) {
     const xx = x(label.time);
-    ctx.fillStyle = label.selected ? '#244f8b' : '#526b8d';
+    ctx.fillStyle = label.selected ? '#176b67' : '#536974';
     ctx.fillText(label.label, xx, bottom + 21);
     if (label.selected) {
-      ctx.fillStyle = '#244f8b';
+      ctx.fillStyle = '#176b67';
       ctx.font = '12px Pretendard, sans-serif';
       ctx.fillText('선택한 구간', xx, bottom + 38);
       ctx.font = '600 14px Pretendard, sans-serif';
@@ -171,7 +171,7 @@ export function drawGraph(canvas, { reference, trace = [], field = 'relativePitc
 
   if (Number.isFinite(progress)) {
     const latestMeasured = measured(trace.at(-1));
-    const cursorColor = live ? (latestMeasured ? COLORS.voice : '#52647b') : COLORS.guide;
+    const cursorColor = live ? (latestMeasured ? COLORS.voice : '#536974') : COLORS.guide;
     const tagHalfWidth = live ? (latestMeasured ? 34 : 43) : 23;
     const xx = x(progress), tagX = Math.min(right - tagHalfWidth, Math.max(left + tagHalfWidth, xx));
     ctx.beginPath(); ctx.strokeStyle = cursorColor; ctx.lineWidth = 2;
@@ -182,11 +182,11 @@ export function drawGraph(canvas, { reference, trace = [], field = 'relativePitc
   }
   if (empty || !values.length) {
     ctx.fillStyle = '#fffffff0'; ctx.fillRect(left, top, right - left, bottom - top);
-    ctx.fillStyle = '#526b8d'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#536974'; ctx.textAlign = 'center';
     ctx.font = '600 14px Pretendard, sans-serif';
     ctx.fillText(reference ? '녹음 후 두 선을 비교해요' : '녹음하면 내 목소리가 나타나요', (left + right) / 2, (top + bottom) / 2 - 12);
     ctx.font = '12px Pretendard, sans-serif';
-    ctx.fillStyle = '#465a74';
+    ctx.fillStyle = '#536974';
     ctx.fillText('확인할 수 없는 소리는 선을 비워 둬요', (left + right) / 2, (top + bottom) / 2 + 13);
   }
 }

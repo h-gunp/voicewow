@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../../app_theme.dart';
 import '../practice_feedback.dart';
 import '../practice_session.dart';
 import '../widgets/prosody_chart.dart';
@@ -143,13 +144,14 @@ class _ProsodyScreenState extends State<ProsodyScreen>
     style: const TextStyle(
       fontSize: 22,
       fontWeight: FontWeight.w700,
+      letterSpacing: -.8,
       height: 1.4,
     ),
   );
 
   Widget _copy(String text, {double size = 16, Color? color}) => Text(
     text,
-    style: TextStyle(fontSize: size, height: 1.6, color: color),
+    style: TextStyle(fontSize: size, height: 1.6, color: color ?? muted),
   );
 
   Widget _status() => Semantics(
@@ -160,15 +162,13 @@ class _ProsodyScreenState extends State<ProsodyScreen>
     ),
   );
 
-  Widget _bottom(List<Widget> children) => Material(
-    color: const Color(0xeef8fbff),
-    child: SafeArea(
-      top: false,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: Color(0xffdce5f2))),
-        ),
+  Widget _bottom(List<Widget> children) => Padding(
+    padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+    child: GlassSurface(
+      radius: 28,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+      child: SafeArea(
+        top: false,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -197,7 +197,7 @@ class _ProsodyScreenState extends State<ProsodyScreen>
 
   Widget _prepareBody() => ListView(
     key: const PageStorageKey('prosody-prepare-scroll'),
-    padding: const EdgeInsets.all(16),
+    padding: const EdgeInsets.fromLTRB(20, 22, 20, 24),
     children: [
       _heading('먼저 읽을 문구를 골라 주세요'),
       const SizedBox(height: 8),
@@ -276,28 +276,7 @@ class _ProsodyScreenState extends State<ProsodyScreen>
                 },
         ),
       const SizedBox(height: 16),
-      Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xffdce5f2)),
-        ),
-        child: _copy(s.phrase, size: 23),
-      ),
-      const SizedBox(height: 10),
-      _copy(
-        s.reference?.source ?? '이 문구의 한국어 가이드를 먼저 만들어 주세요.',
-        size: 14,
-        color: const Color(0xff52647b),
-      ),
-      if (!s.usingScript && s.reference == null && !s.busy)
-        OutlinedButton(
-          onPressed: s.initialize,
-          child: const Text('예시 다시 불러오기', textAlign: TextAlign.center),
-        ),
       if (s.usingScript) ...[
-        const SizedBox(height: 16),
         FilledButton.tonalIcon(
           key: const Key('prosody-generate-guide'),
           onPressed: s.busy || s.phrases.isEmpty ? null : s.generateGuide,
@@ -309,7 +288,32 @@ class _ProsodyScreenState extends State<ProsodyScreen>
         ),
         const SizedBox(height: 8),
         _copy('기기에 설치된 오프라인 한국어 음성으로 이 문구의 가이드와 그래프를 만들어요.', size: 14),
+        const SizedBox(height: 16),
       ],
+      GlassSurface(
+        padding: const EdgeInsets.all(22),
+        child: Text(
+          s.phrase,
+          style: const TextStyle(
+            color: ink,
+            fontSize: 25,
+            fontWeight: FontWeight.w700,
+            height: 1.5,
+            letterSpacing: -.7,
+          ),
+        ),
+      ),
+      const SizedBox(height: 10),
+      _copy(
+        s.reference?.source ?? '이 문구의 한국어 가이드를 먼저 만들어 주세요.',
+        size: 14,
+        color: muted,
+      ),
+      if (!s.usingScript && s.reference == null && !s.busy)
+        OutlinedButton(
+          onPressed: s.initialize,
+          child: const Text('예시 다시 불러오기', textAlign: TextAlign.center),
+        ),
       const SizedBox(height: 12),
       OutlinedButton.icon(
         onPressed: s.busy || s.reference == null ? null : s.playGuide,
@@ -424,10 +428,7 @@ class _ProsodyScreenState extends State<ProsodyScreen>
                   : null,
               height: graphHeight,
             ),
-            Semantics(
-              liveRegion: true,
-              child: _copy(hint, size: 14, color: const Color(0xff536987)),
-            ),
+            Semantics(liveRegion: true, child: _copy(hint, size: 14)),
             if (s.phase == PracticePhase.processing) ...[
               const SizedBox(height: 8),
               const LinearProgressIndicator(),
@@ -517,7 +518,7 @@ class _ProsodyScreenState extends State<ProsodyScreen>
     final feedback = s.feedback;
     return ListView(
       key: const PageStorageKey('prosody-result-scroll'),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(20, 22, 20, 24),
       children: [
         _heading('내 목소리를 함께 살펴봐요'),
         const SizedBox(height: 8),
@@ -542,7 +543,7 @@ class _ProsodyScreenState extends State<ProsodyScreen>
               result.summary.segmentationNote,
           ].join('\n\n'),
           size: 14,
-          color: const Color(0xff52647b),
+          color: muted,
         ),
         const SizedBox(height: 16),
         Wrap(
@@ -595,13 +596,8 @@ class _ProsodyScreenState extends State<ProsodyScreen>
     );
   }
 
-  Widget _feedbackCard(PracticeFeedback feedback) => Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: const Color(0xffdce5f2)),
-    ),
+  Widget _feedbackCard(PracticeFeedback feedback) => GlassSurface(
+    padding: const EdgeInsets.all(22),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -682,9 +678,9 @@ class _ProsodyScreenState extends State<ProsodyScreen>
           if (!didPop) unawaited(_back());
         },
         child: Scaffold(
-          backgroundColor: const Color(0xfff1f5fc),
+          backgroundColor: canvas,
           appBar: AppBar(
-            backgroundColor: const Color(0xeef8fbff),
+            backgroundColor: canvas,
             automaticallyImplyLeading: false,
             leading:
                 _step != ProsodyStep.prepare || s.busy || widget.onExit != null
@@ -703,7 +699,11 @@ class _ProsodyScreenState extends State<ProsodyScreen>
               title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
+              style: const TextStyle(
+                fontSize: 19,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -.5,
+              ),
             ),
             actions: [
               Padding(

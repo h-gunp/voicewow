@@ -34,38 +34,97 @@ class _TrainingWarmupState extends State<TrainingWarmup> {
   @override
   Widget build(BuildContext context) => SingleChildScrollView(
     key: ValueKey(_step),
-    padding: const EdgeInsets.all(24),
+    padding: const EdgeInsets.fromLTRB(20, 28, 20, 28),
     child: Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 560),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('${widget.trainingName} · 워밍업', style: smallCopy),
-            const SizedBox(height: 12),
-            const Text('몸과 목을 편하게', style: pageTitle),
-            const SizedBox(height: 12),
-            const Text('가볍게 긴장을 풀고 호흡을 준비한다.', style: bodyCopy),
-            const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: wash,
-                border: Border.all(color: line),
-                borderRadius: BorderRadius.circular(6),
+            if (MediaQuery.textScalerOf(context).scale(16) < 28) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: wash,
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  child: Text(
+                    '${widget.trainingName} · 워밍업',
+                    style: smallCopy.copyWith(
+                      color: accent,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
               ),
+              const SizedBox(height: 12),
+            ],
+            const Text('몸과 목을 편하게', style: pageTitle),
+            if (MediaQuery.textScalerOf(context).scale(16) < 28) ...[
+              const SizedBox(height: 12),
+              const Text('가볍게 긴장을 풀고 호흡을 준비한다.', style: bodyCopy),
+            ],
+            const SizedBox(height: 28),
+            Row(
+              children: [
+                for (var index = 0; index < _steps.length; index++)
+                  Expanded(
+                    child: Container(
+                      height: 4,
+                      margin: EdgeInsets.only(
+                        right: index == _steps.length - 1 ? 0 : 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: index <= _step ? accent : line,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            GlassSurface(
+              padding: const EdgeInsets.all(24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   ExcludeSemantics(
-                    child: Icon(_steps[_step].$3, size: 64, color: accent),
+                    child: Center(
+                      child: Container(
+                        width: 144,
+                        height: 144,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: wash.withValues(alpha: .55),
+                          border: Border.all(color: Colors.white),
+                        ),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white.withValues(alpha: .8),
+                            border: Border.all(color: line),
+                          ),
+                          child: Icon(
+                            _steps[_step].$3,
+                            size: 48,
+                            color: accent,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 24),
                   Semantics(
                     liveRegion: true,
                     child: Text(
                       '${_step + 1} / 3 · ${_steps[_step].$1}',
-                      style: sectionTitle,
+                      style: sectionTitle.copyWith(fontSize: 20),
                     ),
                   ),
                   const SizedBox(height: 16),

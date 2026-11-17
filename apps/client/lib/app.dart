@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'app_theme.dart';
@@ -277,28 +278,37 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
       child: child!,
     ),
     home: Scaffold(
-      bottomNavigationBar: DecoratedBox(
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: line)),
-        ),
-        child: NavigationBar(
-          selectedIndex: section,
-          onDestinationSelected: changingSection ? null : _selectSection,
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.graphic_eq), label: '음량 측정'),
-            NavigationDestination(
-              key: Key('open-pronunciation'),
-              icon: Icon(Icons.auto_stories_outlined),
-              selectedIcon: Icon(Icons.auto_stories),
-              label: '발음 훈련',
+      bottomNavigationBar: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: Center(
+          heightFactor: 1,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: LiquidChrome(
+              child: NavigationBar(
+                selectedIndex: section,
+                onDestinationSelected: changingSection ? null : _selectSection,
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(CupertinoIcons.waveform),
+                    label: '음량 측정',
+                  ),
+                  NavigationDestination(
+                    key: Key('open-pronunciation'),
+                    icon: Icon(CupertinoIcons.text_bubble),
+                    selectedIcon: Icon(CupertinoIcons.text_bubble_fill),
+                    label: '발음 훈련',
+                  ),
+                  NavigationDestination(
+                    key: Key('open-prosody'),
+                    icon: Icon(CupertinoIcons.waveform_path),
+                    label: '높낮이 연습',
+                  ),
+                ],
+              ),
             ),
-            NavigationDestination(
-              key: Key('open-prosody'),
-              icon: Icon(Icons.multiline_chart_outlined),
-              selectedIcon: Icon(Icons.multiline_chart),
-              label: '높낮이 연습',
-            ),
-          ],
+          ),
         ),
       ),
       body: AbsorbPointer(
@@ -306,36 +316,96 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
         child: SafeArea(
           child: Column(
             children: [
-              Container(
-                width: double.infinity,
-                decoration: const BoxDecoration(
-                  border: Border(bottom: BorderSide(color: line)),
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 4,
-                ),
-                child: Builder(
-                  builder: (context) => Wrap(
-                    alignment: WrapAlignment.end,
-                    spacing: 12,
-                    children: [
-                      Tooltip(
-                        message: '글자 크기: ${_textSize.label}',
-                        child: TextButton.icon(
-                          key: const Key('text-size-control'),
-                          onPressed: () => _showTextSize(context),
-                          icon: const Icon(Icons.text_fields),
-                          label: const Text('글자 크기'),
-                        ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+                child: LiquidChrome(
+                  radius: 24,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
+                    child: Builder(
+                      builder: (context) => Row(
+                        children: [
+                          const VoiceMark(size: 34),
+                          if (MediaQuery.sizeOf(context).width > 480) ...[
+                            const SizedBox(width: 10),
+                            const Text(
+                              'VoiceMate',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: -.6,
+                              ),
+                            ),
+                          ],
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: Wrap(
+                                alignment: WrapAlignment.end,
+                                spacing: 2,
+                                children: [
+                                  if (MediaQuery.textScalerOf(
+                                        context,
+                                      ).scale(15) >
+                                      22)
+                                    IconButton(
+                                      key: const Key('text-size-control'),
+                                      tooltip: '글자 크기: ${_textSize.label}',
+                                      onPressed: () => _showTextSize(context),
+                                      icon: const Icon(
+                                        CupertinoIcons.textformat_size,
+                                        size: 22,
+                                      ),
+                                    )
+                                  else
+                                    Tooltip(
+                                      message: '글자 크기: ${_textSize.label}',
+                                      child: TextButton.icon(
+                                        key: const Key('text-size-control'),
+                                        onPressed: () => _showTextSize(context),
+                                        icon: const Icon(
+                                          CupertinoIcons.textformat_size,
+                                          size: 20,
+                                        ),
+                                        label: const Text('글자 크기'),
+                                      ),
+                                    ),
+                                  if (MediaQuery.textScalerOf(
+                                        context,
+                                      ).scale(15) >
+                                      22)
+                                    IconButton(
+                                      key: const Key('open-training-guide'),
+                                      tooltip: '도움말',
+                                      onPressed: () =>
+                                          _showTrainingGuide(context),
+                                      icon: const Icon(
+                                        CupertinoIcons.question_circle,
+                                        size: 22,
+                                      ),
+                                    )
+                                  else
+                                    TextButton.icon(
+                                      key: const Key('open-training-guide'),
+                                      onPressed: () =>
+                                          _showTrainingGuide(context),
+                                      icon: const Icon(
+                                        CupertinoIcons.question_circle,
+                                        size: 20,
+                                      ),
+                                      label: const Text('도움말'),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      TextButton.icon(
-                        key: const Key('open-training-guide'),
-                        onPressed: () => _showTrainingGuide(context),
-                        icon: const Icon(Icons.help_outline),
-                        label: const Text('도움말'),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -385,7 +455,7 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
                                   alignment: Alignment.topCenter,
                                   child: Padding(
                                     padding: EdgeInsets.symmetric(
-                                      vertical: wide ? 36 : 20,
+                                      vertical: wide ? 44 : 24,
                                       horizontal: wide ? 40 : 20,
                                     ),
                                     child: SizedBox(
@@ -394,39 +464,6 @@ class _VoiceMateAppState extends State<VoiceMateApp> {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.stretch,
                                         children: [
-                                          Container(
-                                            padding: const EdgeInsets.only(
-                                              bottom: 18,
-                                            ),
-                                            decoration: const BoxDecoration(
-                                              border: Border(
-                                                bottom: BorderSide(color: line),
-                                              ),
-                                            ),
-                                            child: const Wrap(
-                                              alignment:
-                                                  WrapAlignment.spaceBetween,
-                                              crossAxisAlignment:
-                                                  WrapCrossAlignment.center,
-                                              spacing: 24,
-                                              runSpacing: 8,
-                                              children: [
-                                                Text(
-                                                  'VoiceMate',
-                                                  style: TextStyle(
-                                                    fontSize: 21,
-                                                    fontWeight: FontWeight.w700,
-                                                    letterSpacing: -.7,
-                                                  ),
-                                                ),
-                                                Text(
-                                                  '목소리 연습',
-                                                  style: smallCopy,
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          SizedBox(height: wide ? 40 : 28),
                                           Material(
                                             color: Colors.transparent,
                                             child: ListenableBuilder(

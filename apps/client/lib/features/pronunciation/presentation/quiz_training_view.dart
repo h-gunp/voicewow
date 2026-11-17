@@ -137,11 +137,6 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
           _item(item),
           const SizedBox(height: 10),
         ],
-      const SizedBox(height: 16),
-      const Text(
-        '참고 발음은 어절별로 끊어 읽는 기준이다. 말 사이의 이어 읽기와 소리의 길이는 판정 범위에 포함하지 않는다.',
-        style: smallCopy,
-      ),
     ];
   }
 
@@ -252,41 +247,48 @@ class _QuizTrainingViewState extends State<QuizTrainingView> {
     required String subtitle,
     VoidCallback? onTap,
     Widget? trailing,
-  }) => Material(
-    color: Colors.white,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(6),
-      side: const BorderSide(color: line),
-    ),
-    child: InkWell(
-      key: key,
-      borderRadius: BorderRadius.circular(6),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 10, 16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      height: 1.5,
+  }) => GlassSurface(
+    padding: EdgeInsets.zero,
+    child: Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: key,
+        borderRadius: BorderRadius.circular(24),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 14, 20),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        height: 1.5,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(subtitle, style: smallCopy),
-                ],
+                    const SizedBox(height: 6),
+                    Text(subtitle, style: smallCopy),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            trailing ?? const Icon(Icons.chevron_right, color: muted),
-          ],
+              const SizedBox(width: 8),
+              trailing ??
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: const BoxDecoration(
+                      color: wash,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.chevron_right, color: accent),
+                  ),
+            ],
+          ),
         ),
       ),
     ),

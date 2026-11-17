@@ -4,13 +4,26 @@
   <base href="$FLUTTER_BASE_HREF">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#fafaf7">
+  <meta name="theme-color" content="#f2f5f7">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="VoiceMate">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.json">
+  <meta property="og:title" content="VoiceMate · 내 목소리를 눈으로">
+  <meta property="og:description" content="음량 측정, 발음 훈련, 높낮이 연습을 한곳에서.">
+  <meta property="og:image" content="icons/icon-512.png">
   <meta name="description" content="상황별 음량 확인과 단어·문장 발음 훈련을 제공하는 VoiceMate.">
   <title>VoiceMate · 음량과 발음 훈련</title>
-  <style>body{margin:0;background:#fafaf7;color:#252a27;font-family:system-ui,sans-serif}#loading{max-width:720px;margin:36px auto;padding:20px;font-size:14px}</style>
+  <style>
+    @font-face{font-family:Pretendard;src:url('assets/assets/fonts/PretendardVariable.ttf') format('truetype');font-display:swap}
+    *{box-sizing:border-box}html{background:#f2f5f7}body{margin:0;background:#f2f5f7;color:#172b34;font-family:Pretendard,system-ui,sans-serif;word-break:keep-all}
+    #loading{min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:24px;text-align:center;background:radial-gradient(ellipse at 25% 20%,#e3efed,transparent 60%)}
+    #loading img{width:72px;height:72px;border-radius:22px;box-shadow:0 16px 40px #24465318}#loading p{font-size:16px;line-height:1.65;margin:0;color:#536974}
+  </style>
 </head>
 <body>
-  <p id="loading" role="status">VoiceMate를 준비하고 있다.</p>
+  <div id="loading" role="status"><img src="icons/icon-192.png" alt="" width="72" height="72"><p id="loading-message">VoiceMate를 준비하고 있다.</p></div>
   <script type="module">
     try {
       await import('./audio/capture-bridge.mjs');
@@ -18,10 +31,10 @@
       await import('./prosody/bridge.mjs');
       const bootstrap=document.createElement('script');
       bootstrap.src='flutter_bootstrap.js';
-      bootstrap.onerror=()=>{document.getElementById('loading').textContent='화면을 불러오지 못했다. 새로고침한다.';};
+      bootstrap.onerror=()=>{document.getElementById('loading-message').textContent='화면을 불러오지 못했다. 새로고침한다.';};
       document.body.append(bootstrap);
     } catch {
-      document.getElementById('loading').textContent='화면을 불러오지 못했다. 새로고침한다.';
+      document.getElementById('loading-message').textContent='화면을 불러오지 못했다. 새로고침한다.';
     }
   </script>
 </body>

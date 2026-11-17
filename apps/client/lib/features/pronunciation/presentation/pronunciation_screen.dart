@@ -56,6 +56,7 @@ class _PronunciationScreenState extends State<PronunciationScreen>
 
   void _tabChanged() {
     if (tabs.index == _tab) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ++_practiceRequest;
     unawaited(_stopSpeech());
     unawaited(recorder.cancel());
@@ -178,41 +179,60 @@ class _PronunciationScreenState extends State<PronunciationScreen>
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (constraints.maxHeight >=
-                  MediaQuery.textScalerOf(context).scale(280)) ...[
-                const SizedBox(height: 22),
-                const Text(
-                  '내 속도로, 함께',
-                  style: TextStyle(
-                    color: blue,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
+                  MediaQuery.textScalerOf(context).scale(500)) ...[
+                const SizedBox(height: 26),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: wash,
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: const Text(
+                      '내 속도로, 함께',
+                      style: TextStyle(
+                        color: accent,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 12),
                 const Text('발음 훈련', style: pageTitle),
                 const SizedBox(height: 6),
                 const Text('익숙한 말부터, 내 속도로 연습해요.', style: smallCopy),
                 const SizedBox(height: 18),
               ],
-              Container(
+              GlassSurface(
+                radius: 22,
                 padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: canvas,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: line),
-                ),
                 child: TabBar(
                   controller: tabs,
                   isScrollable: true,
                   tabAlignment: TabAlignment.start,
-                  labelColor: ink,
+                  labelColor: accent,
                   unselectedLabelColor: muted,
+                  labelStyle: const TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  unselectedLabelStyle: const TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                  ),
                   indicatorSize: TabBarIndicatorSize.tab,
                   dividerColor: Colors.transparent,
                   indicator: BoxDecoration(
                     color: wash,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: line),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: Colors.white),
                   ),
                   tabs: [
                     Tab(height: _tabHeight(context), text: '발음 연습'),
@@ -282,7 +302,7 @@ class _PronunciationScreenState extends State<PronunciationScreen>
   );
 
   double _tabHeight(BuildContext context) =>
-      (MediaQuery.textScalerOf(context).scale(14) * 1.6 + 16).clamp(
+      (MediaQuery.textScalerOf(context).scale(15) * 1.6 + 16).clamp(
         48,
         double.infinity,
       );
@@ -436,7 +456,7 @@ class _PersonalGuideViewState extends State<_PersonalGuideView>
               filled: true,
               fillColor: Colors.white,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(20),
               ),
             ),
             onChanged: (_) {
@@ -470,14 +490,9 @@ class _PersonalGuideViewState extends State<_PersonalGuideView>
           ),
           if (guide != null) ...[
             const SizedBox(height: 24),
-            Container(
+            GlassSurface(
               key: const Key('guide-result'),
               padding: const EdgeInsets.all(22),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: line),
-              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -541,15 +556,10 @@ class _PersonalGuideViewState extends State<_PersonalGuideView>
             if (guide.points.isEmpty)
               const Text('적용된 발음 변화가 없어요. 위의 읽는 소리를 참고해 연습해 보세요.'),
             for (final point in guide.points)
-              Card(
-                color: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  side: const BorderSide(color: line),
-                ),
-                margin: const EdgeInsets.only(bottom: 8),
-                child: Padding(
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: GlassSurface(
+                  radius: 20,
                   padding: const EdgeInsets.all(18),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,

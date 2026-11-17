@@ -16,12 +16,13 @@ const nativeColor = name => {
   assert.ok(match, `missing native color ${name}`);
   return match[1];
 };
-test('solid native and web surfaces retain readable text and controls', () => {
-  for (const [name, value] of Object.entries({canvas:'fafaf7', ink:'252a27', muted:'626b65', accent:'315b49', wash:'edf2ec'})) {
+test('silver native and web surfaces retain readable text and controls', () => {
+  for (const [name, value] of Object.entries({canvas:'f2f5f7', ink:'172b34', muted:'536974', accent:'176b67', wash:'e3efed'})) {
     assert.equal(webColor(name), value);
     assert.equal(nativeColor(name), value);
   }
-  assert.doesNotMatch(css, /(?:radial|linear)-gradient|backdrop-filter:\s*blur|box-shadow:\s*(?!none)[^;}\s]/);
+  assert.match(css, /\.practice-toolbar\{position:sticky;[^}]*backdrop-filter:blur\(18px\)/);
+  assert.doesNotMatch(css, /\.panel\{[^}]*backdrop-filter/);
   for (const surface of ['ffffff', webColor('canvas'), webColor('wash')]) {
     for (const text of ['ink', 'muted', 'accent']) {
       const ratio = contrast(rgb(webColor(text)), rgb(surface));
@@ -47,8 +48,8 @@ test('graph lines and solid gauge boundaries remain distinguishable', () => {
 test('live cursor and reference-end labels have readable contrast', () => {
   const charts = readFileSync(new URL('../../apps/client/web/prosody/charts.js', import.meta.url), 'utf8');
   const flutter = readFileSync(new URL('../../apps/client/lib/features/prosody/widgets/prosody_chart.dart', import.meta.url), 'utf8');
-  assert.match(charts, /latestMeasured \? COLORS.voice : '#52647b'/);
-  assert.match(charts, /ctx.fillStyle = '#52647b';\s*if \(right - endX/);
-  assert.match(flutter, /current \? _voice : const Color\(0xff52647b\)/);
-  for (const background of ['ffffff','f0f5fc','f8fafc']) assert.ok(contrast(rgb('52647b'), rgb(background)) >= 4.5);
+  assert.match(charts, /latestMeasured \? COLORS.voice : '#536974'/);
+  assert.match(charts, /ctx.fillStyle = '#536974';\s*if \(right - endX/);
+  assert.match(flutter, /current \? _voice : const Color\(0xff536974\)/);
+  for (const background of ['ffffff','f0f4f6','f9fbfc']) assert.ok(contrast(rgb('536974'), rgb(background)) >= 4.5);
 });

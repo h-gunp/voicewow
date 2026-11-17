@@ -95,8 +95,8 @@ class VolumeGauge extends StatelessWidget {
                   child: DecoratedBox(
                     key: const Key('gauge-rail'),
                     decoration: BoxDecoration(
-                      color: const Color(0xffe8ece5),
-                      borderRadius: BorderRadius.circular(4),
+                      color: const Color(0xffe4ecef),
+                      borderRadius: BorderRadius.circular(18),
                       border: Border.all(color: line),
                     ),
                   ),
@@ -108,7 +108,7 @@ class VolumeGauge extends StatelessWidget {
                     width: railWidth,
                     height: railHeight,
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
+                      borderRadius: BorderRadius.circular(18),
                       child: TweenAnimationBuilder<double>(
                         tween: Tween(
                           // A newly detected syllable must start at its measured level.

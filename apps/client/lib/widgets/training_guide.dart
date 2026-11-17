@@ -5,13 +5,9 @@ class TrainingPreparationCard extends StatelessWidget {
   const TrainingPreparationCard({super.key});
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => GlassSurface(
     padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(
-      color: wash,
-      border: Border.all(color: line),
-      borderRadius: BorderRadius.circular(6),
-    ),
+    tint: wash,
     child: const Text('어깨의 힘을 빼고 편하게 호흡하며 기다린다.', style: bodyCopy),
   );
 }
@@ -33,7 +29,7 @@ class TrainingGuideScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const Text('기능별 사용 방법', style: pageTitle),
-                const SizedBox(height: 8),
+                const SizedBox(height: 24),
                 _feature(
                   0,
                   '음량 측정',
@@ -63,20 +59,47 @@ class TrainingGuideScreen extends StatelessWidget {
   );
 
   Widget _feature(int index, String title, String body) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 16),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(title, style: sectionTitle),
-        const SizedBox(height: 8),
-        Text(body, style: bodyCopy),
-        const SizedBox(height: 12),
-        OutlinedButton(
-          key: Key('guide-open-$index'),
-          onPressed: () => onSelectSection(index),
-          child: Text('$title 시작'),
-        ),
-      ],
+    padding: const EdgeInsets.only(bottom: 16),
+    child: GlassSurface(
+      padding: const EdgeInsets.all(22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: wash,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '0${index + 1}',
+                  style: smallCopy.copyWith(
+                    color: accent,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Text(title, style: sectionTitle.copyWith(fontSize: 20)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(body, style: bodyCopy),
+          const SizedBox(height: 12),
+          OutlinedButton(
+            key: Key('guide-open-$index'),
+            onPressed: () => onSelectSection(index),
+            child: Text('$title 시작'),
+          ),
+        ],
+      ),
     ),
   );
 }
